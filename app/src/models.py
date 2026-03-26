@@ -8,7 +8,7 @@ class Base(DeclarativeBase):
 
 
 class User(Base):
-    __tablename__ = "users"
+    __tablename__: str = "users"
     user_id: Mapped[int] = mapped_column(primary_key=True)
     email: Mapped[str] = mapped_column(String)
     password_hash: Mapped[str] = mapped_column(String)
@@ -19,7 +19,7 @@ class User(Base):
 
 
 class UserProfile(Base):
-    __tablename__ = "user_profiles"
+    __tablename__: str = "user_profiles"
     id: Mapped[int] = mapped_column(primary_key=True)
     user_id: Mapped[int] = mapped_column(ForeignKey("users.user_id"), nullable=False)
     full_name: Mapped[str] = mapped_column(String)
@@ -31,7 +31,7 @@ class UserProfile(Base):
 
 
 class OauthAccount(Base):
-    __tablename__ = "oauth_accounts"
+    __tablename__: str = "oauth_accounts"
     id: Mapped[int] = mapped_column(primary_key=True)
     user_id: Mapped[int] = mapped_column(ForeignKey("users.user_id"), nullable=False)
     provider: Mapped[str] = mapped_column(String)
@@ -41,7 +41,7 @@ class OauthAccount(Base):
 
 
 class Plan(Base):
-    __tablename__ = "plans"
+    __tablename__: str = "plans"
     id: Mapped[int] = mapped_column(primary_key=True)
     name: Mapped[str] = mapped_column(String)
     price: Mapped[int] = mapped_column(Integer)
@@ -50,18 +50,18 @@ class Plan(Base):
 
 
 class Subscription(Base):
-    __tablename__ = "subscriptions"
+    __tablename__: str = "subscriptions"
     id: Mapped[int] = mapped_column(primary_key=True)
     user_id: Mapped[int] = mapped_column(ForeignKey("users.user_id"), nullable=False)
     plan_id: Mapped[int] = mapped_column(ForeignKey("plans.id"), nullable=False)
-    status: Mapped[str] = String
+    status: Mapped[str] = mapped_column(String)
     start_date: Mapped[datetime] = mapped_column(DateTime)
     end_date: Mapped[datetime] = mapped_column(DateTime)
     auto_renew: Mapped[bool] = mapped_column(Boolean)
 
 
 class Payment(Base):
-    __tablename__ = "payments"
+    __tablename__: str = "payments"
     id: Mapped[int] = mapped_column(primary_key=True)
     user_id: Mapped[int] = mapped_column(ForeignKey("users.user_id"), nullable=False)
     subscription_id: Mapped[int] = mapped_column(ForeignKey("subscriptions.id"), nullable=False)
@@ -73,7 +73,7 @@ class Payment(Base):
 
 
 class Policy(Base):
-    __tablename__ = "policies"
+    __tablename__: str = "policies"
     id: Mapped[int] = mapped_column(primary_key=True)
     name: Mapped[str] = mapped_column(String)
     type: Mapped[str] = mapped_column(String)
@@ -82,7 +82,7 @@ class Policy(Base):
 
 
 class PolicyVersion(Base):
-    __tablename__ = "policy_versions"
+    __tablename__: str = "policy_versions"
     id: Mapped[int] = mapped_column(primary_key=True)
     policy_id: Mapped[int] = mapped_column(ForeignKey("policies.id"), nullable=False)
     version: Mapped[str] = mapped_column(String)
@@ -92,7 +92,7 @@ class PolicyVersion(Base):
 
 
 class UserPolicyAgreement(Base):
-    __tablename__ = "user_policy_agreements"
+    __tablename__: str = "user_policy_agreements"
     id: Mapped[int] = mapped_column(primary_key=True)
     user_id: Mapped[int] = mapped_column(ForeignKey("users.user_id"), nullable=False)
     policy_version_id: Mapped[int] = mapped_column(ForeignKey("policy_versions.id"), nullable=False)
@@ -101,7 +101,7 @@ class UserPolicyAgreement(Base):
 
 
 class Experience(Base):
-    __tablename__ = "experiences"
+    __tablename__: str= "experiences"
     id: Mapped[int] = mapped_column(primary_key=True)
     user_id: Mapped[int] = mapped_column(ForeignKey("users.user_id"), nullable=False)
     raw_text: Mapped[str] = mapped_column(String)
@@ -109,7 +109,7 @@ class Experience(Base):
 
 
 class Analysis(Base):
-    __tablename__ = "analyses"
+    __tablename__: str= "analyses"
     id: Mapped[int] = mapped_column(primary_key=True)
     experience_id: Mapped[str] = mapped_column(String)
     core_skill: Mapped[str] = mapped_column(String)
