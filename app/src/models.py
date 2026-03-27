@@ -4,7 +4,7 @@ from src.enums import EducationType
 from sqlmodel import ARRAY, Field, SQLModel, String
 
 class User(SQLModel, table=True):
-    __tablename__: str = "users"
+    __tablename__: str = "users"  # pyright: ignore[reportIncompatibleVariableOverride]
     id: int = Field(primary_key=True)
     email: str
     password_hash: str | None = None
@@ -27,7 +27,7 @@ class User(SQLModel, table=True):
     )
 
 class UserProfile(SQLModel, table=True):
-    __tablename__: str = "user_profiles"
+    __tablename__: str = "user_profiles"  # pyright: ignore[reportIncompatibleVariableOverride]
     id: int = Field(primary_key=True)
     user_id: int = Field(foreign_key="users.id")
     nickname: str
@@ -59,7 +59,7 @@ class UserProfile(SQLModel, table=True):
     )
 
 class OauthAccount(SQLModel, table=True):
-    __tablename__: str = "oauth_accounts"
+    __tablename__: str = "oauth_accounts"  # pyright: ignore[reportIncompatibleVariableOverride]
     id: int = Field(primary_key=True)
     user_id: int = Field(foreign_key="users.id")
     provider: str

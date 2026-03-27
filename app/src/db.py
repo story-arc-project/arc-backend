@@ -2,7 +2,7 @@ from typing import Annotated
 from fastapi import Depends
 from sqlmodel import SQLModel, create_engine, Session
 from os import getenv
-from src import models
+from src import models  # pyright: ignore[reportUnusedImport]
 
 DATABASE_URL = f"postgresql://{getenv("POSTGRES_USER")}:{getenv("POSTGRES_PASSWORD")}@db:5432/{getenv("POSTGRES_DB")}"
 
