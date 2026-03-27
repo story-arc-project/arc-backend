@@ -30,12 +30,12 @@ class UserProfile(SQLModel, table=True):
     __tablename__: str = "user_profiles"  # pyright: ignore[reportIncompatibleVariableOverride]
     id: int = Field(primary_key=True)
     user_id: int = Field(foreign_key="users.id")
-    nickname: str
+    name: str
     birth: date
+    phone: str = Field(max_length=11)
     education: EducationType
     school: str | None = None
     department: str | None = None
-    phone: str = Field(max_length=11)
     worry: list[str] = Field(
         sa_column=Column(ARRAY(String))
     )
