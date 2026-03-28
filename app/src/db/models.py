@@ -6,7 +6,7 @@ from sqlmodel import ARRAY, Field, SQLModel, String
 class User(SQLModel, table=True):
     __tablename__: str = "users"  # pyright: ignore[reportIncompatibleVariableOverride]
     id: int = Field(primary_key=True)
-    email: str
+    email: str = Field(unique=True)
     password_hash: str | None = None
     username: str
     status: str
