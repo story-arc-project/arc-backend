@@ -16,9 +16,37 @@ services:
       POSTGRES_PASSWORD: ${DB_PASSWORD}
       POSTGRES_DB: ${DB_NAME}
     depends_on:
-      - "db"
+      - db
     ports:
       - "8000:8000"
+  nginx:
+    image: nginx:1.28.3
+    environment:
+      DOMAIN: ${DOMAIN}
+      FASTAPI_HOST: app:8000
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx:/etc/nginx/templates:ro
+      - certbot-etc:/etc/letsencrypt
+      - certbot-var:/var/www/certbot
+    depends_on:
+      - app
+  certbot:
+    image: certbot/certbot
+    volumes:
+      - certbot-etc:/etc/letsencrypt
+      - certbot-var:/var/www/certbot
+    environment:
+      DOMAIN: ${DOMAIN}
+      EMAIL: ${EMAIL}
+    depends_on:
+      - nginx
+    entrypoint: >
+      sh -c "while true; do certbot renew --non-interactive --webroot -w /var/www/certbot --quiet; sleep 12h; done"
 
 volumes:
   db_data:
+  certbot-etc:
+  certbot-var:

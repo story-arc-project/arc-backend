@@ -1,3 +1,4 @@
 #!/bin/bash
 cd "$(dirname "$0")" || exit 1
-docker compose -f ./docker-compose.yml down -v
+source ./config.sh
+docker compose -f ./docker-compose.yml -p "$PROJECT_NAME" down
