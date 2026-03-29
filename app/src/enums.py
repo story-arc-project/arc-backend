@@ -5,3 +5,9 @@ class EducationType(enum.Enum):
     UNIVERSITY = "대학생"
     GRADUATE = "대학원"
     ALUMNI = "졸업생"
+
+class JWTTokenStatus(enum.Enum):
+    EXPIRED = "AUTH_TOKEN_EXPIRED"
+    INVALID = "AUTH_TOKEN_INVALID"
+    REUSED = "AUTH_REUSE_DETECTED"
+    REVOKED = "AUTH_REVOKED"
