@@ -27,20 +27,22 @@ def get_key():
     return key
 
 def create_access_token(user_id: str):
+    exp = datetime.now(timezone.utc) + timedelta(minutes=ACCESS_TOKEN_EXPIRE)
     payload = AccessTokenPayload(
         sub = user_id,
-        exp = int((datetime.now(timezone.utc) + timedelta(minutes=ACCESS_TOKEN_EXPIRE)).timestamp())
+        exp = int(exp.timestamp())
     )
-    return jwt.encode(payload.model_dump(), get_key(), JWT_ALG)
+    return jwt.encode(payload.model_dump(), get_key(), JWT_ALG), exp
 
 def create_refresh_token(user_id: str):
     jti = str(uuid4())
+    exp = datetime.now(timezone.utc) + timedelta(minutes=REFRESH_TOKEN_EXPIRE)
     payload = RefreshTokenPayload(
         sub = user_id,
         jti = jti,
-        exp = int((datetime.now(timezone.utc) + timedelta(minutes=REFRESH_TOKEN_EXPIRE)).timestamp())
+        exp = int(exp.timestamp())
     )
-    return jwt.encode(payload.model_dump(), get_key(), JWT_ALG), jti
+    return jwt.encode(payload.model_dump(), get_key(), JWT_ALG), exp, jti
 
 def verify_access_token(token: str):
     try:

@@ -22,7 +22,7 @@ def set_jwt_key(monkeypatch: pytest.MonkeyPatch):
 
 def test_create_and_verify_access_token():
     user_id = "123"
-    token = create_access_token(user_id)
+    token, exp = create_access_token(user_id)
 
     payload = verify_access_token(token)
     assert payload != JWTTokenStatus.EXPIRED
@@ -30,11 +30,12 @@ def test_create_and_verify_access_token():
     assert payload.sub == user_id
     assert payload.type == str(ACCESS_TOKEN_TYPE)
     assert isinstance(payload.exp, int)
+    assert int(exp.timestamp()) == payload.exp
 
 
 def test_create_and_verify_refresh_token():
     user_id = "456"
-    token, jti = create_refresh_token(user_id)
+    token, exp, jti = create_refresh_token(user_id)
 
     assert isinstance(UUID(jti), UUID)
     payload = verify_refresh_token(token)
@@ -44,6 +45,7 @@ def test_create_and_verify_refresh_token():
     assert payload.jti == jti
     assert payload.type == str(REFRESH_TOKEN_TYPE)
     assert isinstance(payload.exp, int)
+    assert int(exp.timestamp()) == payload.exp
 
 
 def test_access_token_expired():
@@ -53,7 +55,7 @@ def test_access_token_expired():
     with patch("src.utils.token.datetime") as mock_dt:
         mock_dt.now.return_value = past_time
         mock_dt.now.timezone = timezone.utc
-        token = create_access_token(user_id)
+        token, _ = create_access_token(user_id)
     
     result = verify_access_token(token)
     assert result == JWTTokenStatus.EXPIRED
@@ -81,14 +83,14 @@ def test_invalid_access_token_type():
 
 def test_invalid_refresh_token_type():
     user_id = "303"
-    token = create_access_token(user_id)
+    token, _ = create_access_token(user_id)
     result = verify_refresh_token(token)
     assert result == JWTTokenStatus.INVALID
 
 
 def test_invalid_token_signature():
     user_id = "404"
-    token = create_access_token(user_id)
+    token, _ = create_access_token(user_id)
     
     tampered_token = token + "a"
     result = verify_access_token(tampered_token)
