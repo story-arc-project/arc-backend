@@ -3,7 +3,7 @@ from unittest.mock import patch
 from datetime import datetime, timedelta, timezone
 from uuid import UUID
 
-from src.utils.auth import (
+from src.utils.token import (
     create_access_token,
     create_refresh_token,
     verify_access_token,
@@ -50,7 +50,7 @@ def test_access_token_expired():
     user_id = "789"
     
     past_time = datetime.now(timezone.utc) - timedelta(minutes=ACCESS_TOKEN_EXPIRE + 1)
-    with patch("src.utils.auth.datetime") as mock_dt:
+    with patch("src.utils.token.datetime") as mock_dt:
         mock_dt.now.return_value = past_time
         mock_dt.now.timezone = timezone.utc
         token = create_access_token(user_id)
@@ -63,7 +63,7 @@ def test_refresh_token_expired():
     user_id = "101"
     past_time = datetime.now(timezone.utc) - timedelta(minutes=REFRESH_TOKEN_EXPIRE + 1)
     
-    with patch("src.utils.auth.datetime") as mock_dt:
+    with patch("src.utils.token.datetime") as mock_dt:
         mock_dt.now.return_value = past_time
         mock_dt.now.timezone = timezone.utc
         token, _ = create_refresh_token(user_id)
