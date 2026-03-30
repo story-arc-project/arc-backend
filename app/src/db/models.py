@@ -8,7 +8,6 @@ class User(SQLModel, table=True):
     id: int = Field(primary_key=True)
     email: str = Field(unique=True)
     password_hash: str | None = None
-    username: str
     status: UserStatus = Field(default=UserStatus.UNVERIFIED)
     created_at: datetime = Field(
         sa_column=Column(
@@ -64,6 +63,29 @@ class OauthAccount(SQLModel, table=True):
     user_id: int = Field(foreign_key="users.id")
     provider: str
     provider_user_id: str
+    created_at: datetime = Field(
+        sa_column=Column(
+            DateTime(timezone=True),
+            server_default=func.now(),
+            nullable=False
+        )
+    )
+    updated_at: datetime = Field(
+        sa_column=Column(
+            DateTime(timezone=True),
+            server_default=func.now(),
+            onupdate=func.now(),
+            nullable=False
+        )
+    )
+
+class UserSession(SQLModel, table=True):
+    id: int = Field(primary_key=True)
+    user_id: int = Field(foreign_key="users.id")
+    jti: str = Field(unique=True)
+    ver: int
+    exp: int
+    revoked: bool
     created_at: datetime = Field(
         sa_column=Column(
             DateTime(timezone=True),
