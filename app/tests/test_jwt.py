@@ -68,7 +68,7 @@ def test_refresh_token_expired():
     with patch("src.utils.token.datetime") as mock_dt:
         mock_dt.now.return_value = past_time
         mock_dt.now.timezone = timezone.utc
-        token, _ = create_refresh_token(user_id)
+        token, exp, _ = create_refresh_token(user_id)
     
     result = verify_refresh_token(token)
     assert result == JWTTokenStatus.EXPIRED
