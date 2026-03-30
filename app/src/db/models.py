@@ -1,6 +1,6 @@
 from datetime import datetime, date
 from sqlalchemy import DateTime, func, Column
-from src.enums import EducationType
+from src.enums import UserStatus
 from sqlmodel import ARRAY, Field, SQLModel, String
 
 class User(SQLModel, table=True):
@@ -9,7 +9,7 @@ class User(SQLModel, table=True):
     email: str = Field(unique=True)
     password_hash: str | None = None
     username: str
-    status: str
+    status: UserStatus = Field(default=UserStatus.UNVERIFIED)
     created_at: datetime = Field(
         sa_column=Column(
             DateTime(timezone=True),
@@ -33,7 +33,7 @@ class UserProfile(SQLModel, table=True):
     name: str
     birth: date
     phone: str = Field(max_length=11)
-    education: EducationType
+    education: str
     school: str | None = None
     department: str | None = None
     worry: list[str] = Field(
