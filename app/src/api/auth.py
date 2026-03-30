@@ -1,14 +1,14 @@
 from fastapi import APIRouter, Response
 from sqlmodel import select
 
-from app.src.api.models.base import ErrorResponse, LoginData, UserInfo
-from app.src.api.models.request import LoginRequest
-from app.src.api.models.response import LoginResponse
-from app.src.db.db import SessionDep
-from app.src.db.models import User, UserProfile
-from app.src.enums import ErrorResponseCode, UserStatus
-from app.src.utils.pwd import verify_password
-from app.src.utils.token import create_access_token
+from src.api.models.base import ErrorResponse, LoginData, UserInfo
+from src.api.models.request import LoginRequest
+from src.api.models.response import LoginResponse
+from src.db.db import SessionDep
+from src.db.models import User, UserProfile
+from src.enums import ErrorResponseCode, UserStatus
+from src.utils.pwd import verify_password
+from src.utils.token import create_access_token
 
 router = APIRouter()
 

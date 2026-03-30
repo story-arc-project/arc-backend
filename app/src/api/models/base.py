@@ -2,7 +2,7 @@ from datetime import datetime
 from pydantic import BaseModel, EmailStr
 from typing import Generic, TypeVar
 
-from app.src.enums import ErrorResponseCode
+from src.enums import ErrorResponseCode
 
 T = TypeVar("T")
 
