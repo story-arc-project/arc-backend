@@ -1,15 +1,17 @@
 from datetime import datetime, date
 from sqlalchemy import DateTime, func, Column
+from sqlalchemy.sql.functions import now
 from src.enums import UserStatus
 from sqlmodel import ARRAY, Field, SQLModel, String
 
 class User(SQLModel, table=True):
     __tablename__: str = "users"  # pyright: ignore[reportIncompatibleVariableOverride]
-    id: int = Field(primary_key=True)
+    id: int | None = Field(default=None, primary_key=True)
     email: str = Field(unique=True)
     password_hash: str | None = None
     status: UserStatus = Field(default=UserStatus.UNVERIFIED)
     created_at: datetime = Field(
+        default_factory=now,
         sa_column=Column(
             DateTime(timezone=True),
             server_default=func.now(),
@@ -17,6 +19,7 @@ class User(SQLModel, table=True):
         )
     )
     updated_at: datetime = Field(
+        default_factory=now,
         sa_column=Column(
             DateTime(timezone=True),
             server_default=func.now(),
@@ -27,7 +30,7 @@ class User(SQLModel, table=True):
 
 class UserProfile(SQLModel, table=True):
     __tablename__: str = "user_profiles"  # pyright: ignore[reportIncompatibleVariableOverride]
-    id: int = Field(primary_key=True)
+    id: int | None = Field(default=None, primary_key=True)
     user_id: int = Field(foreign_key="users.id")
     name: str
     birth: date
@@ -42,6 +45,7 @@ class UserProfile(SQLModel, table=True):
         sa_column=Column(ARRAY(String))
     )
     created_at: datetime = Field(
+        default_factory=now,
         sa_column=Column(
             DateTime(timezone=True),
             server_default=func.now(),
@@ -49,6 +53,7 @@ class UserProfile(SQLModel, table=True):
         )
     )
     updated_at: datetime = Field(
+        default_factory=now,
         sa_column=Column(
             DateTime(timezone=True),
             server_default=func.now(),
@@ -59,11 +64,12 @@ class UserProfile(SQLModel, table=True):
 
 class OauthAccount(SQLModel, table=True):
     __tablename__: str = "oauth_accounts"  # pyright: ignore[reportIncompatibleVariableOverride]
-    id: int = Field(primary_key=True)
+    id: int | None= Field(default=None, primary_key=True)
     user_id: int = Field(foreign_key="users.id")
     provider: str
     provider_user_id: str
     created_at: datetime = Field(
+        default_factory=now,
         sa_column=Column(
             DateTime(timezone=True),
             server_default=func.now(),
@@ -71,29 +77,7 @@ class OauthAccount(SQLModel, table=True):
         )
     )
     updated_at: datetime = Field(
-        sa_column=Column(
-            DateTime(timezone=True),
-            server_default=func.now(),
-            onupdate=func.now(),
-            nullable=False
-        )
-    )
-
-class UserSession(SQLModel, table=True):
-    id: int = Field(primary_key=True)
-    user_id: int = Field(foreign_key="users.id")
-    jti: str = Field(unique=True)
-    ver: int
-    exp: int
-    revoked: bool
-    created_at: datetime = Field(
-        sa_column=Column(
-            DateTime(timezone=True),
-            server_default=func.now(),
-            nullable=False
-        )
-    )
-    updated_at: datetime = Field(
+        default_factory=now,
         sa_column=Column(
             DateTime(timezone=True),
             server_default=func.now(),
