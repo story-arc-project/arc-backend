@@ -10,18 +10,20 @@ from src.enums import ErrorResponseCode, UserStatus
 from src.utils.pwd import verify_password
 from src.utils.token import create_access_token
 
-router = APIRouter()
+auth_router = APIRouter()
 
-@router.post("/auth/login")
+@auth_router.post("/login")
 async def login(body: LoginRequest, session: SessionDep, response: Response):
     statement = select(User).where(User.email == body.email)
     result = session.exec(statement).one_or_none()
     if result is None or result.password_hash is None or not verify_password(body.password, result.password_hash):
+        response.status_code = 401
         return ErrorResponse(
             code = ErrorResponseCode.INVALID_CREDENTIALS,
             message = "The email or password is incorrect."
         )
     if result.status == UserStatus.UNVERIFIED:
+        response.status_code = 403
         return ErrorResponse(
             code = ErrorResponseCode.EMAIL_NOT_VERIFIED,
             message = "Email verification needed."
