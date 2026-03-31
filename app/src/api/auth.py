@@ -29,6 +29,7 @@ async def signup(body: SignupRequest, session: SessionDep, response: Response):
     )
     session.add(user)
     session.commit()
+    session.refresh(user)
     # Send email verification
     response.status_code = 201
     return SignupResponse(
