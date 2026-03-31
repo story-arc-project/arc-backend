@@ -6,9 +6,11 @@ from src.enums import ErrorResponseCode
 
 T = TypeVar("T")
 
-class SuccessResponse(BaseModel, Generic[T]):
+class SuccessResponse(BaseModel):
     status: str = "success"
     message: str
+
+class SuccessResponseWithData(SuccessResponse, Generic[T]):
     data: T
 
 class ErrorResponse(BaseModel):

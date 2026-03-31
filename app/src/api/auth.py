@@ -2,15 +2,38 @@ from fastapi import APIRouter, Response
 from sqlmodel import select
 
 from src.api.models.base import ErrorResponse, LoginData, UserInfo
-from src.api.models.request import LoginRequest
-from src.api.models.response import LoginResponse
+from src.api.models.request import LoginRequest, SignupRequest
+from src.api.models.response import LoginResponse, SignupResponse
 from src.db.db import SessionDep
 from src.db.models import User, UserProfile
 from src.enums import ErrorResponseCode, UserStatus
-from src.utils.pwd import verify_password
+from src.utils.pwd import hash_password, verify_password
 from src.utils.token import create_access_token
 
 auth_router = APIRouter()
+
+@auth_router.post("/signup")
+async def signup(body: SignupRequest, session: SessionDep, response: Response):
+    statement = select(User).where(User.email == body.email)
+    if session.exec(statement).one_or_none() is not None:
+        response.status_code = 409
+        return ErrorResponse(
+            code = ErrorResponseCode.EMAIL_ALREADY_EXISTS,
+            message = "This email is already registered."
+        )
+    # Add weak password detection
+    password_hash = hash_password(body.password)
+    user = User(
+        email = body.email,
+        password_hash = password_hash
+    )
+    session.add(user)
+    session.commit()
+    # Send email verification
+    response.status_code = 201
+    return SignupResponse(
+        message = "Email verification needed."
+    )
 
 @auth_router.post("/login")
 async def login(body: LoginRequest, session: SessionDep, response: Response):
@@ -40,6 +63,7 @@ async def login(body: LoginRequest, session: SessionDep, response: Response):
         path="/",
         expires=int(acc_exp.timestamp())
     )
+    response.status_code = 200
     return LoginResponse(
         message = "Login successful",
         data = LoginData(
