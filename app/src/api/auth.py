@@ -1,9 +1,10 @@
 from fastapi import APIRouter, Response
 from sqlmodel import select
 
+from src.utils.verify import send_code
 from src.api.models.base import ErrorResponse, LoginData, UserInfo
-from src.api.models.request import LoginRequest, SignupRequest
-from src.api.models.response import LoginResponse, SignupResponse
+from src.api.models.request import LoginRequest, SignupRequest, VerificationRequest
+from src.api.models.response import LoginResponse, SignupResponse, VerificationSentResponse
 from src.db.db import SessionDep
 from src.db.models import User, UserProfile
 from src.enums import ErrorResponseCode, UserStatus
@@ -30,7 +31,13 @@ async def signup(body: SignupRequest, session: SessionDep, response: Response):
     session.add(user)
     session.commit()
     session.refresh(user)
-    # Send email verification
+    errors = send_code(body.email)
+    if errors:
+        response.status_code = 500
+        return ErrorResponse(
+            code = ErrorResponseCode.SERVER_ERROR,
+            message = "Server side error. Please check logs."
+        )
     response.status_code = 201
     return SignupResponse(
         message = "Email verification needed."
@@ -75,3 +82,27 @@ async def login(body: LoginRequest, session: SessionDep, response: Response):
             expire_at = acc_exp
         )
     )
+
+@auth_router.post("/resend-verification")
+async def send_verification(body: VerificationRequest, session: SessionDep, response: Response):
+    # Add rate limit
+    statement = select(User).where(User.email == body.email)
+    result = session.exec(statement).one_or_none()
+    if result is None:
+        response.status_code = 200
+        return VerificationSentResponse()
+    if result.status == UserStatus.VERIFIED:
+        response.status_code = 400
+        return ErrorResponse(
+            code = ErrorResponseCode.ALREADY_VERIFIED,
+            message = "This account is already verified. Please log in."
+        )
+    errors = send_code(result.email)
+    if errors:
+        response.status_code = 500
+        return ErrorResponse(
+            code = ErrorResponseCode.SERVER_ERROR,
+            message = "Server side error. Please check logs."
+        )
+    response.status_code = 200
+    return VerificationSentResponse()

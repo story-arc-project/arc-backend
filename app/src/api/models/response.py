@@ -5,3 +5,6 @@ class LoginResponse(SuccessResponseWithData[LoginData]):
 
 class SignupResponse(SuccessResponse):
     pass
+
+class VerificationSentResponse(SuccessResponse):
+    message: str = "If an account exists with that email, a new verification code has been sent."
