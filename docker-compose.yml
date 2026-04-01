@@ -16,6 +16,8 @@ services:
       POSTGRES_PASSWORD: ${DB_PASSWORD}
       POSTGRES_DB: ${DB_NAME}
       FRONTEND_HOSTS: ${FRONTEND_HOSTS}
+      GMAIL_PASSWORD: ${GMAIL_PASSWORD}
+      GMAIL: ${GMAIL}
     depends_on:
       - db
       - redis
