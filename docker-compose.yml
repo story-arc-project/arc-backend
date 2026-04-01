@@ -18,8 +18,15 @@ services:
       FRONTEND_HOSTS: ${FRONTEND_HOSTS}
     depends_on:
       - db
+      - redis
     ports:
       - "8000:8000"
+  redis:
+    image: redis:8.6.2
+    command: ["redis-server", "--appendonly", "yes"]
+    ports:
+      - "6379:6379"
+    restart: unless-stopped
   nginx:
     image: nginx:1.28.3
     environment:
