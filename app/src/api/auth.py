@@ -131,4 +131,8 @@ async def verify(body: VerifyCodeRequest, session: SessionDep, response: Respons
             code = ErrorResponseCode.INVALID_CODE,
             message = "The verification code is incorrect."
         )
+    result.status = UserStatus.VERIFIED
+    session.add(result)
+    session.commit()
+    session.refresh(result)
     return get_login_response(session, response, result, "Email verified successfully. You have been logged in.")
