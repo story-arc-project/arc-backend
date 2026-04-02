@@ -17,7 +17,7 @@ def get_login_response(session: SessionDep, response: Response, result: User, me
     onboarded = session.exec(select(UserProfile).where(UserProfile.user_id == result.id)).first() is not None
     access_token, acc_exp = create_access_token(str(result.id))
     response.set_cookie(
-        key="access_token",
+        key="accessToken",
         value=access_token,
         httponly=True,
         secure=True,
