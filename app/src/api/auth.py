@@ -144,7 +144,10 @@ async def social_login(request: Request, body: SocialLoginRequest, session: Sess
     origin = check_cors(request)
     if origin is None:
         response.status_code = 403
-        return None # Return json
+        return ErrorResponse(
+            code = ErrorResponseCode.CORS_NOT_ALLOWED,
+            message = "Origin not allowed"
+        )
     res = google_login(
         code = body.token,
         redirect_uri = origin + LOGIN_REDIRECT_ENDPOINT_PREFIX + OauthProviderId.GOOGLE
