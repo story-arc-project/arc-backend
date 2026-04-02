@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Response
 from sqlmodel import select
 
+from src.const import ACCESS_TOKEN_KEY, REFRESH_TOKEN_KEY
 from src.utils.verify import send_code, verify_code
 from src.api.models.base import ErrorResponse, LoginData, UserInfo
 from src.api.models.request import LoginRequest, SignupRequest, VerificationRequest, VerifyCodeRequest
@@ -17,7 +18,7 @@ def get_login_response(session: SessionDep, response: Response, result: User, me
     onboarded = session.exec(select(UserProfile).where(UserProfile.user_id == result.id)).first() is not None
     access_token, acc_exp = create_access_token(str(result.id))
     response.set_cookie(
-        key="accessToken",
+        key=ACCESS_TOKEN_KEY,
         value=access_token,
         httponly=True,
         secure=True,
@@ -27,7 +28,7 @@ def get_login_response(session: SessionDep, response: Response, result: User, me
     )
     refresh_token, ref_exp, _ = create_refresh_token(str(result.id)) # Later configurate jti
     response.set_cookie(
-        key="refreshToken",
+        key=REFRESH_TOKEN_KEY,
         value=refresh_token,
         httponly=True,
         secure=True,
