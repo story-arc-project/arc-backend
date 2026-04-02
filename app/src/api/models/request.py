@@ -10,3 +10,7 @@ class SignupRequest(BaseModel):
 
 class VerificationRequest(BaseModel):
     email: EmailStr
+
+class VerifyCodeRequest(BaseModel):
+    email: EmailStr
+    code: str

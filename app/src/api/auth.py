@@ -1,9 +1,9 @@
 from fastapi import APIRouter, Response
 from sqlmodel import select
 
-from src.utils.verify import send_code
+from src.utils.verify import send_code, verify_code
 from src.api.models.base import ErrorResponse, LoginData, UserInfo
-from src.api.models.request import LoginRequest, SignupRequest, VerificationRequest
+from src.api.models.request import LoginRequest, SignupRequest, VerificationRequest, VerifyCodeRequest
 from src.api.models.response import LoginResponse, SignupResponse, VerificationSentResponse
 from src.db.db import SessionDep
 from src.db.models import User, UserProfile
@@ -109,3 +109,15 @@ async def send_verification(body: VerificationRequest, session: SessionDep, resp
         )
     response.status_code = 200
     return VerificationSentResponse()
+
+@auth_router.post("/verify-email")
+async def verify(body: VerifyCodeRequest, session: SessionDep, response: Response):
+    statement = select(User).where(User.email == body.email)
+    result = session.exec(statement).one_or_none()
+    if result is None or not verify_code(body.email, body.code):
+        response.status_code = 401
+        return ErrorResponse(
+            code = ErrorResponseCode.INVALID_CODE,
+            message = "The verification code is incorrect."
+        )
+    return get_login_response(session, response, result, "Email verified successfully. You have been logged in.")
