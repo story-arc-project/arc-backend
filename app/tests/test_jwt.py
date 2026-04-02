@@ -22,7 +22,7 @@ def test_create_and_verify_access_token():
     assert payload != JWTTokenStatus.EXPIRED
     assert payload != JWTTokenStatus.INVALID
     assert payload.sub == user_id
-    assert payload.type == str(ACCESS_TOKEN_TYPE)
+    assert payload.type == ACCESS_TOKEN_TYPE
     assert isinstance(payload.exp, int)
     assert int(exp.timestamp()) == payload.exp
 
@@ -37,7 +37,7 @@ def test_create_and_verify_refresh_token():
     assert payload != JWTTokenStatus.INVALID
     assert payload.sub == user_id
     assert payload.jti == jti
-    assert payload.type == str(REFRESH_TOKEN_TYPE)
+    assert payload.type == REFRESH_TOKEN_TYPE
     assert isinstance(payload.exp, int)
     assert int(exp.timestamp()) == payload.exp
 

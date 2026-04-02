@@ -1,16 +1,16 @@
 import enum
 
-class UserStatus(enum.Enum):
+class UserStatus(str, enum.Enum):
     UNVERIFIED = "unverified"
     VERIFIED = "verified"
 
-class JWTTokenStatus(enum.Enum):
+class JWTTokenStatus(str, enum.Enum):
     EXPIRED = "AUTH_TOKEN_EXPIRED"
     INVALID = "AUTH_TOKEN_INVALID"
     REUSED = "AUTH_REUSE_DETECTED"
     REVOKED = "AUTH_REVOKED"
 
-class ErrorResponseCode(enum.Enum):
+class ErrorResponseCode(str, enum.Enum):
     SERVER_ERROR = "SERVER_ERROR"
     INVALID_CREDENTIALS = "INVALID_CREDENTIALS"
     EMAIL_NOT_VERIFIED = "EMAIL_NOT_VERIFIED"

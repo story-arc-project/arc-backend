@@ -49,7 +49,7 @@ def verify_access_token(token: str):
         payload_data = jwt.decode(token, get_key(), [JWT_ALG])
         try:
             payload = AccessTokenPayload(**payload_data)
-            if payload.type != str(ACCESS_TOKEN_TYPE):
+            if payload.type != ACCESS_TOKEN_TYPE:
                 return JWTTokenStatus.INVALID
         except ValidationError:
             return JWTTokenStatus.INVALID
@@ -64,7 +64,7 @@ def verify_refresh_token(token: str):
         payload_data = jwt.decode(token, get_key(), [JWT_ALG])
         try:
             payload = RefreshTokenPayload(**payload_data)
-            if payload.type != str(REFRESH_TOKEN_TYPE):
+            if payload.type != REFRESH_TOKEN_TYPE:
                 return JWTTokenStatus.INVALID
         except ValidationError:
             return JWTTokenStatus.INVALID
