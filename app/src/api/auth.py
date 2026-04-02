@@ -190,7 +190,7 @@ async def social_login(request: Request, body: SocialLoginRequest, session: Sess
         _oauth = OauthAccount(
             user_id = result.id,
             provider = OauthProviderId.GOOGLE,
-            provider_user_id = id # Create UNIQUE
+            provider_user_id = id
         )
     else:
         result = session.get(User, _oauth.user_id)

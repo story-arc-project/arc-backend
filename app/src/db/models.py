@@ -2,7 +2,7 @@ from datetime import datetime, date
 from sqlalchemy import DateTime, func, Column
 from sqlalchemy.sql.functions import now
 from src.enums import OauthProviderId, UserStatus
-from sqlmodel import ARRAY, Field, SQLModel, String
+from sqlmodel import ARRAY, Field, SQLModel, String, UniqueConstraint
 
 class User(SQLModel, table=True):
     __tablename__: str = "users"  # pyright: ignore[reportIncompatibleVariableOverride]
@@ -64,6 +64,9 @@ class UserProfile(SQLModel, table=True):
 
 class OauthAccount(SQLModel, table=True):
     __tablename__: str = "oauth_accounts"  # pyright: ignore[reportIncompatibleVariableOverride]
+    __table_args__: tuple[UniqueConstraint] = (
+        UniqueConstraint("provider", "provider_user_id"),
+    )
     id: int | None= Field(default=None, primary_key=True)
     user_id: int = Field(foreign_key="users.id")
     provider: OauthProviderId
