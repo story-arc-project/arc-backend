@@ -157,41 +157,42 @@ async def social_login(request: Request, body: SocialLoginRequest, session: Sess
         )
     id: str | None = res.get("sub")
     email: str | None = res.get("email")
-    if id is None or email is None:
+    is_email_verified: bool | None = res.get("email_verified")
+    if id is None or email is None or is_email_verified is None or not is_email_verified:
         response.status_code = 401
         return ErrorResponse(
             code = ErrorResponseCode.SOCIAL_AUTH_FAILED,
             message = "Could not verify social credentials with Google."
         )
 
-    statement = select(User).where(User.email == email)
-    result = session.exec(statement).one_or_none()
-    new = False
-    if result is None:
-        new = True
-        result = User(
-            email = email,
-            password_hash = None
-        )
-
-    print(res)
-    if res.get("email_verified") is True:
-        result.status = UserStatus.VERIFIED
-
-    session.add(result)
-    session.flush()
-
-    if result.id is None:
-        raise RuntimeError("User ID missing after flush")
-
-    statement = select(OauthAccount).where(OauthAccount.user_id == result.id, OauthAccount.provider == OauthProviderId.GOOGLE, OauthAccount.provider_user_id == id)
+    statement = select(OauthAccount).where(
+        OauthAccount.provider == OauthProviderId.GOOGLE,
+        OauthAccount.provider_user_id == id
+    )
     _oauth = session.exec(statement).one_or_none()
+    new = False
     if _oauth is None:
+        statement = select(User).where(User.email == email)
+        result = session.exec(statement).one_or_none()
+        if result is None:
+            new = True
+            result = User(
+                email = email,
+                password_hash = None
+            )
+        session.add(result)
+        session.flush()
+        if result.id is None:
+            raise RuntimeError("User ID missing after flush")
         _oauth = OauthAccount(
             user_id = result.id,
             provider = OauthProviderId.GOOGLE,
             provider_user_id = id # Create UNIQUE
         )
+    else:
+        result = session.get(User, _oauth.user_id)
+        if result is None:
+            raise RuntimeError("User missing from foreign key")
 
     session.add(_oauth)
     session.commit()
