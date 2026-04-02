@@ -9,7 +9,7 @@ def _keygen(email: EmailStr):
     return f"verify:{email}"
 
 def store_code(email: EmailStr, code: str):
-    _ = r.set(_keygen(email), code, VERIFICATION_CODE_EXPIRE * 60)
+    _ = r.set(_keygen(email), code, int(VERIFICATION_CODE_EXPIRE * 60))
 
 def get_code(email: EmailStr):
     return r.get(_keygen(email))

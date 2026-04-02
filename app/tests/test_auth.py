@@ -1,12 +1,11 @@
+from time import sleep
 import pytest  
 from fastapi.testclient import TestClient
-from sqlmodel import Session, SQLModel, create_engine, select
+from sqlmodel import Session, SQLModel, create_engine
 from sqlmodel.pool import StaticPool
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 from email.mime.multipart import MIMEMultipart
 
-from src.db.models import User
-from src.enums import UserStatus
 from src.main import app
 from src.db.db import get_session
 from src.utils.mail import send_mail
@@ -70,7 +69,7 @@ def test_send_mail(mock_mail: MagicMock):
     assert sent_mail["Body"] == body
 
 
-def test_signup(client: TestClient):
+def test_signup(client: TestClient, mock_mail: MagicMock):
     response = client.post(
         "/auth/signup",
         json={
@@ -90,9 +89,97 @@ def test_signup(client: TestClient):
     )
 
     assert response.status_code == 409
+    assert get_sent_mail(mock_mail)["To"] == email
 
 
-def test_login(client: TestClient, session: Session):
+def test_verification(client: TestClient, mock_mail: MagicMock):
+    response = client.post(
+        "/auth/signup",
+        json={
+            "email": email,
+            "password": password
+        }
+    )
+
+    exp = 0.02
+    with patch("src.db.red.VERIFICATION_CODE_EXPIRE", exp):
+        response = client.post(
+            "/auth/resend-verification",
+            json={
+                "email": email
+            }
+        )
+
+        assert response.status_code == 200
+
+        sent_mail = get_sent_mail(mock_mail)
+        assert sent_mail["To"] == email
+
+        code = sent_mail["Body"] # Assume body has only code
+
+        sleep(int(exp * 60) + 1)
+    
+        response = client.post(
+            "/auth/verify-email",
+            json={
+                "email": email,
+                "code": code
+            }
+        )
+
+        assert response.status_code == 401
+        assert response.cookies.get("accessToken") is None
+        assert response.cookies.get("refreshToken") is None
+    
+    response = client.post(
+        "/auth/resend-verification",
+        json={
+            "email": email
+        }
+    )
+
+    assert response.status_code == 200
+
+    sent_mail = get_sent_mail(mock_mail)
+    assert sent_mail["To"] == email
+
+    code = sent_mail["Body"]
+
+    response = client.post(
+        "/auth/verify-email",
+        json={
+            "email": email,
+            "code": "1234"
+        }
+    )
+
+    assert response.status_code == 401
+    assert response.cookies.get("accessToken") is None
+    assert response.cookies.get("refreshToken") is None
+
+    response = client.post(
+        "/auth/verify-email",
+        json={
+            "email": email,
+            "code": code
+        }
+    )
+
+    assert response.status_code == 200
+    assert response.cookies.get("accessToken") is not None
+    assert response.cookies.get("refreshToken") is not None
+
+    response = client.post(
+        "/auth/resend-verification",
+        json={
+            "email": email
+        }
+    )
+
+    assert response.status_code == 400
+
+
+def test_login(client: TestClient, mock_mail: MagicMock):
     response = client.post(
         "/auth/signup",
         json={
@@ -110,13 +197,20 @@ def test_login(client: TestClient, session: Session):
     )
 
     assert response.status_code == 403
+    assert response.cookies.get("accessToken") is None
+    assert response.cookies.get("refreshToken") is None
 
-    statement = select(User).where(User.email == email)
-    user = session.exec(statement).one()
-    user.status = UserStatus.VERIFIED
-    session.add(user)
-    session.commit()
-    session.refresh(user)
+    code = get_sent_mail(mock_mail)["Body"]
+
+    response = client.post(
+        "/auth/verify-email",
+        json={
+            "email": email,
+            "code": code
+        }
+    )
+
+    assert response.status_code == 200
 
     response = client.post(
         "/auth/login",
@@ -127,3 +221,5 @@ def test_login(client: TestClient, session: Session):
     )
 
     assert response.status_code == 200
+    assert response.cookies.get("accessToken") is not None
+    assert response.cookies.get("refreshToken") is not None
