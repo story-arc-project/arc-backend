@@ -183,8 +183,9 @@ async def social_login(request: Request, body: SocialLoginRequest, session: Sess
                 email = email,
                 password_hash = None
             )
-        session.add(result)
-        session.flush()
+            session.add(result)
+            session.commit()
+            session.refresh(result)
         if result.id is None:
             raise RuntimeError("User ID missing after flush")
         _oauth = OauthAccount(
