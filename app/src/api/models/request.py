@@ -14,3 +14,7 @@ class VerificationRequest(BaseModel):
 class VerifyCodeRequest(BaseModel):
     email: EmailStr
     code: str
+
+class SocialLoginRequest(BaseModel):
+    provider: str = "google" # restrict to google for now
+    token: str

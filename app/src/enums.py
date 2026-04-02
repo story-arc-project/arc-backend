@@ -10,6 +10,9 @@ class JWTTokenStatus(str, enum.Enum):
     REUSED = "AUTH_REUSE_DETECTED"
     REVOKED = "AUTH_REVOKED"
 
+class OauthProviderId(str, enum.Enum):
+    GOOGLE = "google"
+
 class ErrorResponseCode(str, enum.Enum):
     SERVER_ERROR = "SERVER_ERROR"
     INVALID_CREDENTIALS = "INVALID_CREDENTIALS"
@@ -17,3 +20,4 @@ class ErrorResponseCode(str, enum.Enum):
     EMAIL_ALREADY_EXISTS = "EMAIL_ALREADY_EXISTS"
     ALREADY_VERIFIED = "ALREADY_VERIFIED"
     INVALID_CODE = "INVALID_CODE"
+    SOCIAL_AUTH_FAILED = "SOCIAL_AUTH_FAILED"

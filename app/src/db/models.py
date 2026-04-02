@@ -1,7 +1,7 @@
 from datetime import datetime, date
 from sqlalchemy import DateTime, func, Column
 from sqlalchemy.sql.functions import now
-from src.enums import UserStatus
+from src.enums import OauthProviderId, UserStatus
 from sqlmodel import ARRAY, Field, SQLModel, String
 
 class User(SQLModel, table=True):
@@ -66,7 +66,7 @@ class OauthAccount(SQLModel, table=True):
     __tablename__: str = "oauth_accounts"  # pyright: ignore[reportIncompatibleVariableOverride]
     id: int | None= Field(default=None, primary_key=True)
     user_id: int = Field(foreign_key="users.id")
-    provider: str
+    provider: OauthProviderId
     provider_user_id: str
     created_at: datetime = Field(
         default_factory=now,
