@@ -9,7 +9,7 @@ from src.db.db import SessionDep
 from src.db.models import User, UserProfile
 from src.enums import ErrorResponseCode, UserStatus
 from src.utils.pwd import hash_password, verify_password
-from src.utils.token import create_access_token
+from src.utils.token import create_access_token, create_refresh_token
 
 auth_router = APIRouter()
 
@@ -24,6 +24,16 @@ def get_login_response(session: SessionDep, response: Response, result: User, me
         samesite="strict",
         path="/",
         expires=int(acc_exp.timestamp())
+    )
+    refresh_token, ref_exp, _ = create_refresh_token(str(result.id)) # Later configurate jti
+    response.set_cookie(
+        key="refreshToken",
+        value=refresh_token,
+        httponly=True,
+        secure=True,
+        samesite="strict",
+        path="/",
+        expires=int(ref_exp.timestamp())
     )
     response.status_code = 200
     return LoginResponse(
