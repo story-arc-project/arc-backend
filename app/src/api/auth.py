@@ -198,6 +198,10 @@ async def social_login(request: Request, body: SocialLoginRequest, session: Sess
         if result is None:
             raise RuntimeError("User missing from foreign key")
 
+    if result.status != UserStatus.VERIFIED:
+        result.status = UserStatus.VERIFIED
+        session.add(result)
+
     session.add(_oauth)
     session.commit()
 
