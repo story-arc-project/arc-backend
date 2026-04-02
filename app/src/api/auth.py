@@ -13,6 +13,30 @@ from src.utils.token import create_access_token
 
 auth_router = APIRouter()
 
+def get_login_response(session: SessionDep, response: Response, result: User, message: str):
+    onboarded = session.exec(select(UserProfile).where(UserProfile.user_id == result.id)).first() is not None
+    access_token, acc_exp = create_access_token(str(result.id))
+    response.set_cookie(
+        key="access_token",
+        value=access_token,
+        httponly=True,
+        secure=True,
+        samesite="strict",
+        path="/",
+        expires=int(acc_exp.timestamp())
+    )
+    response.status_code = 200
+    return LoginResponse(
+        message = message,
+        data = LoginData(
+            user = UserInfo(
+                email = result.email
+            ),
+            onboarded = onboarded,
+            expire_at = acc_exp
+        )
+    )
+
 @auth_router.post("/signup")
 async def signup(body: SignupRequest, session: SessionDep, response: Response):
     statement = select(User).where(User.email == body.email)
@@ -60,28 +84,7 @@ async def login(body: LoginRequest, session: SessionDep, response: Response):
             message = "Email verification needed."
         )
     # Add account lock when too many requests
-    onboarded = session.exec(select(UserProfile).where(UserProfile.user_id == result.id)).first() is not None
-    access_token, acc_exp = create_access_token(str(result.id))
-    response.set_cookie(
-        key="access_token",
-        value=access_token,
-        httponly=True,
-        secure=True,
-        samesite="strict",
-        path="/",
-        expires=int(acc_exp.timestamp())
-    )
-    response.status_code = 200
-    return LoginResponse(
-        message = "Login successful",
-        data = LoginData(
-            user = UserInfo(
-                email = result.email
-            ),
-            onboarded = onboarded,
-            expire_at = acc_exp
-        )
-    )
+    return get_login_response(session, response, result, "Login successful")
 
 @auth_router.post("/resend-verification")
 async def send_verification(body: VerificationRequest, session: SessionDep, response: Response):
