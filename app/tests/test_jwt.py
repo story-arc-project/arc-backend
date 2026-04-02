@@ -1,4 +1,3 @@
-import pytest
 from unittest.mock import patch
 from datetime import datetime, timedelta, timezone
 from uuid import UUID
@@ -13,11 +12,6 @@ from src.utils.token import (
 )
 from src.enums import JWTTokenStatus
 from src.const import ACCESS_TOKEN_EXPIRE, REFRESH_TOKEN_EXPIRE
-
-
-@pytest.fixture(autouse=True)
-def set_jwt_key(monkeypatch: pytest.MonkeyPatch):
-    monkeypatch.setenv("JWT_KEY", "testsecrettestsecrettestsecrettestsecret")
 
 
 def test_create_and_verify_access_token():
