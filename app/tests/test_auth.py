@@ -1,11 +1,12 @@
 from time import sleep
 import pytest  
 from fastapi.testclient import TestClient
-from sqlmodel import Session, SQLModel, create_engine
+from sqlmodel import ARRAY, JSON, Session, SQLModel, create_engine, inspect
 from sqlmodel.pool import StaticPool
 from unittest.mock import MagicMock, patch
 from email.mime.multipart import MIMEMultipart
 
+from src.db.models import UserProfile
 from src.main import app
 from src.db.db import get_session
 from src.utils.mail import send_mail
@@ -17,7 +18,11 @@ password = "testpassword"
 
 
 @pytest.fixture(name="session")  
-def session_fixture():  
+def session_fixture():
+    table = inspect(UserProfile).local_table
+    for col in table.columns:
+        if isinstance(col.type, ARRAY):
+            col.type = JSON()
     engine = create_engine(
         "sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool
     )
