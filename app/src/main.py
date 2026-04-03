@@ -1,7 +1,10 @@
 from contextlib import asynccontextmanager
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from os import getenv
+
+from fastapi.responses import JSONResponse
+from src.api.models.exc import AppException
 from src.db.db import create_db_and_tables
 from src.api.auth import auth_router
 
@@ -21,6 +24,13 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"]
 )
+
+@app.exception_handler(AppException)
+async def app_exception_handler(request: Request, exc: AppException):
+    return JSONResponse(
+        status_code = exc.status_code,
+        content = exc.error.model_dump()
+    )
 
 app.include_router(
     auth_router,
