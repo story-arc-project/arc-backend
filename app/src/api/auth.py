@@ -1,21 +1,23 @@
 from datetime import datetime, timezone
-from fastapi import APIRouter, Request, Response
+from typing import Annotated
+from fastapi import APIRouter, Depends, Request, Response
 from pydantic import BaseModel
 from sqlmodel import select
 
+from src.utils.auth import check_auth
 from src.utils.env import get_env
 from src.utils.cors import check_cors
 from src.utils.oauth import google_login
 from src.const import ACCESS_TOKEN_KEY, LOGIN_REDIRECT_ENDPOINT_PREFIX, REFRESH_TOKEN_KEY
 from src.utils.verify import send_code, verify_code
-from src.api.models.base import ErrorResponse, LoginData, RefreshData, UserInfo
-from src.api.models.request import LoginRequest, SignupRequest, SocialLoginRequest, VerificationRequest, VerifyCodeRequest
-from src.api.models.response import LoginResponse, RefreshResponse, SignupResponse, VerificationSentResponse
+from src.api.models.base import ErrorResponse, LoginData, OnboardResponseData, RefreshData, UserInfo
+from src.api.models.request import LoginRequest, OnboardRequest, SignupRequest, SocialLoginRequest, VerificationRequest, VerifyCodeRequest
+from src.api.models.response import LoginResponse, OnboardResponse, RefreshResponse, SignupResponse, VerificationSentResponse
 from src.db.db import SessionDep
 from src.db.models import OauthAccount, Token, User, UserProfile
 from src.enums import Environment, ErrorResponseCode, JWTTokenStatus, OauthProviderId, UserStatus
 from src.utils.pwd import hash_password, verify_password
-from src.utils.token import create_access_token, create_refresh_token, hash_jti, verify_refresh_token
+from src.utils.token import AccessTokenPayload, create_access_token, create_refresh_token, hash_jti, verify_refresh_token
 
 auth_router = APIRouter()
 
@@ -319,5 +321,32 @@ async def refresh(request: Request, session: SessionDep, response: Response):
     return RefreshResponse(
         data = RefreshData(
             expire_at = set_token_res.acc_exp
+        )
+    )
+
+@auth_router.post("/onboarding")
+async def onboard(body: OnboardRequest, session: SessionDep, response: Response, payload: Annotated[AccessTokenPayload, Depends(check_auth)]):
+    user_id = int(payload.sub)
+    statement = select(UserProfile).where(UserProfile.user_id == user_id)
+    user_profile = session.exec(statement).one_or_none()
+    if user_profile is not None:
+        # TODO: Do something
+        pass
+    user_profile = UserProfile(
+        user_id = user_id,
+        name = body.name,
+        birth = body.birth,
+        phone = body.phone,
+        education = body.education,
+        worry = body.worry,
+        interest = body.interest
+    )
+    session.add(user_profile)
+    session.commit()
+    response.status_code = 200
+    return OnboardResponse(
+        message = "Onboarding completed successfully.",
+        data = OnboardResponseData(
+            onboarded = True
         )
     )

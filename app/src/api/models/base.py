@@ -28,3 +28,6 @@ class LoginData(BaseModel):
 
 class RefreshData(BaseModel):
     expire_at: datetime
+
+class OnboardResponseData(BaseModel):
+    onboarded: bool

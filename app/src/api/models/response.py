@@ -1,4 +1,4 @@
-from src.api.models.base import RefreshData, SuccessResponseWithData, LoginData, SuccessResponse
+from src.api.models.base import OnboardResponseData, RefreshData, SuccessResponseWithData, LoginData, SuccessResponse
 
 class LoginResponse(SuccessResponseWithData[LoginData]):
     pass
@@ -11,3 +11,6 @@ class VerificationSentResponse(SuccessResponse):
 
 class RefreshResponse(SuccessResponseWithData[RefreshData]):
     message: str = "Tokens refreshed successfully."
+
+class OnboardResponse(SuccessResponseWithData[OnboardResponseData]):
+    pass
