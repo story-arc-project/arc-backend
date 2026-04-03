@@ -84,7 +84,11 @@ def verify_access_token(token: str):
         return JWTTokenStatus.INVALID
     except jwt.exceptions.ExpiredSignatureError:
         return JWTTokenStatus.EXPIRED
-    return payload
+    try:
+        _ = int(payload.sub)
+        return payload
+    except ValueError:
+        return JWTTokenStatus.INVALID
 
 def verify_refresh_token(token: str):
     try:
