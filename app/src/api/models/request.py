@@ -28,19 +28,38 @@ class OnboardRequest(BaseModel):
     worry: list[str]
     interest: list[str]
 
+    @field_validator("name", mode="after")
+    @classmethod
+    def validate_name(cls, v: str):
+        if len(v) == 0:
+            raise ValueError("Name must not be empty")
+        return v
+
     @field_validator("birth", mode="before")
     @classmethod
-    def validate_date_format(cls, v: str):
+    def validate_birth(cls, v):
+        if not isinstance(v, str):
+            raise ValueError("Birth must be a string")
         try:
-            return date.fromisoformat(v)
+            d = date.fromisoformat(v)
         except ValueError:
-            raise ValueError("Must be a valid YYYY-MM-DD date")
+            raise ValueError("Birth must be a valid YYYY-MM-DD date")
+        if d > date.today():
+            raise ValueError("Birth must be a past date")
+        return d
     
-    @field_validator("phone")
+    @field_validator("phone", mode="after")
     @classmethod
     def validate_phone(cls, v: str):
         if len(v) != 11:
             raise ValueError("Phone number must be 11 digits")
         if not v.isdigit():
             raise ValueError("Phone number must contain digits only")
+        return v
+
+    @field_validator("education", mode="after")
+    @classmethod
+    def validate_education(cls, v: str):
+        if len(v) == 0:
+            raise ValueError("Education must not be empty")
         return v
