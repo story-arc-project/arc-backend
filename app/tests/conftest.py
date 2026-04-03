@@ -28,3 +28,28 @@ def mock_mail():
         mock_server.send_message.return_value = {}
 
         yield mock_server
+
+@pytest.fixture(autouse=True)
+def mock_jwt_key():
+    with patch("src.utils.token.getenv") as mock_getenv:
+        def fake_env(key: str):
+            return {
+                "JWT_KEY": "fakejwtkeyfakejwtkeyfakejwtkeyfakejwtkey",
+                "HMAC_KEY": "fakehmackeyfakehmackeyfakehmackeyfakehmackey"
+            }.get(key)
+        
+        mock_getenv.side_effect = fake_env
+
+        yield mock_getenv
+
+@pytest.fixture(autouse=True)
+def dev_env():
+    with patch("src.api.auth.getenv") as mock_getenv:
+        def fake_env(key: str, default):
+            return {
+                "ENVIRONMENT": "development"
+            }.get(key, default)
+        
+        mock_getenv.side_effect = fake_env
+
+        yield mock_getenv

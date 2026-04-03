@@ -25,6 +25,16 @@ class RefreshTokenPayload(BaseModel):
     iat: int
     type: Literal["refresh"] = REFRESH_TOKEN_TYPE
 
+class AccessTokenResult(BaseModel):
+    token: str
+    exp: datetime
+
+class RefreshTokenResult(BaseModel):
+    token: str
+    exp: datetime
+    jti: str
+    iat: datetime
+
 def get_key():
     key = getenv("JWT_KEY")
     if key is None:
@@ -39,7 +49,10 @@ def create_access_token(user_id: str):
         iat = int(iat.timestamp()),
         exp = int(exp.timestamp())
     )
-    return jwt.encode(payload.model_dump(), get_key(), JWT_ALG), exp
+    return AccessTokenResult(
+        token = jwt.encode(payload.model_dump(), get_key(), JWT_ALG),
+        exp = exp
+    )
 
 def create_refresh_token(user_id: str):
     jti = str(uuid4())
@@ -51,7 +64,12 @@ def create_refresh_token(user_id: str):
         iat = int(iat.timestamp()),
         exp = int(exp.timestamp())
     )
-    return jwt.encode(payload.model_dump(), get_key(), JWT_ALG), exp, jti
+    return RefreshTokenResult(
+        token = jwt.encode(payload.model_dump(), get_key(), JWT_ALG),
+        exp = exp,
+        jti = jti,
+        iat = iat
+    )
 
 def verify_access_token(token: str):
     try:
@@ -62,7 +80,7 @@ def verify_access_token(token: str):
                 return JWTTokenStatus.INVALID
         except ValidationError:
             return JWTTokenStatus.INVALID
-    except jwt.exceptions.InvalidSignatureError:
+    except jwt.exceptions.DecodeError:
         return JWTTokenStatus.INVALID
     except jwt.exceptions.ExpiredSignatureError:
         return JWTTokenStatus.EXPIRED
@@ -77,7 +95,7 @@ def verify_refresh_token(token: str):
                 return JWTTokenStatus.INVALID
         except ValidationError:
             return JWTTokenStatus.INVALID
-    except jwt.exceptions.InvalidSignatureError:
+    except jwt.exceptions.DecodeError:
         return JWTTokenStatus.INVALID
     except jwt.exceptions.ExpiredSignatureError:
         return JWTTokenStatus.EXPIRED
@@ -86,5 +104,5 @@ def verify_refresh_token(token: str):
 def hash_jti(jti: str):
     key = getenv("HMAC_KEY")
     if key is None:
-        return None
+        raise ValueError("Hmac key not configured")
     return hmac.new(key.encode(), jti.encode(), hashlib.sha256).hexdigest()

@@ -67,7 +67,7 @@ class OauthAccount(SQLModel, table=True):
     __table_args__: tuple[UniqueConstraint] = (
         UniqueConstraint("provider", "provider_user_id"),
     )
-    id: int | None= Field(default=None, primary_key=True)
+    id: int | None = Field(default=None, primary_key=True)
     user_id: int = Field(foreign_key="users.id")
     provider: OauthProviderId
     provider_user_id: str
@@ -88,3 +88,13 @@ class OauthAccount(SQLModel, table=True):
             nullable=False
         )
     )
+
+class Token(SQLModel, table=True):
+    __tablename__: str = "tokens"  # pyright: ignore[reportIncompatibleVariableOverride]
+    id: int | None = Field(default=None, primary_key=True)
+    jti_hash: str = Field(unique=True, index=True)
+    user_id: int = Field(foreign_key="users.id")
+    iat: datetime = Field(sa_column=Column(DateTime(timezone=True), nullable=False))
+    exp: datetime = Field(sa_column=Column(DateTime(timezone=True), nullable=False))
+    next: int | None = None
+    revoked: bool = False
