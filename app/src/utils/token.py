@@ -1,3 +1,5 @@
+import hashlib
+import hmac
 from typing import Literal
 import jwt
 from os import getenv
@@ -80,3 +82,9 @@ def verify_refresh_token(token: str):
     except jwt.exceptions.ExpiredSignatureError:
         return JWTTokenStatus.EXPIRED
     return payload
+
+def hash_jti(jti: str):
+    key = getenv("HMAC_KEY")
+    if key is None:
+        return None
+    return hmac.new(key.encode(), jti.encode(), hashlib.sha256).hexdigest()
