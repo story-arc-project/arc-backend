@@ -44,7 +44,7 @@ def mock_jwt_key():
 
 @pytest.fixture(autouse=True)
 def dev_env():
-    with patch("src.api.auth.getenv") as mock_getenv:
+    with patch("src.utils.env.getenv") as mock_getenv:
         def fake_env(key: str, default):
             return {
                 "ENVIRONMENT": "development"
