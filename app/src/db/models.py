@@ -31,7 +31,7 @@ class User(SQLModel, table=True):
 class UserProfile(SQLModel, table=True):
     __tablename__: str = "user_profiles"  # pyright: ignore[reportIncompatibleVariableOverride]
     id: int | None = Field(default=None, primary_key=True)
-    user_id: int = Field(foreign_key="users.id")
+    user_id: int = Field(foreign_key="users.id", unique=True)
     name: str
     birth: date
     phone: str = Field(max_length=11)
