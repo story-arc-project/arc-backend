@@ -1,3 +1,4 @@
+from typing import Literal
 import jwt
 from os import getenv
 from uuid import uuid4
@@ -12,13 +13,15 @@ REFRESH_TOKEN_TYPE = "refresh"
 class AccessTokenPayload(BaseModel):
     sub: str
     exp: int
-    type: str = ACCESS_TOKEN_TYPE
+    iat: int
+    type: Literal["access"] = ACCESS_TOKEN_TYPE
 
 class RefreshTokenPayload(BaseModel):
     sub: str
     jti: str
     exp: int
-    type: str = REFRESH_TOKEN_TYPE
+    iat: int
+    type: Literal["refresh"] = REFRESH_TOKEN_TYPE
 
 def get_key():
     key = getenv("JWT_KEY")
@@ -27,19 +30,23 @@ def get_key():
     return key
 
 def create_access_token(user_id: str):
-    exp = datetime.now(timezone.utc) + timedelta(minutes=ACCESS_TOKEN_EXPIRE)
+    iat = datetime.now(timezone.utc)
+    exp = iat + timedelta(minutes=ACCESS_TOKEN_EXPIRE)
     payload = AccessTokenPayload(
         sub = user_id,
+        iat = int(iat.timestamp()),
         exp = int(exp.timestamp())
     )
     return jwt.encode(payload.model_dump(), get_key(), JWT_ALG), exp
 
 def create_refresh_token(user_id: str):
     jti = str(uuid4())
-    exp = datetime.now(timezone.utc) + timedelta(minutes=REFRESH_TOKEN_EXPIRE)
+    iat = datetime.now(timezone.utc)
+    exp = iat + timedelta(minutes=REFRESH_TOKEN_EXPIRE)
     payload = RefreshTokenPayload(
         sub = user_id,
         jti = jti,
+        iat = int(iat.timestamp()),
         exp = int(exp.timestamp())
     )
     return jwt.encode(payload.model_dump(), get_key(), JWT_ALG), exp, jti
