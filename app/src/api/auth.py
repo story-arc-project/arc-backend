@@ -106,7 +106,7 @@ async def signup(body: SignupRequest, session: SessionDep, response: Response):
             code = ErrorResponseCode.EMAIL_ALREADY_EXISTS,
             message = "This email is already registered."
         )
-    # Add weak password detection
+    # TODO: Add weak password detection
     password_hash = hash_password(body.password)
     user = User(
         email = body.email,
@@ -143,12 +143,12 @@ async def login(body: LoginRequest, session: SessionDep, response: Response):
             code = ErrorResponseCode.EMAIL_NOT_VERIFIED,
             message = "Email verification needed."
         )
-    # Add account lock when too many requests
+    # TODO: Add account lock when too many requests
     return get_login_response(session, response, result, "Login successful")
 
 @auth_router.post("/resend-verification")
 async def send_verification(body: VerificationRequest, session: SessionDep, response: Response):
-    # Add rate limit
+    # TODO: Add rate limit
     statement = select(User).where(User.email == body.email)
     result = session.exec(statement).one_or_none()
     if result is None:

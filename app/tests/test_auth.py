@@ -120,7 +120,7 @@ def test_verification(client: TestClient, mock_mail: MagicMock):
         sent_mail = get_sent_mail(mock_mail)
         assert sent_mail["To"] == email
 
-        code = sent_mail["Body"] # Assume body has only code
+        code = sent_mail["Body"] # TODO: Assume body has only code
 
         sleep(int(exp * 60) + 1)
     

@@ -16,5 +16,5 @@ class VerifyCodeRequest(BaseModel):
     code: str
 
 class SocialLoginRequest(BaseModel):
-    provider: str = "google" # restrict to google for now
+    provider: str = "google" # TODO: restrict to google for now
     token: str
