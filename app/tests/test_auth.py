@@ -2,14 +2,15 @@ from datetime import datetime, timedelta, timezone
 from time import sleep
 import pytest  
 from fastapi.testclient import TestClient
-from sqlmodel import ARRAY, JSON, Session, SQLModel, create_engine, inspect, select
-from sqlmodel.pool import StaticPool
+from sqlmodel import Session, SQLModel, create_engine, select
+from sqlalchemy.pool import NullPool
 from unittest.mock import MagicMock, patch
 from email.mime.multipart import MIMEMultipart
+from testcontainers.postgres import PostgresContainer
 
 from src.utils.token import hash_jti, verify_refresh_token
 from src.const import REFRESH_TOKEN_EXPIRE
-from src.db.models import Token, UserProfile
+from src.db.models import Token
 from src.main import app
 from src.db.db import get_session
 from src.utils.mail import send_mail
@@ -23,16 +24,11 @@ password = "testpassword"
 
 @pytest.fixture(name="session")  
 def session_fixture():
-    table = inspect(UserProfile).local_table
-    for col in table.columns:
-        if isinstance(col.type, ARRAY):
-            col.type = JSON()
-    engine = create_engine(
-        "sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool
-    )
-    SQLModel.metadata.create_all(engine)
-    with Session(engine) as session:
-        yield session
+    with PostgresContainer("postgres:16") as postgres:
+        engine = create_engine(postgres.get_connection_url(), poolclass=NullPool)
+        SQLModel.metadata.create_all(engine)
+        with Session(engine) as session:
+            yield session
 
 
 @pytest.fixture
@@ -333,30 +329,30 @@ def test_refresh(session: Session, client: TestClient, mock_mail: MagicMock):
     assert response.status_code == 403
     assert response.json()["code"] == ErrorResponseCode.AUTH_REUSE_DETECTED
     
-    # # 7. DB expired
-    # client.cookies.clear()
-    # response = client.post(
-    #     "/auth/login",
-    #     json={
-    #         "email": email,
-    #         "password": password
-    #     }
-    # )
-    # refreshToken = client.cookies.get("refreshToken")
-    # assert refreshToken is not None
-    # payload = verify_refresh_token(refreshToken)
-    # assert payload != JWTTokenStatus.INVALID
-    # assert payload != JWTTokenStatus.EXPIRED
-    # jti = payload.jti
-    # statement = select(Token).where(Token.jti_hash == hash_jti(jti))
-    # tok = session.exec(statement).one_or_none()
-    # assert tok is not None
-    # tok.exp = tok.iat - timedelta(minutes=REFRESH_TOKEN_EXPIRE + 1)
-    # session.add(tok)
-    # session.commit()
-    # response = client.post("/auth/refresh")
-    # assert response.status_code == 401
-    # assert response.json()["code"] == ErrorResponseCode.AUTH_TOKEN_EXPIRED
+    # 7. DB expired
+    client.cookies.clear()
+    response = client.post(
+        "/auth/login",
+        json={
+            "email": email,
+            "password": password
+        }
+    )
+    refreshToken = client.cookies.get("refreshToken")
+    assert refreshToken is not None
+    payload = verify_refresh_token(refreshToken)
+    assert payload != JWTTokenStatus.INVALID
+    assert payload != JWTTokenStatus.EXPIRED
+    jti = payload.jti
+    statement = select(Token).where(Token.jti_hash == hash_jti(jti))
+    tok = session.exec(statement).one_or_none()
+    assert tok is not None
+    tok.exp = tok.iat - timedelta(minutes=REFRESH_TOKEN_EXPIRE + 1)
+    session.add(tok)
+    session.commit()
+    response = client.post("/auth/refresh")
+    assert response.status_code == 401
+    assert response.json()["code"] == ErrorResponseCode.AUTH_TOKEN_EXPIRED
 
     # 8. Success
     client.cookies.clear()
