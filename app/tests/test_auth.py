@@ -366,3 +366,70 @@ def test_refresh(session: Session, client: TestClient, mock_mail: MagicMock):
     assert response.status_code == 200
     response = client.post("/auth/refresh")
     assert response.status_code == 200
+
+@pytest.fixture
+def authenticated_client(client: TestClient, mock_mail: MagicMock):
+    _ = client.post("/auth/signup", json={"email": email, "password": password})
+    response = client.post("/auth/verify-email", json={
+        "email": email,
+        "code": get_sent_mail(mock_mail)["Body"]
+    })
+    assert response.status_code == 200
+    return client
+
+valid_data = {
+    "name": "홍길동",
+    "birth": "2001-01-01",
+    "education": "서울대학교",
+    "phone": "01000000000",
+    "worry": ["진로", "이력"],
+    "interest": ["컴퓨터", "AI"]
+}
+
+@pytest.mark.parametrize("override,expected_status", [
+    # Missing required fields
+    ({"name": None}, 400),
+    ({"birth": None}, 400),
+    ({"phone": None}, 400),
+
+    # Invalid formats
+    ({"birth": "01-01-2001"}, 400),    # wrong date format
+    ({"birth": "not-a-date"}, 400),
+    ({"birth": "2099-01-01"}, 400),    # future date
+    ({"phone": "010-0000-0000"}, 400), # dashes not allowed
+    ({"phone": "0100000000"}, 400),    # too short
+    ({"phone": "010000000000"}, 400),  # too long
+    ({"phone": "abcdefghijk"}, 400),   # non-numeric
+
+    # Empty values
+    ({"name": ""}, 400),
+    ({"education": ""}, 400),
+
+    # Wrong types
+    ({"worry": "진로"}, 400),           # string instead of list
+    ({"interest": 123}, 400),
+    ({"birth": 20010101}, 400),        # int instead of string
+])
+
+def test_onboarding_invalid_data(authenticated_client: TestClient, override: dict[str, str | list[str] | int | None], expected_status: int):
+    data = {**valid_data, **{k: v for k, v in override.items() if v is not None}}
+    # Remove key entirely if value is None (simulates missing field)
+    for k, v in override.items():
+        if v is None:
+            data.pop(k, None)
+
+    response = authenticated_client.post("/auth/onboarding", json=data)
+    assert response.status_code == expected_status
+
+
+def test_onboarding_unauthenticated(client: TestClient):
+    """Should fail without prior signup/verify"""
+    response = client.post("/auth/onboarding", json=valid_data)
+    assert response.status_code in (401, 403)
+
+
+def test_onboarding_duplicate(authenticated_client: TestClient):
+    """Second onboarding attempt should fail"""
+    _ = authenticated_client.post("/auth/onboarding", json=valid_data)
+    response = authenticated_client.post("/auth/onboarding", json=valid_data)
+    assert response.status_code in (400, 409)
