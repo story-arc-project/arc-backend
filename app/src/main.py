@@ -1,5 +1,6 @@
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request
+from fastapi.exceptions import RequestValidationError, ValidationException
 from fastapi.middleware.cors import CORSMiddleware
 from os import getenv
 
@@ -30,6 +31,20 @@ async def app_exception_handler(request: Request, exc: AppException):
     return JSONResponse(
         status_code = exc.status_code,
         content = exc.error.model_dump()
+    )
+
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(request: Request, exc: ValidationException):
+    return JSONResponse(
+        status_code = 400,
+        content = {
+            "status": "error",
+            "code": "INVALID_INPUT",
+            "message": "Please provide a valid input.",
+            "data": {
+                "invalid_fields": [err["loc"][-1] for err in exc.errors()]
+            }
+        }
     )
 
 app.include_router(
