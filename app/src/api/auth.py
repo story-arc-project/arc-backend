@@ -331,7 +331,11 @@ async def onboard(body: OnboardRequest, session: SessionDep, response: Response,
     user_profile = session.exec(statement).one_or_none()
     if user_profile is not None:
         # TODO: Do something
-        pass
+        response.status_code = 400
+        return ErrorResponse(
+            code = ErrorResponseCode.DUPLICATE_ONBOARDING,
+            message = "Onboarding data already exists."
+        )
     user_profile = UserProfile(
         user_id = user_id,
         name = body.name,
