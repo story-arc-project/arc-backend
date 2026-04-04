@@ -8,6 +8,7 @@ from testcontainers.postgres import PostgresContainer
 
 from src.db.db import get_session
 from src.main import app
+from tests.const import TESTSERVER_HOST
 
 @pytest.fixture(autouse=True)
 def fake_redis():
@@ -66,5 +67,8 @@ def client(session: Session):
             yield new_session
     
     app.dependency_overrides[get_session] = override
-    yield TestClient(app)
+    yield TestClient(
+        app,
+        f"https://{TESTSERVER_HOST}"
+    )
     app.dependency_overrides.clear()
