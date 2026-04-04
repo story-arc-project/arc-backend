@@ -21,7 +21,7 @@ services:
       GMAIL: ${GMAIL}
       GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID}
       GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET}
-      HASH_KEY: ${HASH_KEY}
+      HMAC_KEY: ${HMAC_KEY}
       ENVIRONMENT: production
     depends_on:
       - db
