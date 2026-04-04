@@ -5,7 +5,6 @@ from pydantic import BaseModel
 from sqlmodel import select
 
 from src.utils.auth import check_auth
-from src.utils.env import get_env
 from src.utils.cors import check_cors
 from src.utils.oauth import google_login
 from src.const import ACCESS_TOKEN_KEY, LOGIN_REDIRECT_ENDPOINT_PREFIX, REFRESH_TOKEN_KEY
@@ -15,7 +14,7 @@ from src.api.models.request import LoginRequest, OnboardRequest, SignupRequest, 
 from src.api.models.response import LoginResponse, OnboardResponse, RefreshResponse, SignupResponse, VerificationSentResponse
 from src.db.db import SessionDep
 from src.db.models import OauthAccount, Token, User, UserProfile
-from src.enums import Environment, ErrorResponseCode, JWTTokenStatus, OauthProviderId, UserStatus
+from src.enums import ErrorResponseCode, JWTTokenStatus, OauthProviderId, UserStatus
 from src.utils.pwd import hash_password, verify_password
 from src.utils.token import AccessTokenPayload, create_access_token, create_refresh_token, hash_jti, verify_refresh_token
 
@@ -32,13 +31,12 @@ class SetTokenResult(BaseModel):
     id: int
 
 def set_tokens(user_id: int, response: Response, session: SessionDep):
-    secure = (get_env() == Environment.PRODUCTION)
     acc = create_access_token(str(user_id))
     response.set_cookie(
         key=ACCESS_TOKEN_KEY,
         value=acc.token,
         httponly=True,
-        secure=secure,
+        secure=True,
         samesite="none",
         path=ACCESS_TOKEN_PATH,
         expires=int(acc.exp.timestamp())
@@ -48,7 +46,7 @@ def set_tokens(user_id: int, response: Response, session: SessionDep):
         key=REFRESH_TOKEN_KEY,
         value=ref.token,
         httponly=True,
-        secure=secure,
+        secure=True,
         samesite="none",
         path=REFRESH_TOKEN_PATH,
         expires=int(ref.exp.timestamp())

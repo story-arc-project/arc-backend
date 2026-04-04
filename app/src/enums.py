@@ -13,10 +13,6 @@ class JWTTokenStatus(str, enum.Enum):
 class OauthProviderId(str, enum.Enum):
     GOOGLE = "google"
 
-class Environment(str, enum.Enum):
-    PRODUCTION = "production"
-    DEVELOPMENT = "development"
-
 class ErrorResponseCode(str, enum.Enum):
     SERVER_ERROR = "SERVER_ERROR"
     INVALID_CREDENTIALS = "INVALID_CREDENTIALS"

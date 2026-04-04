@@ -41,15 +41,3 @@ def mock_jwt_key():
         mock_getenv.side_effect = fake_env
 
         yield mock_getenv
-
-@pytest.fixture(autouse=True)
-def dev_env():
-    with patch("src.utils.env.getenv") as mock_getenv:
-        def fake_env(key: str, default):
-            return {
-                "ENVIRONMENT": "development"
-            }.get(key, default)
-        
-        mock_getenv.side_effect = fake_env
-
-        yield mock_getenv

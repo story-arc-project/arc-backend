@@ -22,7 +22,6 @@ services:
       GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID}
       GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET}
       HMAC_KEY: ${HMAC_KEY}
-      ENVIRONMENT: production
     depends_on:
       - db
       - redis
