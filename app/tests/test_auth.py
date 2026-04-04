@@ -2,17 +2,13 @@ from datetime import datetime, timedelta, timezone
 from time import sleep
 import pytest  
 from fastapi.testclient import TestClient
-from sqlmodel import Session, SQLModel, create_engine, select
-from sqlalchemy.pool import NullPool
+from sqlmodel import Session, select
 from unittest.mock import MagicMock, patch
 from email.mime.multipart import MIMEMultipart
-from testcontainers.postgres import PostgresContainer
 
 from src.utils.token import hash_jti, verify_refresh_token
 from src.const import REFRESH_TOKEN_EXPIRE
 from src.db.models import Token
-from src.main import app
-from src.db.db import get_session
 from src.utils.mail import send_mail
 from src.enums import ErrorResponseCode, JWTTokenStatus
 
@@ -20,26 +16,6 @@ from src.enums import ErrorResponseCode, JWTTokenStatus
 # Test data
 email = "test@gmail.com"
 password = "testpassword"
-
-
-@pytest.fixture(name="session")  
-def session_fixture():
-    with PostgresContainer("postgres:16") as postgres:
-        engine = create_engine(postgres.get_connection_url(), poolclass=NullPool)
-        SQLModel.metadata.create_all(engine)
-        with Session(engine) as session:
-            yield session
-
-
-@pytest.fixture
-def client(session: Session):
-    def override():
-        with Session(session.get_bind()) as new_session:
-            yield new_session
-    
-    app.dependency_overrides[get_session] = override
-    yield TestClient(app)
-    app.dependency_overrides.clear()
 
 
 def get_sent_mail(mock_mail: MagicMock):

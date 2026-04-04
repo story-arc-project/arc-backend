@@ -1,6 +1,13 @@
+from fastapi.testclient import TestClient
 import pytest
 from fakeredis import FakeRedis
 from unittest.mock import MagicMock, patch
+from sqlalchemy.pool import NullPool
+from sqlmodel import SQLModel, Session, create_engine
+from testcontainers.postgres import PostgresContainer
+
+from src.db.db import get_session
+from src.main import app
 
 @pytest.fixture(autouse=True)
 def fake_redis():
@@ -41,3 +48,23 @@ def mock_jwt_key():
         mock_getenv.side_effect = fake_env
 
         yield mock_getenv
+
+
+@pytest.fixture(name="session")  
+def session_fixture():
+    with PostgresContainer("postgres:16") as postgres:
+        engine = create_engine(postgres.get_connection_url(), poolclass=NullPool)
+        SQLModel.metadata.create_all(engine)
+        with Session(engine) as session:
+            yield session
+
+
+@pytest.fixture
+def client(session: Session):
+    def override():
+        with Session(session.get_bind()) as new_session:
+            yield new_session
+    
+    app.dependency_overrides[get_session] = override
+    yield TestClient(app)
+    app.dependency_overrides.clear()
