@@ -39,7 +39,7 @@ def set_tokens(user_id: int, response: Response, session: SessionDep):
         value=acc.token,
         httponly=True,
         secure=secure,
-        samesite="strict",
+        samesite="none",
         path=ACCESS_TOKEN_PATH,
         expires=int(acc.exp.timestamp())
     )
@@ -49,7 +49,7 @@ def set_tokens(user_id: int, response: Response, session: SessionDep):
         value=ref.token,
         httponly=True,
         secure=secure,
-        samesite="strict",
+        samesite="none",
         path=REFRESH_TOKEN_PATH,
         expires=int(ref.exp.timestamp())
     )
