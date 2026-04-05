@@ -5,10 +5,13 @@ from unittest.mock import MagicMock, patch
 from sqlalchemy.pool import NullPool
 from sqlmodel import SQLModel, Session, create_engine
 from testcontainers.postgres import PostgresContainer
+import os
+
+from tests.const import TESTFRONT_HOST, TESTSERVER_HOST
+os.environ["FRONTEND_HOSTS"] = f"https://{TESTFRONT_HOST}"
 
 from src.db.db import get_session
 from src.main import app
-from tests.const import TESTSERVER_HOST
 
 @pytest.fixture(autouse=True)
 def fake_redis():
@@ -69,6 +72,9 @@ def client(session: Session):
     app.dependency_overrides[get_session] = override
     yield TestClient(
         app,
-        f"https://{TESTSERVER_HOST}"
+        f"https://{TESTSERVER_HOST}",
+        headers={
+            "Origin": f"https://{TESTFRONT_HOST}"
+        }
     )
     app.dependency_overrides.clear()
