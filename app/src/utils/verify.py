@@ -1,4 +1,4 @@
-import random
+import secrets
 
 from pydantic import EmailStr
 
@@ -6,7 +6,7 @@ from src.utils.mail import send_mail
 from src.db.red import delete_code, get_code, store_code
 
 def __generate_code():
-    return str(random.randint(100000, 999999))
+    return str(secrets.randbelow(900000) + 100000)
 
 def _generate_code(email: EmailStr):
     code = __generate_code()
