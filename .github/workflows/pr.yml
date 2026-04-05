@@ -18,7 +18,9 @@ jobs:
         uses: astral-sh/setup-uv@v7
 
       - name: Set up Python
+        working-directory: ./app
         run: uv sync --frozen
 
       - name: Run tests
+        working-directory: ./app
         run: uv run pytest
