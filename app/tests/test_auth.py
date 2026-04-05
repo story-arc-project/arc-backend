@@ -5,6 +5,7 @@ from fastapi.testclient import TestClient
 from sqlmodel import Session, select
 from unittest.mock import MagicMock, patch
 from email.mime.multipart import MIMEMultipart
+from freezegun import freeze_time
 
 from src.utils.token import hash_jti, verify_refresh_token
 from src.const import REFRESH_TOKEN_EXPIRE
@@ -227,18 +228,19 @@ def test_refresh(session: Session, client: TestClient, mock_mail: MagicMock):
         }
     )
     past_time = datetime.now(timezone.utc) - timedelta(days=(REFRESH_TOKEN_EXPIRE + 1))
-    with patch("src.utils.token.datetime") as mock_dt:
-        mock_dt.now.return_value = past_time
-        mock_dt.now.timezone = timezone.utc
-        response = client.post(
-            "/auth/verify-email",
-            json={
-                "email": email,
-                "code": get_sent_mail(mock_mail)["Body"]
-            }
-        )
-        refreshToken = client.cookies.get("refreshToken")
-        assert refreshToken is not None
+    with freeze_time(past_time):
+        with patch("src.utils.token.datetime") as mock_dt:
+            mock_dt.now.return_value = past_time
+            mock_dt.now.timezone = timezone.utc
+            response = client.post(
+                "/auth/verify-email",
+                json={
+                    "email": email,
+                    "code": get_sent_mail(mock_mail)["Body"]
+                }
+            )
+            refreshToken = client.cookies.get("refreshToken")
+            assert refreshToken is not None
     client.cookies.set("refreshToken", refreshToken)
     response = client.post("/auth/refresh")
     assert response.status_code == 401
