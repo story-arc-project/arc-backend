@@ -57,7 +57,7 @@ def test_access_token_expired():
 
 def test_refresh_token_expired():
     user_id = "101"
-    past_time = datetime.now(timezone.utc) - timedelta(minutes=REFRESH_TOKEN_EXPIRE + 1)
+    past_time = datetime.now(timezone.utc) - timedelta(days=(REFRESH_TOKEN_EXPIRE + 1))
     
     with patch("src.utils.token.datetime") as mock_dt:
         mock_dt.now.return_value = past_time

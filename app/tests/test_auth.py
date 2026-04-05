@@ -226,7 +226,7 @@ def test_refresh(session: Session, client: TestClient, mock_mail: MagicMock):
             "password": password
         }
     )
-    past_time = datetime.now(timezone.utc) - timedelta(minutes=REFRESH_TOKEN_EXPIRE + 1)
+    past_time = datetime.now(timezone.utc) - timedelta(days=(REFRESH_TOKEN_EXPIRE + 1))
     with patch("src.utils.token.datetime") as mock_dt:
         mock_dt.now.return_value = past_time
         mock_dt.now.timezone = timezone.utc
@@ -323,7 +323,7 @@ def test_refresh(session: Session, client: TestClient, mock_mail: MagicMock):
     statement = select(Token).where(Token.jti_hash == hash_jti(jti))
     tok = session.exec(statement).one_or_none()
     assert tok is not None
-    tok.exp = tok.iat - timedelta(minutes=REFRESH_TOKEN_EXPIRE + 1)
+    tok.exp = tok.iat - timedelta(days=(REFRESH_TOKEN_EXPIRE + 1))
     session.add(tok)
     session.commit()
     response = client.post("/auth/refresh")
