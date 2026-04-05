@@ -57,7 +57,7 @@ def create_access_token(user_id: str):
 def create_refresh_token(user_id: str):
     jti = str(uuid4())
     iat = datetime.now(timezone.utc)
-    exp = iat + timedelta(minutes=REFRESH_TOKEN_EXPIRE)
+    exp = iat + timedelta(days=REFRESH_TOKEN_EXPIRE)
     payload = RefreshTokenPayload(
         sub = user_id,
         jti = jti,
