@@ -39,7 +39,7 @@ def set_tokens(user_id: int, response: Response, session: SessionDep):
         secure=True,
         samesite="none",
         path=ACCESS_TOKEN_PATH,
-        expires=int(acc.exp.timestamp())
+        expires=acc.exp
     )
     ref = create_refresh_token(str(user_id))
     response.set_cookie(
@@ -49,7 +49,7 @@ def set_tokens(user_id: int, response: Response, session: SessionDep):
         secure=True,
         samesite="none",
         path=REFRESH_TOKEN_PATH,
-        expires=int(ref.exp.timestamp())
+        expires=ref.exp
     )
     new_ref = Token(
         jti_hash = hash_jti(ref.jti),
