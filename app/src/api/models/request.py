@@ -56,10 +56,3 @@ class OnboardRequest(BaseModel):
         if not v.isdigit():
             raise ValueError("Phone number must contain digits only")
         return v
-
-    @field_validator("education", mode="after")
-    @classmethod
-    def validate_education(cls, v: str):
-        if len(v) == 0:
-            raise ValueError("Education must not be empty")
-        return v

@@ -379,7 +379,6 @@ valid_data = {
 
     # Empty values
     ({"name": ""}, 400),
-    ({"education": ""}, 400),
 
     # Wrong types
     ({"worry": "진로"}, 400),           # string instead of list
