@@ -29,8 +29,10 @@ def google_login(code: str, redirect_uri: str):
         "redirect_uri": redirect_uri,
         "grant_type": "authorization_code"
     }
-    r = requests.post(GOOGLE_TOKEN_ENDPOINT, data=post_data)
-    if r.status_code != 200:
+    try:
+        r = requests.post(GOOGLE_TOKEN_ENDPOINT, data=post_data, timeout=10)
+        r.raise_for_status()
+    except requests.RequestException:
         return None
     
     token_data = TokenResponseModel(**r.json())  # pyright: ignore[reportAny]
