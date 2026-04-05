@@ -15,10 +15,53 @@ services:
       POSTGRES_USER: ${DB_USER}
       POSTGRES_PASSWORD: ${DB_PASSWORD}
       POSTGRES_DB: ${DB_NAME}
+      JWT_KEY: ${JWT_KEY}
+      FRONTEND_HOSTS: ${FRONTEND_HOSTS}
+      GMAIL_PASSWORD: ${GMAIL_PASSWORD}
+      GMAIL: ${GMAIL}
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET}
+      HMAC_KEY: ${HMAC_KEY}
     depends_on:
-      - "db"
+      - db
+      - redis
     ports:
       - "8000:8000"
+  redis:
+    image: redis:8.6.2
+    command: ["redis-server", "--appendonly", "yes"]
+    ports:
+      - "6379:6379"
+    restart: unless-stopped
+  nginx:
+    image: nginx:1.28.3
+    environment:
+      DOMAIN: ${DOMAIN}
+      FASTAPI_HOST: app:8000
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./data/log:/var/log/nginx
+      - ./nginx:/etc/nginx/templates:ro
+      - certbot-etc:/etc/letsencrypt
+      - certbot-var:/var/www/certbot
+    depends_on:
+      - app
+  certbot:
+    image: certbot/certbot
+    volumes:
+      - certbot-etc:/etc/letsencrypt
+      - certbot-var:/var/www/certbot
+    environment:
+      DOMAIN: ${DOMAIN}
+      EMAIL: ${EMAIL}
+    depends_on:
+      - nginx
+    entrypoint: >
+      sh -c "while true; do certbot renew --non-interactive --webroot -w /var/www/certbot --quiet; sleep 12h; done"
 
 volumes:
   db_data:
+  certbot-etc:
+  certbot-var:

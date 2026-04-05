@@ -1,0 +1,27 @@
+services:
+  nginx:
+    image: nginx:1.28.3
+    environment:
+      DOMAIN: ${DOMAIN}
+    ports:
+      - "80:80"
+    volumes:
+      - ./init/nginx:/etc/nginx/conf.d:ro
+      - certbot-etc:/etc/letsencrypt
+      - certbot-var:/var/www/certbot
+  certbot:
+    image: certbot/certbot
+    volumes:
+      - certbot-etc:/etc/letsencrypt
+      - certbot-var:/var/www/certbot
+    environment:
+      DOMAIN: ${DOMAIN}
+      EMAIL: ${EMAIL}
+    depends_on:
+      - nginx
+    entrypoint: >
+      sh -c "if [ ! -d /etc/letsencrypt/live/$DOMAIN ]; then certbot certonly --non-interactive --webroot -w /var/www/certbot --email $EMAIL --agree-tos --no-eff-email -d $DOMAIN; fi"
+
+volumes:
+  certbot-etc:
+  certbot-var:
