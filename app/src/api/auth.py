@@ -4,14 +4,15 @@ from fastapi import APIRouter, Depends, Request, Response
 from pydantic import BaseModel
 from sqlmodel import select
 
+from src.api.models.exc import AppException
 from src.utils.auth import check_auth
 from src.utils.cors import check_cors
 from src.utils.oauth import google_login
 from src.const import ACCESS_TOKEN_KEY, LOGIN_REDIRECT_ENDPOINT_PREFIX, REFRESH_TOKEN_KEY
 from src.utils.verify import send_code, verify_code
-from src.api.models.base import ErrorResponse, LoginData, OnboardResponseData, RefreshData, UserInfo
+from src.api.models.base import AccountData, AuthMeData, ErrorResponse, LoginData, OnboardResponseData, ProfileData, RefreshData, UserInfo
 from src.api.models.request import LoginRequest, OnboardRequest, SignupRequest, SocialLoginRequest, VerificationRequest, VerifyCodeRequest
-from src.api.models.response import LoginResponse, LogoutResponse, OnboardResponse, RefreshResponse, SignupResponse, VerificationSentResponse
+from src.api.models.response import AuthMeResponse, LoginResponse, LogoutResponse, OnboardResponse, RefreshResponse, SignupResponse, VerificationSentResponse
 from src.db.db import SessionDep
 from src.db.models import OauthAccount, Token, User, UserProfile
 from src.enums import ErrorResponseCode, JWTTokenStatus, OauthProviderId, UserStatus
@@ -377,3 +378,44 @@ async def logout(session: SessionDep, response: Response, payload: Annotated[Acc
     response.status_code = 200
     remove_tokens(response)
     return LogoutResponse()
+
+@auth_router.get("/me")
+async def me(session: SessionDep, response: Response, payload: Annotated[AccessTokenPayload, Depends(check_auth)]):
+    statement = (
+        select(User, UserProfile, OauthAccount)
+        .outerjoin(UserProfile)
+        .outerjoin(OauthAccount)
+        .where(User.id == int(payload.sub))
+    )
+    results = session.exec(statement).all()
+    if not results:
+        raise AppException(
+            401,
+            ErrorResponse(
+                code = ErrorResponseCode.AUTH_TOKEN_INVALID,
+                message = "Login required."
+            )
+        )
+    user, profile = results[0][0], results[0][1]
+    oauth_accounts = [oauth for _, _, oauth in results if oauth is not None]
+    
+    onboarded = (profile is not None)
+    data = AuthMeData(
+        account = AccountData(
+            email = user.email,
+            has_password = (user.password_hash is not None),
+            email_verified = (user.status == UserStatus.VERIFIED),
+            connected_oauth = [oauth.provider for oauth in oauth_accounts]
+        ),
+        profile = ProfileData(
+            name = profile.name,
+            birth = profile.birth,
+            phone = profile.phone,
+            education = profile.education,
+            worry = profile.worry,
+            interest = profile.interest
+        ) if onboarded else None,
+        onboarded = onboarded
+    )
+    response.status_code = 200
+    return AuthMeResponse(data=data)

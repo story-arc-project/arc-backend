@@ -460,3 +460,17 @@ def test_logout_token_jti_manipulated(authenticated_client: TestClient, session:
     assert response.json()["code"] == ErrorResponseCode.AUTH_TOKEN_INVALID
     assert authenticated_client.cookies.get("refreshToken") is None
     assert authenticated_client.cookies.get("accessToken") is None
+
+def test_me(authenticated_client: TestClient):
+    response = authenticated_client.get("/auth/me")
+    assert response.status_code == 200
+    assert response.json()["data"]["account"]["email"] == email
+    assert response.json()["data"]["onboarded"] == False
+    assert response.json()["data"]["profile"] is None
+    _ = authenticated_client.post("/auth/onboarding", json=valid_onboarding_data)
+    response = authenticated_client.get("/auth/me")
+    assert response.status_code == 200
+    assert response.json()["data"]["account"]["email"] == email
+    assert response.json()["data"]["onboarded"] == True
+    assert response.json()["data"]["profile"] is not None
+    # TODO: test more
