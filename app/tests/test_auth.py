@@ -358,7 +358,7 @@ def authenticated_client(client: TestClient, mock_mail: MagicMock):
     assert client.cookies.get("accessToken") is not None
     return client
 
-valid_data = {
+valid_onboarding_data = {
     "name": "홍길동",
     "birth": "2001-01-01",
     "education": "서울대학교",
@@ -392,7 +392,7 @@ valid_data = {
 ])
 
 def test_onboarding_invalid_data(authenticated_client: TestClient, override: dict[str, str | list[str] | int | None], expected_status: int):
-    data = {**valid_data, **{k: v for k, v in override.items() if v is not None}}
+    data = {**valid_onboarding_data, **{k: v for k, v in override.items() if v is not None}}
     # Remove key entirely if value is None (simulates missing field)
     for k, v in override.items():
         if v is None:
@@ -404,14 +404,14 @@ def test_onboarding_invalid_data(authenticated_client: TestClient, override: dic
 
 def test_onboarding_unauthenticated(client: TestClient):
     """Should fail without prior signup/verify"""
-    response = client.post("/auth/onboarding", json=valid_data)
+    response = client.post("/auth/onboarding", json=valid_onboarding_data)
     assert response.status_code == 401
 
 
 def test_onboarding_duplicate(authenticated_client: TestClient):
     """Second onboarding attempt should fail"""
-    _ = authenticated_client.post("/auth/onboarding", json=valid_data)
-    response = authenticated_client.post("/auth/onboarding", json=valid_data)
+    _ = authenticated_client.post("/auth/onboarding", json=valid_onboarding_data)
+    response = authenticated_client.post("/auth/onboarding", json=valid_onboarding_data)
     assert response.status_code in (400, 409)
 
 def test_logout_success(authenticated_client: TestClient):
