@@ -367,6 +367,10 @@ valid_onboarding_data = {
     "interest": ["컴퓨터", "AI"]
 }
 
+def test_onboarding_valid_data(authenticated_client: TestClient):
+    response = authenticated_client.post("/auth/onboarding", json=valid_onboarding_data)
+    assert response.status_code == 200
+
 @pytest.mark.parametrize("override,expected_status", [
     # Missing required fields
     ({"name": None}, 400),
