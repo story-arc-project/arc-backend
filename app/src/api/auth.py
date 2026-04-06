@@ -11,7 +11,7 @@ from src.const import ACCESS_TOKEN_KEY, LOGIN_REDIRECT_ENDPOINT_PREFIX, REFRESH_
 from src.utils.verify import send_code, verify_code
 from src.api.models.base import ErrorResponse, LoginData, OnboardResponseData, RefreshData, UserInfo
 from src.api.models.request import LoginRequest, OnboardRequest, SignupRequest, SocialLoginRequest, VerificationRequest, VerifyCodeRequest
-from src.api.models.response import LoginResponse, OnboardResponse, RefreshResponse, SignupResponse, VerificationSentResponse
+from src.api.models.response import LoginResponse, LogoutResponse, OnboardResponse, RefreshResponse, SignupResponse, VerificationSentResponse
 from src.db.db import SessionDep
 from src.db.models import OauthAccount, Token, User, UserProfile
 from src.enums import ErrorResponseCode, JWTTokenStatus, OauthProviderId, UserStatus
@@ -352,3 +352,28 @@ async def onboard(body: OnboardRequest, session: SessionDep, response: Response,
             onboarded = True
         )
     )
+
+@auth_router.post("/logout")
+async def logout(session: SessionDep, response: Response, payload: Annotated[AccessTokenPayload, Depends(check_auth)]):
+    statement = select(Token).where(Token.jti_hash == hash_jti(payload.jti))
+    result = session.exec(statement).one_or_none()
+    if result is None:
+        response.status_code = 401
+        remove_tokens(response)
+        return ErrorResponse(
+            code = ErrorResponseCode.AUTH_TOKEN_INVALID,
+            message = "Invalid access token."
+        )
+    if result.revoked:
+        response.status_code = 403
+        remove_tokens(response)
+        return ErrorResponse(
+            code = ErrorResponseCode.AUTH_REVOKED,
+            message = "Token already revoked."
+        )
+    result.revoked = True
+    session.add(result)
+    session.commit()
+    response.status_code = 200
+    remove_tokens(response)
+    return LogoutResponse()

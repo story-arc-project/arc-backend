@@ -14,3 +14,6 @@ class RefreshResponse(SuccessResponseWithData[RefreshData]):
 
 class OnboardResponse(SuccessResponseWithData[OnboardResponseData]):
     pass
+
+class LogoutResponse(SuccessResponse):
+    message: str = "Logout success"

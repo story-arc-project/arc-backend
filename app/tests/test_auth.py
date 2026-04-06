@@ -1,5 +1,6 @@
 from datetime import datetime, timedelta, timezone
 from time import sleep
+from uuid import uuid4
 import pytest  
 from fastapi.testclient import TestClient
 from sqlmodel import Session, select
@@ -353,6 +354,8 @@ def authenticated_client(client: TestClient, mock_mail: MagicMock):
         "code": get_sent_mail(mock_mail)["Body"]
     })
     assert response.status_code == 200
+    assert client.cookies.get("refreshToken") is not None
+    assert client.cookies.get("accessToken") is not None
     return client
 
 valid_data = {
@@ -402,7 +405,7 @@ def test_onboarding_invalid_data(authenticated_client: TestClient, override: dic
 def test_onboarding_unauthenticated(client: TestClient):
     """Should fail without prior signup/verify"""
     response = client.post("/auth/onboarding", json=valid_data)
-    assert response.status_code in (401, 403)
+    assert response.status_code == 401
 
 
 def test_onboarding_duplicate(authenticated_client: TestClient):
@@ -410,3 +413,46 @@ def test_onboarding_duplicate(authenticated_client: TestClient):
     _ = authenticated_client.post("/auth/onboarding", json=valid_data)
     response = authenticated_client.post("/auth/onboarding", json=valid_data)
     assert response.status_code in (400, 409)
+
+def test_logout_success(authenticated_client: TestClient):
+    response = authenticated_client.post("/auth/logout")
+    assert response.status_code == 200
+    assert authenticated_client.cookies.get("refreshToken") is None
+    assert authenticated_client.cookies.get("accessToken") is None
+
+def test_logout_no_token(client: TestClient):
+    response = client.post("/auth/logout")
+    assert response.status_code == 401
+    assert response.json()["code"] == ErrorResponseCode.AUTH_MISSING_COOKIES
+
+def test_logout_token_not_found(authenticated_client: TestClient, session: Session):
+    tok = session.exec(select(Token)).one()
+    session.delete(tok)
+    session.commit()
+    response = authenticated_client.post("/auth/logout")
+    assert response.status_code == 401
+    assert response.json()["code"] == ErrorResponseCode.AUTH_TOKEN_INVALID
+    assert authenticated_client.cookies.get("refreshToken") is None
+    assert authenticated_client.cookies.get("accessToken") is None
+
+def test_logout_token_already_revoked(authenticated_client: TestClient, session: Session):
+    tok = session.exec(select(Token)).one()
+    tok.revoked = True
+    session.add(tok)
+    session.commit()
+    response = authenticated_client.post("/auth/logout")
+    assert response.status_code == 403
+    assert response.json()["code"] == ErrorResponseCode.AUTH_REVOKED
+    assert authenticated_client.cookies.get("refreshToken") is None
+    assert authenticated_client.cookies.get("accessToken") is None
+
+def test_logout_token_jti_manipulated(authenticated_client: TestClient, session: Session):
+    tok = session.exec(select(Token)).one()
+    tok.jti_hash = hash_jti(str(uuid4()))
+    session.add(tok)
+    session.commit()
+    response = authenticated_client.post("/auth/logout")
+    assert response.status_code == 401
+    assert response.json()["code"] == ErrorResponseCode.AUTH_TOKEN_INVALID
+    assert authenticated_client.cookies.get("refreshToken") is None
+    assert authenticated_client.cookies.get("accessToken") is None
