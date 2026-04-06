@@ -445,6 +445,8 @@ def test_logout_token_already_revoked(authenticated_client: TestClient, session:
     response = authenticated_client.post("/auth/logout")
     assert response.status_code == 403
     assert response.json()["code"] == ErrorResponseCode.AUTH_REVOKED
+    assert authenticated_client.cookies.get("refreshToken") is None
+    assert authenticated_client.cookies.get("accessToken") is None
 
 def test_logout_token_jti_manipulated(authenticated_client: TestClient, session: Session):
     tok = session.exec(select(Token)).one()
@@ -467,7 +469,6 @@ def test_me(authenticated_client: TestClient):
     assert response.json()["data"]["account"]["email"] == email
     assert response.json()["data"]["onboarded"] == True
     assert response.json()["data"]["profile"] is not None
-    # TODO: test more
 
 def test_me_revoked_token(authenticated_client: TestClient, session: Session):
     tok = session.exec(select(Token)).one()
@@ -477,6 +478,8 @@ def test_me_revoked_token(authenticated_client: TestClient, session: Session):
     response = authenticated_client.get("/auth/me")
     assert response.status_code == 403
     assert response.json()["code"] == ErrorResponseCode.AUTH_REVOKED
+    assert authenticated_client.cookies.get("refreshToken") is None
+    assert authenticated_client.cookies.get("accessToken") is None
 
 def test_me_rotated_token(authenticated_client: TestClient, session: Session):
     tok = session.exec(select(Token)).one()
@@ -486,6 +489,8 @@ def test_me_rotated_token(authenticated_client: TestClient, session: Session):
     response = authenticated_client.get("/auth/me")
     assert response.status_code == 403
     assert response.json()["code"] == ErrorResponseCode.AUTH_REUSE_DETECTED
+    assert authenticated_client.cookies.get("refreshToken") is None
+    assert authenticated_client.cookies.get("accessToken") is None
 
 def test_me_after_logout(authenticated_client: TestClient):
     response = authenticated_client.post("/auth/logout")
