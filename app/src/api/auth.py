@@ -356,24 +356,9 @@ async def onboard(body: OnboardRequest, session: SessionDep, response: Response,
 
 @auth_router.post("/logout")
 async def logout(session: SessionDep, response: Response, payload: Annotated[AccessTokenPayload, Depends(check_auth)]):
-    statement = select(Token).where(Token.jti_hash == hash_jti(payload.jti))
-    result = session.exec(statement).one_or_none()
-    if result is None:
-        response.status_code = 401
-        remove_tokens(response)
-        return ErrorResponse(
-            code = ErrorResponseCode.AUTH_TOKEN_INVALID,
-            message = "Invalid access token."
-        )
-    if result.revoked:
-        response.status_code = 403
-        remove_tokens(response)
-        return ErrorResponse(
-            code = ErrorResponseCode.AUTH_REVOKED,
-            message = "Token already revoked."
-        )
-    result.revoked = True
-    session.add(result)
+    token = session.exec(select(Token).where(Token.jti_hash == hash_jti(payload.jti))).one()
+    token.revoked = True
+    session.add(token)
     session.commit()
     response.status_code = 200
     remove_tokens(response)

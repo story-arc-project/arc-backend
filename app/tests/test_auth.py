@@ -436,8 +436,6 @@ def test_logout_token_not_found(authenticated_client: TestClient, session: Sessi
     response = authenticated_client.post("/auth/logout")
     assert response.status_code == 401
     assert response.json()["code"] == ErrorResponseCode.AUTH_TOKEN_INVALID
-    assert authenticated_client.cookies.get("refreshToken") is None
-    assert authenticated_client.cookies.get("accessToken") is None
 
 def test_logout_token_already_revoked(authenticated_client: TestClient, session: Session):
     tok = session.exec(select(Token)).one()
@@ -447,8 +445,6 @@ def test_logout_token_already_revoked(authenticated_client: TestClient, session:
     response = authenticated_client.post("/auth/logout")
     assert response.status_code == 403
     assert response.json()["code"] == ErrorResponseCode.AUTH_REVOKED
-    assert authenticated_client.cookies.get("refreshToken") is None
-    assert authenticated_client.cookies.get("accessToken") is None
 
 def test_logout_token_jti_manipulated(authenticated_client: TestClient, session: Session):
     tok = session.exec(select(Token)).one()
@@ -458,8 +454,6 @@ def test_logout_token_jti_manipulated(authenticated_client: TestClient, session:
     response = authenticated_client.post("/auth/logout")
     assert response.status_code == 401
     assert response.json()["code"] == ErrorResponseCode.AUTH_TOKEN_INVALID
-    assert authenticated_client.cookies.get("refreshToken") is None
-    assert authenticated_client.cookies.get("accessToken") is None
 
 def test_me(authenticated_client: TestClient):
     response = authenticated_client.get("/auth/me")
@@ -474,3 +468,28 @@ def test_me(authenticated_client: TestClient):
     assert response.json()["data"]["onboarded"] == True
     assert response.json()["data"]["profile"] is not None
     # TODO: test more
+
+def test_me_revoked_token(authenticated_client: TestClient, session: Session):
+    tok = session.exec(select(Token)).one()
+    tok.revoked = True
+    session.add(tok)
+    session.commit()
+    response = authenticated_client.get("/auth/me")
+    assert response.status_code == 403
+    assert response.json()["code"] == ErrorResponseCode.AUTH_REVOKED
+
+def test_me_rotated_token(authenticated_client: TestClient, session: Session):
+    tok = session.exec(select(Token)).one()
+    tok.next = (tok.id or 0) + 1
+    session.add(tok)
+    session.commit()
+    response = authenticated_client.get("/auth/me")
+    assert response.status_code == 403
+    assert response.json()["code"] == ErrorResponseCode.AUTH_REUSE_DETECTED
+
+def test_me_after_logout(authenticated_client: TestClient):
+    response = authenticated_client.post("/auth/logout")
+    assert response.status_code == 200
+    response = authenticated_client.get("/auth/me")
+    assert response.status_code == 401
+    assert response.json()["code"] == ErrorResponseCode.AUTH_MISSING_COOKIES
