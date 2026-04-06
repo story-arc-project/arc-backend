@@ -38,14 +38,4 @@ def check_auth(accessToken: Annotated[str | None, Cookie()] = None):
                 message = err_msg
             )
         )
-    try:
-        _ = int(payload.sub)
-    except ValueError:
-        raise AppException(
-            err_st_c,
-            ErrorResponse(
-                code = ErrorResponseCode.AUTH_TOKEN_INVALID,
-                message = err_msg
-            )
-        )
     return payload
