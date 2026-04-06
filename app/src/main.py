@@ -7,7 +7,7 @@ from os import getenv
 from fastapi.responses import JSONResponse
 from src.api.models.exc import AppException
 from src.db.db import create_db_and_tables
-from src.api.auth import auth_router
+from src.api.auth import auth_router, remove_tokens
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):  # pyright: ignore[reportUnusedParameter]
@@ -28,10 +28,13 @@ app.add_middleware(
 
 @app.exception_handler(AppException)
 async def app_exception_handler(request: Request, exc: AppException):
-    return JSONResponse(
+    response = JSONResponse(
         status_code = exc.status_code,
         content = exc.error.model_dump()
     )
+    if response.status_code == 403:
+        remove_tokens(response)
+    return response
 
 @app.exception_handler(RequestValidationError)
 async def validation_exception_handler(request: Request, exc: ValidationException):

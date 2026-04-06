@@ -1,4 +1,4 @@
-from src.api.models.base import OnboardResponseData, RefreshData, SuccessResponseWithData, LoginData, SuccessResponse
+from src.api.models.base import AuthMeData, OnboardResponseData, RefreshData, SuccessResponseWithData, LoginData, SuccessResponse
 
 class LoginResponse(SuccessResponseWithData[LoginData]):
     pass
@@ -14,3 +14,9 @@ class RefreshResponse(SuccessResponseWithData[RefreshData]):
 
 class OnboardResponse(SuccessResponseWithData[OnboardResponseData]):
     pass
+
+class LogoutResponse(SuccessResponse):
+    message: str = "Logout success"
+
+class AuthMeResponse(SuccessResponseWithData[AuthMeData]):
+    message: str = "User data fetch success"

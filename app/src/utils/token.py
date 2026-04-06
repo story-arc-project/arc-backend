@@ -14,6 +14,7 @@ REFRESH_TOKEN_TYPE = "refresh"
 
 class AccessTokenPayload(BaseModel):
     sub: str
+    jti: str
     exp: int
     iat: int
     type: Literal["access"] = ACCESS_TOKEN_TYPE
@@ -41,11 +42,12 @@ def get_key():
         raise RuntimeError("JWT key not found in env")
     return key
 
-def create_access_token(user_id: str):
+def create_access_token(user_id: str, jti: str):
     iat = datetime.now(timezone.utc)
     exp = iat + timedelta(minutes=ACCESS_TOKEN_EXPIRE)
     payload = AccessTokenPayload(
         sub = user_id,
+        jti = jti,
         iat = int(iat.timestamp()),
         exp = int(exp.timestamp())
     )

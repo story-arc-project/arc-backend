@@ -1,5 +1,6 @@
 from datetime import datetime, timedelta, timezone
 from time import sleep
+from uuid import uuid4
 import pytest  
 from fastapi.testclient import TestClient
 from sqlmodel import Session, select
@@ -353,9 +354,11 @@ def authenticated_client(client: TestClient, mock_mail: MagicMock):
         "code": get_sent_mail(mock_mail)["Body"]
     })
     assert response.status_code == 200
+    assert client.cookies.get("refreshToken") is not None
+    assert client.cookies.get("accessToken") is not None
     return client
 
-valid_data = {
+valid_onboarding_data = {
     "name": "홍길동",
     "birth": "2001-01-01",
     "education": "서울대학교",
@@ -363,6 +366,10 @@ valid_data = {
     "worry": ["진로", "이력"],
     "interest": ["컴퓨터", "AI"]
 }
+
+def test_onboarding_valid_data(authenticated_client: TestClient):
+    response = authenticated_client.post("/auth/onboarding", json=valid_onboarding_data)
+    assert response.status_code == 200
 
 @pytest.mark.parametrize("override,expected_status", [
     # Missing required fields
@@ -389,7 +396,7 @@ valid_data = {
 ])
 
 def test_onboarding_invalid_data(authenticated_client: TestClient, override: dict[str, str | list[str] | int | None], expected_status: int):
-    data = {**valid_data, **{k: v for k, v in override.items() if v is not None}}
+    data = {**valid_onboarding_data, **{k: v for k, v in override.items() if v is not None}}
     # Remove key entirely if value is None (simulates missing field)
     for k, v in override.items():
         if v is None:
@@ -401,12 +408,93 @@ def test_onboarding_invalid_data(authenticated_client: TestClient, override: dic
 
 def test_onboarding_unauthenticated(client: TestClient):
     """Should fail without prior signup/verify"""
-    response = client.post("/auth/onboarding", json=valid_data)
-    assert response.status_code in (401, 403)
+    response = client.post("/auth/onboarding", json=valid_onboarding_data)
+    assert response.status_code == 401
 
 
 def test_onboarding_duplicate(authenticated_client: TestClient):
     """Second onboarding attempt should fail"""
-    _ = authenticated_client.post("/auth/onboarding", json=valid_data)
-    response = authenticated_client.post("/auth/onboarding", json=valid_data)
+    _ = authenticated_client.post("/auth/onboarding", json=valid_onboarding_data)
+    response = authenticated_client.post("/auth/onboarding", json=valid_onboarding_data)
     assert response.status_code in (400, 409)
+
+def test_logout_success(authenticated_client: TestClient):
+    response = authenticated_client.post("/auth/logout")
+    assert response.status_code == 200
+    assert authenticated_client.cookies.get("refreshToken") is None
+    assert authenticated_client.cookies.get("accessToken") is None
+
+def test_logout_no_token(client: TestClient):
+    response = client.post("/auth/logout")
+    assert response.status_code == 401
+    assert response.json()["code"] == ErrorResponseCode.AUTH_MISSING_COOKIES
+
+def test_logout_token_not_found(authenticated_client: TestClient, session: Session):
+    tok = session.exec(select(Token)).one()
+    session.delete(tok)
+    session.commit()
+    response = authenticated_client.post("/auth/logout")
+    assert response.status_code == 401
+    assert response.json()["code"] == ErrorResponseCode.AUTH_TOKEN_INVALID
+
+def test_logout_token_already_revoked(authenticated_client: TestClient, session: Session):
+    tok = session.exec(select(Token)).one()
+    tok.revoked = True
+    session.add(tok)
+    session.commit()
+    response = authenticated_client.post("/auth/logout")
+    assert response.status_code == 403
+    assert response.json()["code"] == ErrorResponseCode.AUTH_REVOKED
+    assert authenticated_client.cookies.get("refreshToken") is None
+    assert authenticated_client.cookies.get("accessToken") is None
+
+def test_logout_token_jti_manipulated(authenticated_client: TestClient, session: Session):
+    tok = session.exec(select(Token)).one()
+    tok.jti_hash = hash_jti(str(uuid4()))
+    session.add(tok)
+    session.commit()
+    response = authenticated_client.post("/auth/logout")
+    assert response.status_code == 401
+    assert response.json()["code"] == ErrorResponseCode.AUTH_TOKEN_INVALID
+
+def test_me(authenticated_client: TestClient):
+    response = authenticated_client.get("/auth/me")
+    assert response.status_code == 200
+    assert response.json()["data"]["account"]["email"] == email
+    assert response.json()["data"]["onboarded"] == False
+    assert response.json()["data"]["profile"] is None
+    _ = authenticated_client.post("/auth/onboarding", json=valid_onboarding_data)
+    response = authenticated_client.get("/auth/me")
+    assert response.status_code == 200
+    assert response.json()["data"]["account"]["email"] == email
+    assert response.json()["data"]["onboarded"] == True
+    assert response.json()["data"]["profile"] is not None
+
+def test_me_revoked_token(authenticated_client: TestClient, session: Session):
+    tok = session.exec(select(Token)).one()
+    tok.revoked = True
+    session.add(tok)
+    session.commit()
+    response = authenticated_client.get("/auth/me")
+    assert response.status_code == 403
+    assert response.json()["code"] == ErrorResponseCode.AUTH_REVOKED
+    assert authenticated_client.cookies.get("refreshToken") is None
+    assert authenticated_client.cookies.get("accessToken") is None
+
+def test_me_rotated_token(authenticated_client: TestClient, session: Session):
+    tok = session.exec(select(Token)).one()
+    tok.next = (tok.id or 0) + 1
+    session.add(tok)
+    session.commit()
+    response = authenticated_client.get("/auth/me")
+    assert response.status_code == 403
+    assert response.json()["code"] == ErrorResponseCode.AUTH_REUSE_DETECTED
+    assert authenticated_client.cookies.get("refreshToken") is None
+    assert authenticated_client.cookies.get("accessToken") is None
+
+def test_me_after_logout(authenticated_client: TestClient):
+    response = authenticated_client.post("/auth/logout")
+    assert response.status_code == 200
+    response = authenticated_client.get("/auth/me")
+    assert response.status_code == 401
+    assert response.json()["code"] == ErrorResponseCode.AUTH_MISSING_COOKIES

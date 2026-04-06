@@ -1,8 +1,8 @@
-from datetime import datetime
+from datetime import date, datetime
 from pydantic import BaseModel, EmailStr
 from typing import Generic, TypeVar
 
-from src.enums import ErrorResponseCode
+from src.enums import ErrorResponseCode, OauthProviderId
 
 T = TypeVar("T")
 
@@ -31,3 +31,23 @@ class RefreshData(BaseModel):
 
 class OnboardResponseData(BaseModel):
     onboarded: bool
+
+class AccountData(BaseModel):
+    email: EmailStr
+    has_password: bool
+    email_verified: bool
+    connected_oauth: list[OauthProviderId]
+
+class ProfileData(BaseModel):
+    name: str
+    birth: date
+    phone: str
+    education: str
+    worry: list[str]
+    interest: list[str]
+
+class AuthMeData(BaseModel):
+    account: AccountData
+    profile: ProfileData | None
+    onboarded: bool
+    # TODO: validate profile is None only when onboarded is False, not None only when onboarded is True
