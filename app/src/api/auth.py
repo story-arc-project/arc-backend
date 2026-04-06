@@ -31,16 +31,6 @@ class SetTokenResult(BaseModel):
     id: int
 
 def set_tokens(user_id: int, response: Response, session: SessionDep):
-    acc = create_access_token(str(user_id))
-    response.set_cookie(
-        key=ACCESS_TOKEN_KEY,
-        value=acc.token,
-        httponly=True,
-        secure=True,
-        samesite="none",
-        path=ACCESS_TOKEN_PATH,
-        expires=acc.exp
-    )
     ref = create_refresh_token(str(user_id))
     response.set_cookie(
         key=REFRESH_TOKEN_KEY,
@@ -50,6 +40,16 @@ def set_tokens(user_id: int, response: Response, session: SessionDep):
         samesite="none",
         path=REFRESH_TOKEN_PATH,
         expires=ref.exp
+    )
+    acc = create_access_token(str(user_id), ref.jti)
+    response.set_cookie(
+        key=ACCESS_TOKEN_KEY,
+        value=acc.token,
+        httponly=True,
+        secure=True,
+        samesite="none",
+        path=ACCESS_TOKEN_PATH,
+        expires=acc.exp
     )
     new_ref = Token(
         jti_hash = hash_jti(ref.jti),
