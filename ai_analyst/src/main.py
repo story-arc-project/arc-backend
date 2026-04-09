@@ -1,5 +1,5 @@
 from typing import Annotated
-from src.app import main
+from src.individual import main
 from fastapi import Body, FastAPI
 
 from src.models import IndividualRequest
