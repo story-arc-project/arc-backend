@@ -450,7 +450,7 @@ def test_logout_token_already_revoked(authenticated_client: TestClient, session:
 
 def test_logout_token_jti_manipulated(authenticated_client: TestClient, session: Session):
     tok = session.exec(select(Token)).one()
-    tok.jti_hash = hash_jti(str(uuid4()))
+    tok.jti_hash = hash_jti(uuid4())
     session.add(tok)
     session.commit()
     response = authenticated_client.post("/auth/logout")
@@ -483,7 +483,7 @@ def test_me_revoked_token(authenticated_client: TestClient, session: Session):
 
 def test_me_rotated_token(authenticated_client: TestClient, session: Session):
     tok = session.exec(select(Token)).one()
-    tok.next = (tok.id or 0) + 1
+    tok.next = uuid4()
     session.add(tok)
     session.commit()
     response = authenticated_client.get("/auth/me")

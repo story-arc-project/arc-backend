@@ -1,12 +1,17 @@
 from datetime import datetime, date
-from sqlalchemy import DateTime, func, Column
+import uuid
+from sqlalchemy import DateTime, func, Column, UUID as SAUUID
 from sqlalchemy.sql.functions import now
 from src.enums import OauthProviderId, UserStatus
 from sqlmodel import ARRAY, Field, SQLModel, String, UniqueConstraint
 
 class User(SQLModel, table=True):
     __tablename__: str = "users"  # pyright: ignore[reportIncompatibleVariableOverride]
-    id: int | None = Field(default=None, primary_key=True)
+    id: uuid.UUID = Field(
+        default_factory=uuid.uuid4,
+        primary_key=True,
+        sa_type=SAUUID
+    )
     email: str = Field(unique=True)
     password_hash: str | None = None
     status: UserStatus = Field(default=UserStatus.UNVERIFIED)
@@ -30,8 +35,12 @@ class User(SQLModel, table=True):
 
 class UserProfile(SQLModel, table=True):
     __tablename__: str = "user_profiles"  # pyright: ignore[reportIncompatibleVariableOverride]
-    id: int | None = Field(default=None, primary_key=True)
-    user_id: int = Field(foreign_key="users.id", unique=True)
+    id: uuid.UUID = Field(
+        default_factory=uuid.uuid4,
+        primary_key=True,
+        sa_type=SAUUID
+    )
+    user_id: uuid.UUID = Field(foreign_key="users.id", unique=True)
     name: str
     birth: date
     phone: str = Field(max_length=11)
@@ -67,8 +76,12 @@ class OauthAccount(SQLModel, table=True):
     __table_args__: tuple[UniqueConstraint] = (
         UniqueConstraint("provider", "provider_user_id"),
     )
-    id: int | None = Field(default=None, primary_key=True)
-    user_id: int = Field(foreign_key="users.id")
+    id: uuid.UUID = Field(
+        default_factory=uuid.uuid4,
+        primary_key=True,
+        sa_type=SAUUID
+    )
+    user_id: uuid.UUID = Field(foreign_key="users.id")
     provider: OauthProviderId
     provider_user_id: str
     created_at: datetime = Field(
@@ -91,10 +104,14 @@ class OauthAccount(SQLModel, table=True):
 
 class Token(SQLModel, table=True):
     __tablename__: str = "tokens"  # pyright: ignore[reportIncompatibleVariableOverride]
-    id: int | None = Field(default=None, primary_key=True)
+    id: uuid.UUID = Field(
+        default_factory=uuid.uuid4,
+        primary_key=True,
+        sa_type=SAUUID
+    )
     jti_hash: str = Field(unique=True, index=True)
-    user_id: int = Field(foreign_key="users.id")
+    user_id: uuid.UUID = Field(foreign_key="users.id")
     iat: datetime = Field(sa_column=Column(DateTime(timezone=True), nullable=False))
     exp: datetime = Field(sa_column=Column(DateTime(timezone=True), nullable=False))
-    next: int | None = None
+    next: uuid.UUID | None = None
     revoked: bool = False
