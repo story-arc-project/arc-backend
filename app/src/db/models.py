@@ -1,9 +1,11 @@
 from datetime import datetime, date
+from typing import Any
 import uuid
 from sqlalchemy import DateTime, func, Column, UUID as SAUUID
 from sqlalchemy.sql.functions import now
-from src.enums import OauthProviderId, UserStatus
+from src.enums import ExperiencePriority, OauthProviderId, UserStatus
 from sqlmodel import ARRAY, Field, SQLModel, String, UniqueConstraint
+from sqlalchemy.dialects.postgresql import JSONB
 
 class User(SQLModel, table=True):
     __tablename__: str = "users"  # pyright: ignore[reportIncompatibleVariableOverride]
@@ -115,3 +117,111 @@ class Token(SQLModel, table=True):
     exp: datetime = Field(sa_column=Column(DateTime(timezone=True), nullable=False))
     next: uuid.UUID | None = None
     revoked: bool = False
+
+class Experience(SQLModel, table=True):
+    __tablename__: str = "experiences"  # pyright: ignore[reportIncompatibleVariableOverride]
+    id: uuid.UUID = Field(
+        default_factory=uuid.uuid4,
+        primary_key=True,
+        sa_type=SAUUID
+    )
+    user_id: uuid.UUID = Field(foreign_key="users.id")
+    type: str
+    priority: ExperiencePriority = ExperiencePriority.MEDIUM
+    content: dict[str, Any] = Field(
+        sa_column=Column(JSONB)
+    )
+    created_at: datetime = Field(
+        default_factory=now,
+        sa_column=Column(
+            DateTime(timezone=True),
+            server_default=func.now(),
+            nullable=False
+        )
+    )
+    updated_at: datetime = Field(
+        default_factory=now,
+        sa_column=Column(
+            DateTime(timezone=True),
+            server_default=func.now(),
+            onupdate=func.now(),
+            nullable=False
+        )
+    )
+
+class Library(SQLModel, table=True):
+    __tablename__: str = "libraries"  # pyright: ignore[reportIncompatibleVariableOverride]
+    id: uuid.UUID = Field(
+        default_factory=uuid.uuid4,
+        primary_key=True,
+        sa_type=SAUUID
+    )
+    user_id: uuid.UUID = Field(foreign_key="users.id")
+    name: str = Field(nullable=False)
+    color: str
+    icon: str
+    is_system: bool = False
+    filter: dict[str, Any] | None = Field(
+        default=None,
+        sa_column=Column(JSONB, nullable=True)
+    )
+    sort_order: int = 0
+    created_at: datetime = Field(
+        default_factory=now,
+        sa_column=Column(
+            DateTime(timezone=True),
+            server_default=func.now(),
+            nullable=False
+        )
+    )
+    updated_at: datetime = Field(
+        default_factory=now,
+        sa_column=Column(
+            DateTime(timezone=True),
+            server_default=func.now(),
+            onupdate=func.now(),
+            nullable=False
+        )
+    )
+
+class LibraryExperienceRelation(SQLModel, table=True):
+    __tablename__: str = "libraries-experiences"  # pyright: ignore[reportIncompatibleVariableOverride]
+    id: uuid.UUID = Field(
+        default_factory=uuid.uuid4,
+        primary_key=True,
+        sa_type=SAUUID
+    )
+    library_id: uuid.UUID = Field(foreign_key="libraries.id")
+    experience_id: uuid.UUID = Field(foreign_key="experiences.id")
+
+class Preset(SQLModel, table=True):
+    __tablename__: str = "presets"  # pyright: ignore[reportIncompatibleVariableOverride]
+    id: uuid.UUID = Field(
+        default_factory=uuid.uuid4,
+        primary_key=True,
+        sa_type=SAUUID
+    )
+    user_id: uuid.UUID = Field(foreign_key="users.id")
+    name: str = Field(nullable=False)
+    description: str | None
+    blocks: list[dict[str, Any]] = Field(
+        sa_column=Column(ARRAY(JSONB))
+    )
+    is_favorite: bool = False
+    created_at: datetime = Field(
+        default_factory=now,
+        sa_column=Column(
+            DateTime(timezone=True),
+            server_default=func.now(),
+            nullable=False
+        )
+    )
+    updated_at: datetime = Field(
+        default_factory=now,
+        sa_column=Column(
+            DateTime(timezone=True),
+            server_default=func.now(),
+            onupdate=func.now(),
+            nullable=False
+        )
+    )
