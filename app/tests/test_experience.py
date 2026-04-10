@@ -1,8 +1,10 @@
 from unittest.mock import patch
+from uuid import UUID, uuid4
 import pytest
 from fastapi.testclient import TestClient
-from sqlmodel import Session
+from sqlmodel import Session, select
 
+from src.db.models import Experience
 from src.utils.auth import check_auth
 
 
@@ -87,3 +89,26 @@ def test_post_experience_db_commit_failure_returns_500(authenticated_client: Tes
         data = {"type": "career", "content": {"a": "b"}}
         response = authenticated_client.post("/experiences", json=data)
         assert response.status_code == 500
+
+class TestGetExperienceById:
+    def test_success(self, authenticated_client: TestClient):
+        data = {"type": "career", "content": {"a": "b"}}
+        response = authenticated_client.post("/experiences", json=data)
+        experience_id = response.json()["data"]["id"]
+        response = authenticated_client.get(f"/experiences/{experience_id}")
+        assert response.status_code == 200
+        assert response.json()["data"]["id"] == experience_id
+    def test_not_found(self, authenticated_client: TestClient):
+        response = authenticated_client.get(f"/experiences/{uuid4()}")
+        assert response.status_code == 404
+    # TODO: test_forbidden
+    # def test_forbidden(self, authenticated_client: TestClient, session: Session):
+    #     data = {"type": "career", "content": {"a": "b"}}
+    #     response = authenticated_client.post("/experiences", json=data)
+    #     experience_id = response.json()["data"]["id"]
+    #     result = session.exec(select(Experience).where(Experience.id == UUID(experience_id))).one()
+    #     result.user_id = uuid4()
+    #     session.add(result)
+    #     session.commit()
+    #     response = authenticated_client.get(f"/experiences/{experience_id}")
+    #     assert response.status_code == 403

@@ -1,9 +1,9 @@
 from datetime import date, datetime
 from uuid import UUID
 from pydantic import BaseModel, EmailStr
-from typing import Generic, TypeVar
+from typing import Any, Generic, TypeVar
 
-from src.enums import ErrorResponseCode, OauthProviderId
+from src.enums import ErrorResponseCode, ExperiencePriority, OauthProviderId
 
 T = TypeVar("T")
 
@@ -55,3 +55,12 @@ class AuthMeData(BaseModel):
 
 class UUIDData(BaseModel):
     id: UUID
+
+class ExperienceResponseData(BaseModel):
+    id: UUID
+    user_id: UUID
+    type: str
+    priority: ExperiencePriority
+    content: dict[str, Any]
+    created_at: datetime
+    updated_at: datetime
