@@ -346,18 +346,6 @@ def test_refresh(session: Session, client: TestClient, mock_mail: MagicMock):
     response = client.post("/auth/refresh")
     assert response.status_code == 200
 
-@pytest.fixture
-def authenticated_client(client: TestClient, mock_mail: MagicMock):
-    _ = client.post("/auth/signup", json={"email": email, "password": password})
-    response = client.post("/auth/verify-email", json={
-        "email": email,
-        "code": get_sent_mail(mock_mail)["Body"]
-    })
-    assert response.status_code == 200
-    assert client.cookies.get("refreshToken") is not None
-    assert client.cookies.get("accessToken") is not None
-    return client
-
 valid_onboarding_data = {
     "name": "홍길동",
     "birth": "2001-01-01",
