@@ -1,4 +1,5 @@
 from datetime import date, datetime
+from uuid import UUID
 from pydantic import BaseModel, EmailStr
 from typing import Generic, TypeVar
 
@@ -51,3 +52,6 @@ class AuthMeData(BaseModel):
     profile: ProfileData | None
     onboarded: bool
     # TODO: validate profile is None only when onboarded is False, not None only when onboarded is True
+
+class UUIDData(BaseModel):
+    id: UUID

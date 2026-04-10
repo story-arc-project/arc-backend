@@ -1,4 +1,5 @@
 from datetime import date
+from typing import Any
 from pydantic import BaseModel, EmailStr, field_validator
 
 class LoginRequest(BaseModel):
@@ -55,4 +56,15 @@ class OnboardRequest(BaseModel):
             raise ValueError("Phone number must be 11 digits")
         if not v.isdigit():
             raise ValueError("Phone number must contain digits only")
+        return v
+
+class ExperiencePostRequest(BaseModel):
+    type: str
+    content: dict[str, Any]
+
+    @field_validator("type", mode="after")
+    @classmethod
+    def validate_type(cls, v: str):
+        if len(v) == 0:
+            raise ValueError("Type must not be empty")
         return v
