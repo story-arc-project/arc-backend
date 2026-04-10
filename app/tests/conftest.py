@@ -10,6 +10,7 @@ import os
 from tests.const import TESTFRONT_HOST, TESTSERVER_HOST
 os.environ["FRONTEND_HOSTS"] = f"https://{TESTFRONT_HOST}"
 
+from tests.test_auth import get_sent_mail
 from src.db.db import get_session
 from src.main import app
 
@@ -78,3 +79,18 @@ def client(session: Session):
         }
     )
     app.dependency_overrides.clear()
+
+@pytest.fixture
+def authenticated_client(client: TestClient, mock_mail: MagicMock):
+    # Test data
+    email = "test@gmail.com"
+    password = "testpassword"
+    _ = client.post("/auth/signup", json={"email": email, "password": password})
+    response = client.post("/auth/verify-email", json={
+        "email": email,
+        "code": get_sent_mail(mock_mail)["Body"]
+    })
+    assert response.status_code == 200
+    assert client.cookies.get("refreshToken") is not None
+    assert client.cookies.get("accessToken") is not None
+    return client
