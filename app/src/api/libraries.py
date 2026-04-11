@@ -3,7 +3,7 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, Response
 from sqlmodel import select
 
-from src.api.models.base import ErrorResponse, LibrariesResponseData, LibraryContentData, LibraryResponseData, SuccessResponse, SuccessResponseWithData, UUIDData
+from src.api.models.base import ErrorResponse, ExperienceResponseData, ExperiencesResponseData, LibrariesResponseData, LibraryContentData, LibraryResponseData, SuccessResponse, SuccessResponseWithData, UUIDData
 from src.api.models.exc import AppException
 from src.api.models.request import LibraryPostRequest
 from src.api.models.response import DeleteSuccessResponse, PostSuccessResponse
@@ -162,4 +162,37 @@ async def delete_library_experience(library_id: UUID, experience_id: UUID, sessi
     response.status_code = 204
     return DeleteSuccessResponse(
         message = "Relation deleted."
+    )
+
+@libraries_router.get("/{library_id}/experiences")
+async def get_library_experiences(library_id: UUID, session: SessionDep, response: Response, payload: Annotated[AccessTokenPayload, Depends(check_auth)]):
+    library = session.get(Library, library_id)
+    if library is None:
+        raise AppException(
+            404,
+            ErrorResponse(
+                code = ErrorResponseCode.NOT_FOUND,
+                message = "Library not found"
+            )
+        )
+    if library.user_id != payload.sub:
+        raise AppException(
+            403,
+            ErrorResponse(
+                code = ErrorResponseCode.RESOURCE_NOT_ALLOWED,
+                message = "Access for the resource is not allowed"
+            )
+        )
+    experiences = session.exec(
+        select(Experience)
+        .join(LibraryExperienceRelation)
+        .where(LibraryExperienceRelation.library_id == library_id)
+    ).all()
+    response.status_code = 200
+    return SuccessResponseWithData[ExperiencesResponseData](
+        message = "Fetch success",
+        data = ExperiencesResponseData(
+            count = len(experiences),
+            contents = [ExperienceResponseData(**obj.model_dump()) for obj in experiences]
+        )
     )
