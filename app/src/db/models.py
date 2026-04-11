@@ -186,13 +186,17 @@ class Library(SQLModel, table=True):
 
 class LibraryExperienceRelation(SQLModel, table=True):
     __tablename__: str = "libraries-experiences"  # pyright: ignore[reportIncompatibleVariableOverride]
-    id: uuid.UUID = Field(
-        default_factory=uuid.uuid4,
-        primary_key=True,
-        sa_type=SAUUID
+    user_id: uuid.UUID = Field(foreign_key="users.id", index=True)
+    library_id: uuid.UUID = Field(foreign_key="libraries.id", primary_key=True)
+    experience_id: uuid.UUID = Field(foreign_key="experiences.id", primary_key=True)
+    created_at: datetime = Field(
+        default_factory=now,
+        sa_column=Column(
+            DateTime(timezone=True),
+            server_default=func.now(),
+            nullable=False
+        )
     )
-    library_id: uuid.UUID = Field(foreign_key="libraries.id")
-    experience_id: uuid.UUID = Field(foreign_key="experiences.id")
 
 class Preset(SQLModel, table=True):
     __tablename__: str = "presets"  # pyright: ignore[reportIncompatibleVariableOverride]

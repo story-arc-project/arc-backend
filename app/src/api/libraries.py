@@ -1,13 +1,14 @@
 from typing import Annotated
+from uuid import UUID
 from fastapi import APIRouter, Depends, Response
 from sqlmodel import select
 
-from src.api.models.base import ErrorResponse, LibrariesResponseData, LibraryContentData, LibraryResponseData, SuccessResponseWithData, UUIDData
+from src.api.models.base import ErrorResponse, LibrariesResponseData, LibraryContentData, LibraryResponseData, SuccessResponse, SuccessResponseWithData, UUIDData
 from src.api.models.exc import AppException
 from src.api.models.request import LibraryPostRequest
 from src.api.models.response import PostSuccessResponse
 from src.db.db import SessionDep
-from src.db.models import Library
+from src.db.models import Experience, Library, LibraryExperienceRelation
 from src.enums import ErrorResponseCode
 from src.utils.auth import check_auth
 from src.utils.token import AccessTokenPayload
@@ -59,4 +60,62 @@ async def get_libraries(session: SessionDep, response: Response, payload: Annota
                 custom = [LibraryResponseData(**obj.model_dump()) for obj in result if not obj.is_system]
             )
         )
+    )
+
+@libraries_router.post("/{library_id}/experiences/{experience_id}")
+async def post_library_experience(library_id: UUID, experience_id: UUID, session: SessionDep, response: Response, payload: Annotated[AccessTokenPayload, Depends(check_auth)]):
+    library = session.exec(select(Library).where(Library.id == library_id)).one_or_none()
+    experience = session.exec(select(Experience).where(Experience.id == experience_id)).one_or_none()
+    if library is None or experience is None:
+        raise AppException(
+            404,
+            ErrorResponse(
+                code = ErrorResponseCode.NOT_FOUND,
+                message = "Experience not found"
+            )
+        )
+    if library.user_id != payload.sub or experience.user_id != payload.sub:
+        raise AppException(
+            403,
+            ErrorResponse(
+                code = ErrorResponseCode.RESOURCE_NOT_ALLOWED,
+                message = "Access for the resource is not allowed"
+            )
+        )
+    if library.is_system:
+        raise AppException(
+            400,
+            ErrorResponse(
+                code = ErrorResponseCode.BAD_REQUEST,
+                message = "System library cannot have experiences."
+            )
+        )
+    if library.filter is not None:
+        raise AppException(
+            400,
+            ErrorResponse(
+                code = ErrorResponseCode.BAD_REQUEST,
+                message = "Smart library cannot have experiences."
+            )
+        )
+    try:
+        relation = LibraryExperienceRelation(
+            user_id = payload.sub,
+            library_id = library.id,
+            experience_id = experience_id
+        )
+        session.add(relation)
+        session.commit()
+    except:
+        session.rollback()
+        raise AppException(
+            500,
+            ErrorResponse(
+                code=ErrorResponseCode.SERVER_ERROR,
+                message="Server side error."
+            )
+        )
+    response.status_code = 201
+    return SuccessResponse(
+        message = "Library-Experience relation created."
     )
