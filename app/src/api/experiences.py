@@ -83,7 +83,7 @@ async def get_experience_by_id(experience_id: UUID, session: SessionDep, respons
         data = ExperienceResponseData(**result.model_dump())
     )
 
-@experiences_router.put("{experience_id}")
+@experiences_router.put("/{experience_id}")
 async def put_experience_by_id(body: ExperiencePutRequest, experience_id: UUID, session: SessionDep, response: Response, payload: Annotated[AccessTokenPayload, Depends(check_auth)]):
     statement = select(Experience).where(Experience.id == experience_id)
     result = session.exec(statement).one_or_none()
@@ -122,7 +122,7 @@ async def put_experience_by_id(body: ExperiencePutRequest, experience_id: UUID, 
         message = "Experience edit success."
     )
 
-@experiences_router.delete("{experience_id}")
+@experiences_router.delete("/{experience_id}")
 async def delete_experience_by_id(experience_id: UUID, session: SessionDep, response: Response, payload: Annotated[AccessTokenPayload, Depends(check_auth)]):
     statement = select(Experience).where(Experience.id == experience_id)
     result = session.exec(statement).one_or_none()
@@ -159,7 +159,7 @@ async def delete_experience_by_id(experience_id: UUID, session: SessionDep, resp
         message = "Experience deleted."
     )
 
-@experiences_router.post("{experience_id}/duplicate")
+@experiences_router.post("/{experience_id}/duplicate")
 async def duplicate_experience_by_id(experience_id: UUID, session: SessionDep, response: Response, payload: Annotated[AccessTokenPayload, Depends(check_auth)]):
     statement = select(Experience).where(Experience.id == experience_id)
     result = session.exec(statement).one_or_none()
