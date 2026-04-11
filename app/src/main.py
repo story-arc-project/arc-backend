@@ -8,6 +8,7 @@ from fastapi.responses import JSONResponse
 from src.api.experiences import experiences_router
 from src.api.libraries import libraries_router
 from src.api.models.exc import AppException
+from src.api.presets import presets_router
 from src.db.db import create_db_and_tables
 from src.api.auth import auth_router, remove_tokens
 from src.enums import ErrorResponseCode
@@ -64,4 +65,8 @@ app.include_router(
 app.include_router(
     libraries_router,
     prefix="/libraries"
+)
+app.include_router(
+    presets_router,
+    prefix="/presets"
 )

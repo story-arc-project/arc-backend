@@ -87,3 +87,17 @@ class LibraryContentData(BaseModel):
 class LibrariesResponseData(BaseModel):
     count: int
     contents: LibraryContentData
+
+class PresetResponseData(BaseModel):
+    id: UUID
+    user_id: UUID
+    name: str
+    description: str | None
+    blocks: list[dict[str, Any]]
+    is_favorite: bool
+    created_at: datetime
+    updated_at: datetime
+
+class PresetsResponseData(BaseModel):
+    count: int
+    contents: list[PresetResponseData]
