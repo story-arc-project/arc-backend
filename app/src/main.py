@@ -9,6 +9,7 @@ from src.api.experiences import experiences_router
 from src.api.models.exc import AppException
 from src.db.db import create_db_and_tables
 from src.api.auth import auth_router, remove_tokens
+from src.enums import ErrorResponseCode
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):  # pyright: ignore[reportUnusedParameter]
@@ -33,7 +34,7 @@ async def app_exception_handler(request: Request, exc: AppException):
         status_code = exc.status_code,
         content = exc.error.model_dump()
     )
-    if response.status_code == 403:
+    if response.status_code == 403 and exc.error.code in [ErrorResponseCode.AUTH_REVOKED, ErrorResponseCode.AUTH_REUSE_DETECTED]:
         remove_tokens(response)
     return response
 
