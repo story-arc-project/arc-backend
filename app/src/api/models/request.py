@@ -71,3 +71,17 @@ class ExperiencePostRequest(BaseModel):
 
 class ExperiencePutRequest(BaseModel):
     content: dict[str, Any]
+
+class LibraryPostRequest(BaseModel):
+    name: str
+    color: str
+    icon: str
+    is_system: bool = False
+    filter: dict[str, Any] | None
+
+    @field_validator("name", mode="after")
+    @classmethod
+    def validate_name(cls, v: str):
+        if len(v) == 0:
+            raise ValueError("Name must not be empty")
+        return v
