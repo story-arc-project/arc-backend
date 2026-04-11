@@ -23,3 +23,9 @@ class AuthMeResponse(SuccessResponseWithData[AuthMeData]):
 
 class PostSuccessResponse(SuccessResponseWithData[UUIDData]):
     pass
+
+class PutSuccessResponse(SuccessResponse):
+    pass
+
+class DeleteSuccessResponse(SuccessResponse):
+    pass

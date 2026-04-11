@@ -68,3 +68,6 @@ class ExperiencePostRequest(BaseModel):
         if len(v) == 0:
             raise ValueError("Type must not be empty")
         return v
+
+class ExperiencePutRequest(BaseModel):
+    content: dict[str, Any]
