@@ -1,3 +1,4 @@
+from copy import deepcopy
 from typing import Annotated
 from uuid import UUID
 from fastapi import APIRouter, Depends, Response
@@ -183,7 +184,7 @@ async def duplicate_experience_by_id(experience_id: UUID, session: SessionDep, r
             user_id = result.user_id,
             type = result.type,
             priority = result.priority,
-            content = result.content
+            content = deepcopy(result.content)
         )
         session.add(new)
         session.commit()
