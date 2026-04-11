@@ -196,3 +196,40 @@ async def get_library_experiences(library_id: UUID, session: SessionDep, respons
             contents = [ExperienceResponseData(**obj.model_dump()) for obj in experiences]
         )
     )
+
+@libraries_router.delete("/{library_id}")
+async def delete_library_by_id(library_id: UUID, session: SessionDep, response: Response, payload: Annotated[AccessTokenPayload, Depends(check_auth)]):
+    statement = select(Library).where(Library.id == library_id)
+    result = session.exec(statement).one_or_none()
+    if result is None:
+        raise AppException(
+            404,
+            ErrorResponse(
+                code = ErrorResponseCode.NOT_FOUND,
+                message = "Library not found"
+            )
+        )
+    if result.user_id != payload.sub:
+        raise AppException(
+            403,
+            ErrorResponse(
+                code = ErrorResponseCode.RESOURCE_NOT_ALLOWED,
+                message = "Access for the resource is not allowed"
+            )
+        )
+    try:
+        session.delete(result)
+        session.commit()
+    except:
+        session.rollback()
+        raise AppException(
+            500,
+            ErrorResponse(
+                code=ErrorResponseCode.SERVER_ERROR,
+                message="Server side error."
+            )
+        )
+    response.status_code = 204
+    return DeleteSuccessResponse(
+        message = "Library deleted."
+    )
