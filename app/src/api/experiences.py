@@ -3,7 +3,7 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, Response
 from sqlmodel import select
 
-from src.api.models.base import ErrorResponse, ExperienceResponseData, SuccessResponseWithData, UUIDData
+from src.api.models.base import ErrorResponse, ExperienceResponseData, ExperiencesResponseData, SuccessResponseWithData, UUIDData
 from src.api.models.exc import AppException
 from src.api.models.request import ExperiencePostRequest
 from src.api.models.response import PostSuccessResponse
@@ -43,6 +43,19 @@ async def post_experience(body: ExperiencePostRequest, session: SessionDep, resp
         )
     )
 
+@experiences_router.get("/")
+async def get_experience(session: SessionDep, response: Response, payload: Annotated[AccessTokenPayload, Depends(dependency=check_auth)]):
+    statement = select(Experience).where(Experience.user_id == payload.sub)
+    result = session.exec(statement).all()
+    response.status_code = 200
+    return SuccessResponseWithData[ExperiencesResponseData](
+        message = "Fetch success",
+        data = ExperiencesResponseData(
+            count = len(result),
+            contents = [ExperienceResponseData(**obj.model_dump()) for obj in result]
+        )
+    )
+
 @experiences_router.get("/{experience_id}")
 async def get_experience_by_id(experience_id: UUID, session: SessionDep, response: Response, payload: Annotated[AccessTokenPayload, Depends(dependency=check_auth)]):
     statement = select(Experience).where(Experience.id == experience_id)
@@ -66,13 +79,5 @@ async def get_experience_by_id(experience_id: UUID, session: SessionDep, respons
     response.status_code = 200
     return SuccessResponseWithData[ExperienceResponseData](
         message = "Fetch success",
-        data = ExperienceResponseData(
-            id = result.id,
-            user_id = result.user_id,
-            type = result.type,
-            priority = result.priority,
-            content = result.content,
-            created_at = result.created_at,
-            updated_at = result.updated_at
-        )
+        data = ExperienceResponseData(**result.model_dump())
     )

@@ -64,3 +64,7 @@ class ExperienceResponseData(BaseModel):
     content: dict[str, Any]
     created_at: datetime
     updated_at: datetime
+
+class ExperiencesResponseData(BaseModel):
+    count: int
+    contents: list[ExperienceResponseData]
