@@ -6,7 +6,7 @@ from sqlmodel import select
 from src.api.models.base import ErrorResponse, LibrariesResponseData, LibraryContentData, LibraryResponseData, SuccessResponse, SuccessResponseWithData, UUIDData
 from src.api.models.exc import AppException
 from src.api.models.request import LibraryPostRequest
-from src.api.models.response import PostSuccessResponse
+from src.api.models.response import DeleteSuccessResponse, PostSuccessResponse
 from src.db.db import SessionDep
 from src.db.models import Experience, Library, LibraryExperienceRelation
 from src.enums import ErrorResponseCode
@@ -66,7 +66,15 @@ async def get_libraries(session: SessionDep, response: Response, payload: Annota
 async def post_library_experience(library_id: UUID, experience_id: UUID, session: SessionDep, response: Response, payload: Annotated[AccessTokenPayload, Depends(check_auth)]):
     library = session.exec(select(Library).where(Library.id == library_id)).one_or_none()
     experience = session.exec(select(Experience).where(Experience.id == experience_id)).one_or_none()
-    if library is None or experience is None:
+    if library is None:
+        raise AppException(
+            404,
+            ErrorResponse(
+                code = ErrorResponseCode.NOT_FOUND,
+                message = "Library not found"
+            )
+        )
+    if experience is None:
         raise AppException(
             404,
             ErrorResponse(
@@ -118,4 +126,40 @@ async def post_library_experience(library_id: UUID, experience_id: UUID, session
     response.status_code = 201
     return SuccessResponse(
         message = "Library-Experience relation created."
+    )
+
+@libraries_router.delete("/{library_id}/experiences/{experience_id}")
+async def delete_library_experience(library_id: UUID, experience_id: UUID, session: SessionDep, response: Response, payload: Annotated[AccessTokenPayload, Depends(check_auth)]):
+    relation = session.exec(select(LibraryExperienceRelation).where(LibraryExperienceRelation.library_id == library_id, LibraryExperienceRelation.experience_id == experience_id)).one_or_none()
+    if relation is None:
+        raise AppException(
+            404,
+            ErrorResponse(
+                code = ErrorResponseCode.NOT_FOUND,
+                message = "Relation not found"
+            )
+        )
+    if relation.user_id != payload.sub:
+        raise AppException(
+            403,
+            ErrorResponse(
+                code = ErrorResponseCode.RESOURCE_NOT_ALLOWED,
+                message = "Access for the resource is not allowed"
+            )
+        )
+    try:
+        session.delete(relation)
+        session.commit()
+    except:
+        session.rollback()
+        raise AppException(
+            500,
+            ErrorResponse(
+                code=ErrorResponseCode.SERVER_ERROR,
+                message="Server side error."
+            )
+        )
+    response.status_code = 204
+    return DeleteSuccessResponse(
+        message = "Relation deleted."
     )
