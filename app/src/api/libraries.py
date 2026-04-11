@@ -1,7 +1,8 @@
 from typing import Annotated
 from fastapi import APIRouter, Depends, Response
+from sqlmodel import select
 
-from src.api.models.base import ErrorResponse, UUIDData
+from src.api.models.base import ErrorResponse, LibrariesResponseData, LibraryContentData, LibraryResponseData, SuccessResponseWithData, UUIDData
 from src.api.models.exc import AppException
 from src.api.models.request import LibraryPostRequest
 from src.api.models.response import PostSuccessResponse
@@ -41,5 +42,21 @@ async def post_library(body: LibraryPostRequest, session: SessionDep, response: 
         message = "New library created.",
         data = UUIDData(
             id = new_library.id
+        )
+    )
+
+@libraries_router.get("/")
+async def get_libraries(session: SessionDep, response: Response, payload: Annotated[AccessTokenPayload, Depends(check_auth)]):
+    statement = select(Library).where(Library.user_id == payload.sub)
+    result = session.exec(statement).all()
+    response.status_code = 200
+    return SuccessResponseWithData[LibrariesResponseData](
+        message = "Fetch success",
+        data = LibrariesResponseData(
+            count = len(result),
+            contents = LibraryContentData(
+                system = [LibraryResponseData(**obj.model_dump()) for obj in result if obj.is_system],
+                custom = [LibraryResponseData(**obj.model_dump()) for obj in result if not obj.is_system]
+            )
         )
     )

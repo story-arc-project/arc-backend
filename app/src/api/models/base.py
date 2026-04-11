@@ -68,3 +68,22 @@ class ExperienceResponseData(BaseModel):
 class ExperiencesResponseData(BaseModel):
     count: int
     contents: list[ExperienceResponseData]
+
+class LibraryResponseData(BaseModel):
+    id: UUID
+    user_id: UUID
+    name: str
+    color: str
+    icon: str
+    filter: dict[str, Any]
+    sort_order: int
+    created_at: datetime
+    updated_at: datetime
+
+class LibraryContentData(BaseModel):
+    system: list[LibraryResponseData]
+    custom: list[LibraryResponseData]
+
+class LibrariesResponseData(BaseModel):
+    count: int
+    contents: LibraryContentData
