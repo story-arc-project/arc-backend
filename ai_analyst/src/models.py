@@ -1,8 +1,10 @@
 from typing import Literal
+from uuid import UUID
 from pydantic import BaseModel
 
 
 class IndividualRequest(BaseModel):
+    analysis_id: UUID
     input: list[str]
 
 

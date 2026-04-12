@@ -3,8 +3,10 @@ import hmac
 import json
 from os import getenv
 from typing import Any
+from celery import Task
 import httpx
 from src.queue.celery_app import celery
+from src.ai.individual import main as individual
 
 FRONTEND_API_URL = "http://app:8000"
 INTERNAL_SECRET_KEY = "INTERNAL_SECRET"
@@ -13,7 +15,7 @@ def sign_body(body: dict[str, Any]):
     key = getenv(INTERNAL_SECRET_KEY)
     if key is None:
         raise ValueError("Internal secret not set.")
-    body_bytes = json.dumps(body, seperators=(",", ":")).encode()
+    body_bytes = json.dumps(body, separators=(",", ":")).encode()
     return hmac.new(key.encode(), body_bytes, hashlib.sha256).hexdigest()
 
 def call_frontend(endpoint: str, body: dict[str, Any]):
@@ -28,14 +30,12 @@ def call_frontend(endpoint: str, body: dict[str, Any]):
     return response.json()
 
 @celery.task(bind=True, max_retries=3, default_retry_delay=5)
-def process_order(self, order_id: int):
+def process_individual(self: Task, analysis_id: str, user_input: list[str]):
     try:
-        # TODO: add logic
-        result = {"order_id": order_id, "processed": True}
-
+        result = individual(user_input)
         call_frontend(
-            f"/{getenv("INTERNAL_ROUTE", "internal")}/order/complete",
-            {"order_id": order_id, "result": result}
+            f"/{getenv("INTERNAL_ROUTE", "internal")}/individual/complete",
+            {"analysis_id": analysis_id, "result": result}
         )
 
     except Exception as exc:

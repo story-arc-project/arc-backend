@@ -1,5 +1,5 @@
 from typing import Annotated
-# from src.individual import main as individual_main
+from src.queue.tasks import process_individual
 # from src.comprehensive import main as comprehensive_main
 # from src.resume import main as resume_main
 from fastapi import Body, FastAPI
@@ -8,9 +8,12 @@ from src.models import ComprehensiveRequest, IndividualRequest, ResumeRequest
 
 app = FastAPI()
 
-# @app.post("/individual")
-# async def individual(body: Annotated[IndividualRequest, Body()]):
-#     return individual_main(body.input)
+@app.post("/individual")
+async def individual(body: Annotated[IndividualRequest, Body()]):
+    return process_individual(
+        analysis_id = body.analysis_id,
+        user_input = body.input
+    )
 
 # @app.post("/comprehensive")
 # async def comprehensive(body: Annotated[ComprehensiveRequest, Body()]):
