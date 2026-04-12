@@ -5,8 +5,6 @@ services:
       POSTGRES_USER: ${DB_USER}
       POSTGRES_PASSWORD: ${DB_PASSWORD}
       POSTGRES_DB: ${DB_NAME}
-    ports:
-      - "5432:5432"
     volumes:
       - db_data:/var/lib/postgresql/data
   app:
@@ -25,13 +23,9 @@ services:
     depends_on:
       - db
       - redis
-    ports:
-      - "8000:8000"
   redis:
     image: redis:8.6.2
     command: ["redis-server", "--appendonly", "yes"]
-    ports:
-      - "6379:6379"
     restart: unless-stopped
   nginx:
     image: nginx:1.28.3
@@ -66,8 +60,6 @@ services:
       GEMINI_API_KEY: ${GEMINI_API_KEY}
     depends_on:
       - db
-    ports:
-      - "8001:8001"
 
 volumes:
   db_data:
