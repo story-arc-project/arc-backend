@@ -1,8 +1,9 @@
 from datetime import date, datetime
+from uuid import UUID
 from pydantic import BaseModel, EmailStr
-from typing import Generic, TypeVar
+from typing import Any, Generic, TypeVar
 
-from src.enums import ErrorResponseCode, OauthProviderId
+from src.enums import ErrorResponseCode, ExperiencePriority, OauthProviderId
 
 T = TypeVar("T")
 
@@ -51,3 +52,52 @@ class AuthMeData(BaseModel):
     profile: ProfileData | None
     onboarded: bool
     # TODO: validate profile is None only when onboarded is False, not None only when onboarded is True
+
+class UUIDData(BaseModel):
+    id: UUID
+
+class ExperienceResponseData(BaseModel):
+    id: UUID
+    user_id: UUID
+    type: str
+    priority: ExperiencePriority
+    content: dict[str, Any]
+    created_at: datetime
+    updated_at: datetime
+
+class ExperiencesResponseData(BaseModel):
+    count: int
+    contents: list[ExperienceResponseData]
+
+class LibraryResponseData(BaseModel):
+    id: UUID
+    user_id: UUID
+    name: str
+    color: str
+    icon: str
+    filter: dict[str, Any]
+    sort_order: int
+    created_at: datetime
+    updated_at: datetime
+
+class LibraryContentData(BaseModel):
+    system: list[LibraryResponseData]
+    custom: list[LibraryResponseData]
+
+class LibrariesResponseData(BaseModel):
+    count: int
+    contents: LibraryContentData
+
+class PresetResponseData(BaseModel):
+    id: UUID
+    user_id: UUID
+    name: str
+    description: str | None
+    blocks: list[dict[str, Any]]
+    is_favorite: bool
+    created_at: datetime
+    updated_at: datetime
+
+class PresetsResponseData(BaseModel):
+    count: int
+    contents: list[PresetResponseData]

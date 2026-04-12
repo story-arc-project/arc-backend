@@ -346,18 +346,6 @@ def test_refresh(session: Session, client: TestClient, mock_mail: MagicMock):
     response = client.post("/auth/refresh")
     assert response.status_code == 200
 
-@pytest.fixture
-def authenticated_client(client: TestClient, mock_mail: MagicMock):
-    _ = client.post("/auth/signup", json={"email": email, "password": password})
-    response = client.post("/auth/verify-email", json={
-        "email": email,
-        "code": get_sent_mail(mock_mail)["Body"]
-    })
-    assert response.status_code == 200
-    assert client.cookies.get("refreshToken") is not None
-    assert client.cookies.get("accessToken") is not None
-    return client
-
 valid_onboarding_data = {
     "name": "홍길동",
     "birth": "2001-01-01",
@@ -450,7 +438,7 @@ def test_logout_token_already_revoked(authenticated_client: TestClient, session:
 
 def test_logout_token_jti_manipulated(authenticated_client: TestClient, session: Session):
     tok = session.exec(select(Token)).one()
-    tok.jti_hash = hash_jti(str(uuid4()))
+    tok.jti_hash = hash_jti(uuid4())
     session.add(tok)
     session.commit()
     response = authenticated_client.post("/auth/logout")
@@ -483,7 +471,7 @@ def test_me_revoked_token(authenticated_client: TestClient, session: Session):
 
 def test_me_rotated_token(authenticated_client: TestClient, session: Session):
     tok = session.exec(select(Token)).one()
-    tok.next = (tok.id or 0) + 1
+    tok.next = uuid4()
     session.add(tok)
     session.commit()
     response = authenticated_client.get("/auth/me")

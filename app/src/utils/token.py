@@ -3,7 +3,7 @@ import hmac
 from typing import Literal
 import jwt
 from os import getenv
-from uuid import uuid4
+from uuid import UUID, uuid4
 from pydantic import BaseModel, ValidationError
 from datetime import datetime, timedelta, timezone
 from src.const import ACCESS_TOKEN_EXPIRE, REFRESH_TOKEN_EXPIRE, JWT_ALG
@@ -13,15 +13,15 @@ ACCESS_TOKEN_TYPE = "access"
 REFRESH_TOKEN_TYPE = "refresh"
 
 class AccessTokenPayload(BaseModel):
-    sub: str
-    jti: str
+    sub: UUID
+    jti: UUID
     exp: int
     iat: int
     type: Literal["access"] = ACCESS_TOKEN_TYPE
 
 class RefreshTokenPayload(BaseModel):
-    sub: str
-    jti: str
+    sub: UUID
+    jti: UUID
     exp: int
     iat: int
     type: Literal["refresh"] = REFRESH_TOKEN_TYPE
@@ -33,7 +33,7 @@ class AccessTokenResult(BaseModel):
 class RefreshTokenResult(BaseModel):
     token: str
     exp: datetime
-    jti: str
+    jti: UUID
     iat: datetime
 
 def get_key():
@@ -42,7 +42,7 @@ def get_key():
         raise RuntimeError("JWT key not found in env")
     return key
 
-def create_access_token(user_id: str, jti: str):
+def create_access_token(user_id: UUID, jti: UUID):
     iat = datetime.now(timezone.utc)
     exp = iat + timedelta(minutes=ACCESS_TOKEN_EXPIRE)
     payload = AccessTokenPayload(
@@ -52,12 +52,12 @@ def create_access_token(user_id: str, jti: str):
         exp = int(exp.timestamp())
     )
     return AccessTokenResult(
-        token = jwt.encode(payload.model_dump(), get_key(), JWT_ALG),
+        token = jwt.encode(payload.model_dump(mode="json"), get_key(), JWT_ALG),
         exp = exp
     )
 
-def create_refresh_token(user_id: str):
-    jti = str(uuid4())
+def create_refresh_token(user_id: UUID):
+    jti = uuid4()
     iat = datetime.now(timezone.utc)
     exp = iat + timedelta(days=REFRESH_TOKEN_EXPIRE)
     payload = RefreshTokenPayload(
@@ -67,7 +67,7 @@ def create_refresh_token(user_id: str):
         exp = int(exp.timestamp())
     )
     return RefreshTokenResult(
-        token = jwt.encode(payload.model_dump(), get_key(), JWT_ALG),
+        token = jwt.encode(payload.model_dump(mode="json"), get_key(), JWT_ALG),
         exp = exp,
         jti = jti,
         iat = iat
@@ -107,8 +107,8 @@ def verify_refresh_token(token: str):
         return JWTTokenStatus.EXPIRED
     return payload
 
-def hash_jti(jti: str):
+def hash_jti(jti: UUID):
     key = getenv("HMAC_KEY")
     if key is None:
         raise ValueError("Hmac key not configured")
-    return hmac.new(key.encode(), jti.encode(), hashlib.sha256).hexdigest()
+    return hmac.new(key.encode(), str(jti).encode(), hashlib.sha256).hexdigest()

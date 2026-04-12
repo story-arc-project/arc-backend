@@ -1,5 +1,6 @@
 from datetime import datetime, timezone
 from typing import Annotated
+from uuid import UUID
 from fastapi import APIRouter, Depends, Request, Response
 from pydantic import BaseModel
 from sqlmodel import select
@@ -28,11 +29,11 @@ class SetTokenResult(BaseModel):
     acc_exp: datetime
     ref_exp: datetime
     ref_iat: datetime
-    jti: str
-    id: int
+    jti: UUID
+    id: UUID
 
-def set_tokens(user_id: int, response: Response, session: SessionDep):
-    ref = create_refresh_token(str(user_id))
+def set_tokens(user_id: UUID, response: Response, session: SessionDep):
+    ref = create_refresh_token(user_id)
     response.set_cookie(
         key=REFRESH_TOKEN_KEY,
         value=ref.token,
@@ -42,7 +43,7 @@ def set_tokens(user_id: int, response: Response, session: SessionDep):
         path=REFRESH_TOKEN_PATH,
         expires=ref.exp
     )
-    acc = create_access_token(str(user_id), ref.jti)
+    acc = create_access_token(user_id, ref.jti)
     response.set_cookie(
         key=ACCESS_TOKEN_KEY,
         value=acc.token,
@@ -325,7 +326,7 @@ async def refresh(request: Request, session: SessionDep, response: Response):
 
 @auth_router.post("/onboarding")
 async def onboard(body: OnboardRequest, session: SessionDep, response: Response, payload: Annotated[AccessTokenPayload, Depends(check_auth)]):
-    user_id = int(payload.sub)
+    user_id = payload.sub
     statement = select(UserProfile).where(UserProfile.user_id == user_id)
     user_profile = session.exec(statement).one_or_none()
     if user_profile is not None:
@@ -370,7 +371,7 @@ async def me(session: SessionDep, response: Response, payload: Annotated[AccessT
         select(User, UserProfile, OauthAccount)
         .outerjoin(UserProfile)
         .outerjoin(OauthAccount)
-        .where(User.id == int(payload.sub))
+        .where(User.id == payload.sub)
     )
     results = session.exec(statement).all()
     if not results:
