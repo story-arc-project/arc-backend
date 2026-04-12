@@ -26,6 +26,7 @@ services:
       GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID}
       GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET}
       HMAC_KEY: ${HMAC_KEY}
+      INTERNAL_SECRET: ${INTERNAL_SECRET}
     depends_on:
       db:
         condition: service_healthy
@@ -66,11 +67,41 @@ services:
       sh -c "while true; do certbot renew --non-interactive --webroot -w /var/www/certbot --quiet; sleep 12h; done"
   ai_analyst:
     build: ./ai_analyst
+    command: uv run --no-sync uvicorn src.main:app --host 0.0.0.0 --port 8001
+    depends_on:
+      app:
+        condition: service_started
+      rabbitmq:
+        condition: service_healthy
+    restart: unless-stopped
+  rabbitmq:
+    image: rabbitmq:4.2.5-management-alpine
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD}
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+  worker:
+    build: ./ai_analyst
+    command: uv run --no-sync celery -A src.queue.celery_app worker --loglevel=info
     environment:
       GEMINI_API_KEY: ${GEMINI_API_KEY}
+      RABBITMQ_USER: ${RABBITMQ_USER}
+      RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD}
+      INTERNAL_SECRET: ${INTERNAL_SECRET}
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
     restart: unless-stopped
 
 volumes:
   db_data:
   certbot-etc:
   certbot-var:
+  rabbitmq_data:
