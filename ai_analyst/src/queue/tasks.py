@@ -34,7 +34,7 @@ def process_order(self, order_id: int):
         result = {"order_id": order_id, "processed": True}
 
         call_frontend(
-            "/internal/order/complete",
+            f"/{getenv("INTERNAL_ROUTE", "internal")}/order/complete",
             {"order_id": order_id, "result": result}
         )
 

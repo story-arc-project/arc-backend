@@ -27,6 +27,7 @@ services:
       GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET}
       HMAC_KEY: ${HMAC_KEY}
       INTERNAL_SECRET: ${INTERNAL_SECRET}
+      INTERNAL_ROUTE: ${INTERNAL_ROUTE}
     depends_on:
       db:
         condition: service_healthy
@@ -95,6 +96,7 @@ services:
       RABBITMQ_USER: ${RABBITMQ_USER}
       RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD}
       INTERNAL_SECRET: ${INTERNAL_SECRET}
+      INTERNAL_ROUTE: ${INTERNAL_ROUTE}
     depends_on:
       rabbitmq:
         condition: service_healthy
