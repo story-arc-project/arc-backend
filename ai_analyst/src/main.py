@@ -18,16 +18,4 @@ async def comprehensive(body: Annotated[ComprehensiveRequest, Body()]):
 
 @app.post("/resume")
 async def resume(body: Annotated[ResumeRequest, Body()]):
-    return resume_main(
-        sources=body.sources,
-        name_ko=body.name_ko,
-        name_en=body.name_en,
-        email=body.email,
-        phone=body.phone,
-        school=body.school,
-        department=body.department,
-        links=body.links,
-        language=body.language,
-        output_path=body.output_path,
-        deep_crawl=body.deep_crawl
-    )
+    return resume_main(**body.model_dump())
