@@ -28,3 +28,11 @@ class ErrorResponseCode(str, enum.Enum):
     AUTH_REUSE_DETECTED = "AUTH_REUSE_DETECTED"
     AUTH_REVOKED = "AUTH_REVOKED"
     DUPLICATE_ONBOARDING = "DUPLICATE_ONBOARDING"
+    NOT_FOUND = "NOT_FOUND"
+    RESOURCE_NOT_ALLOWED = "RESOURCE_NOT_ALLOWED"
+    BAD_REQUEST = "BAD_REQUEST"
+
+class ExperiencePriority(str, enum.Enum):
+    HIGH = "high"
+    MEDIUM = "medium"
+    LOW = "low"

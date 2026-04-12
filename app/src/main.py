@@ -5,7 +5,10 @@ from fastapi.middleware.cors import CORSMiddleware
 from os import getenv
 
 from fastapi.responses import JSONResponse
+from src.api.experiences import experiences_router
+from src.api.libraries import libraries_router
 from src.api.models.exc import AppException
+from src.api.presets import presets_router
 from src.db.db import create_db_and_tables
 from src.api.auth import auth_router, remove_tokens
 from src.enums import ErrorResponseCode
@@ -54,4 +57,16 @@ async def validation_exception_handler(request: Request, exc: ValidationExceptio
 app.include_router(
     auth_router,
     prefix="/auth"
+)
+app.include_router(
+    experiences_router,
+    prefix="/experiences"
+)
+app.include_router(
+    libraries_router,
+    prefix="/libraries"
+)
+app.include_router(
+    presets_router,
+    prefix="/presets"
 )
