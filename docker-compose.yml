@@ -7,6 +7,11 @@ services:
       POSTGRES_DB: ${DB_NAME}
     volumes:
       - db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER} -d ${DB_NAME}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
   app:
     image: arc-backend-app:latest
     environment:
@@ -21,8 +26,10 @@ services:
       GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET}
       HMAC_KEY: ${HMAC_KEY}
     depends_on:
-      - db
-      - redis
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_started
   redis:
     image: redis:8.6.2
     command: ["redis-server", "--appendonly", "yes"]
@@ -58,8 +65,6 @@ services:
     build: ./ai_analyst
     environment:
       GEMINI_API_KEY: ${GEMINI_API_KEY}
-    depends_on:
-      - db
 
 volumes:
   db_data:
