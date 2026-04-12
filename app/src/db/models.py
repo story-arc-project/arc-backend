@@ -3,7 +3,7 @@ from typing import Any
 import uuid
 from sqlalchemy import DateTime, func, Column, UUID as SAUUID
 from sqlalchemy.sql.functions import now
-from src.enums import ExperiencePriority, OauthProviderId, UserStatus
+from src.enums import AnalysisStatus, ExperiencePriority, OauthProviderId, UserStatus
 from sqlmodel import ARRAY, Field, SQLModel, String, UniqueConstraint
 from sqlalchemy.dialects.postgresql import JSONB
 from pgvector.sqlalchemy import Vector
@@ -238,9 +238,14 @@ class IndividualAnalysis(SQLModel, table=True):
         primary_key=True,
         sa_type=SAUUID
     )
-    vector: list[float] = Field(sa_column=Column(Vector(3072)))
-    result: dict[str, Any] = Field(
-        sa_column=Column(JSONB)
+    task_id: str | None = Field(nullable=True, index=True, default=None)
+    status: AnalysisStatus = AnalysisStatus.QUEUED
+    experience_id: uuid.UUID = Field(foreign_key="experiences.id")
+    vector: list[float] | None = Field(
+        sa_column=Column(Vector(3072), nullable=True, default=None)
+    )
+    result: dict[str, Any] | None = Field(
+        sa_column=Column(JSONB, nullable=True, default=None)
     )
 
 class ComprehensiveAnalysis(SQLModel, table=True):
