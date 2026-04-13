@@ -20,7 +20,7 @@ def verify_signature(body: dict[str, Any], signature: str):
     if key is None:
         raise ValueError("Internal secret not set.")
     expected = hmac.new(
-        INTERNAL_SECRET_KEY.encode(),
+        key.encode(),
         json.dumps(body, separators=(",", ":")).encode(),
         hashlib.sha256
     ).hexdigest()
