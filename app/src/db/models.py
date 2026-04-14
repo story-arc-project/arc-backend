@@ -249,7 +249,7 @@ class IndividualAnalysis(SQLModel, table=True):
     )
 
 class ComprehensiveAnalysis(SQLModel, table=True):
-    __tablename__: str = "individual_analyses"  # pyright: ignore[reportIncompatibleVariableOverride]
+    __tablename__: str = "comprehensive_analyses"  # pyright: ignore[reportIncompatibleVariableOverride]
     id: uuid.UUID = Field(
         default_factory=uuid.uuid4,
         primary_key=True,
