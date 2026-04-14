@@ -26,8 +26,8 @@ def verify_signature(body: dict[str, Any], signature: str):
     ).hexdigest()
     return hmac.compare_digest(expected, signature)
 
-@internal_router.post("/individual/complete")
-async def complete_individual(request: Request, session: SessionDep, response: Response):
+@internal_router.post("/individual/success")
+async def success_individual(request: Request, session: SessionDep, response: Response):
     body: dict[str, Any] = await request.json()
     signature = request.headers.get("X-Signature")
     if not signature or not verify_signature(body, signature):
@@ -40,7 +40,9 @@ async def complete_individual(request: Request, session: SessionDep, response: R
     analysis = session.exec(statement).one_or_none()
     if analysis is None:
         return HTTPException(status_code=404)
-    analysis.result = json.loads(result)
+    analysis_result: dict[str, Any] = json.loads(result)
+    analysis.vector = analysis_result.get("vector")
+    analysis.result = analysis_result.get("result")
     analysis.status = AnalysisStatus.SUCCESS
     session.add(analysis)
     session.commit()

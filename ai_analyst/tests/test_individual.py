@@ -67,6 +67,6 @@ def test_task_individual_enqueue(client: TestClient, mocked_tasks: tuple[MagicMo
     assert isinstance(task_id, str)
     args, kwargs = mock_call.call_args
     endpoint, call_data = args
-    assert endpoint == "/internal/individual/complete"
+    assert endpoint == "/internal/individual/success"
     assert call_data["analysis_id"] == analysis_id
     assert call_data["result"] == individual_return_data

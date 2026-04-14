@@ -32,6 +32,6 @@ def call_frontend(endpoint: str, body: dict[str, Any]):
 def process_individual(analysis_id: str, user_input: list[str]):
     result = individual(user_input)
     return call_frontend(
-        f"/{getenv("INTERNAL_ROUTE", "internal")}/individual/complete",
+        f"/{getenv("INTERNAL_ROUTE", "internal")}/individual/success",
         {"analysis_id": analysis_id, "result": result}
     )
