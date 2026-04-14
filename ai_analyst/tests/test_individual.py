@@ -2,7 +2,7 @@ import os
 from fastapi.testclient import TestClient
 import pytest
 from uuid import uuid4
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 from testcontainers.rabbitmq import RabbitMqContainer
 
 from src.main import app
@@ -40,25 +40,33 @@ def celery_app(rabbitmq):
 def client(celery_app):
     yield TestClient(app)
 
-def test_task_individual_enqueue(client: TestClient):
+
+individual_return_data = {"summary": "test result"}
+
+
+@pytest.fixture
+def mocked_tasks():
     with patch("src.queue.tasks.individual") as mock_individual, \
          patch("src.queue.tasks.call_frontend") as mock_call:
+        mock_individual.return_value = individual_return_data
+        yield mock_individual, mock_call
 
-        analysis_id = str(uuid4())
-        data = {"summary": "test result"}
-        mock_individual.return_value = data
 
-        response = client.post("/individual", json={
-            "analysis_id": analysis_id,
-            "input": ["test data"]
-        })
-        
-        assert response.status_code == 200
-        task_id = response.json()["task_id"]
-        assert task_id is not None
-        assert isinstance(task_id, str)
-        args, kwargs = mock_call.call_args
-        endpoint, call_data = args
-        assert endpoint == "/internal/individual/complete"
-        assert call_data["analysis_id"] == analysis_id
-        assert call_data["result"] == data
+def test_task_individual_enqueue(client: TestClient, mocked_tasks: tuple[MagicMock, MagicMock]):
+    _, mock_call = mocked_tasks
+    analysis_id = str(uuid4())
+
+    response = client.post("/individual", json={
+        "analysis_id": analysis_id,
+        "input": ["test data"]
+    })
+    
+    assert response.status_code == 200
+    task_id = response.json()["task_id"]
+    assert task_id is not None
+    assert isinstance(task_id, str)
+    args, kwargs = mock_call.call_args
+    endpoint, call_data = args
+    assert endpoint == "/internal/individual/complete"
+    assert call_data["analysis_id"] == analysis_id
+    assert call_data["result"] == individual_return_data
