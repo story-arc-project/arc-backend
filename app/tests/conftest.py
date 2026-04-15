@@ -2,6 +2,7 @@ from fastapi.testclient import TestClient
 import pytest
 from fakeredis import FakeRedis
 from unittest.mock import MagicMock, patch
+from sqlalchemy import text
 from sqlalchemy.pool import NullPool
 from sqlmodel import SQLModel, Session, create_engine
 from testcontainers.postgres import PostgresContainer
@@ -57,8 +58,11 @@ def mock_jwt_key():
 
 @pytest.fixture(name="session")  
 def session_fixture():
-    with PostgresContainer("postgres:16") as postgres:
+    with PostgresContainer("pgvector/pgvector:pg16") as postgres:
         engine = create_engine(postgres.get_connection_url(), poolclass=NullPool)
+        with engine.begin() as conn:
+            _ = conn.execute(text("CREATE EXTENSION IF NOT EXISTS vector"))
+            conn.commit()
         SQLModel.metadata.create_all(engine)
         with Session(engine) as session:
             yield session

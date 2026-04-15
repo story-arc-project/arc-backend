@@ -242,9 +242,11 @@ class IndividualAnalysis(SQLModel, table=True):
     status: AnalysisStatus = AnalysisStatus.QUEUED
     experience_id: uuid.UUID = Field(foreign_key="experiences.id")
     vector: list[float] | None = Field(
+        default=None,
         sa_column=Column(Vector(3072), nullable=True, default=None)
     )
     result: dict[str, Any] | None = Field(
+        default=None,
         sa_column=Column(JSONB, nullable=True, default=None)
     )
 
@@ -255,9 +257,13 @@ class ComprehensiveAnalysis(SQLModel, table=True):
         primary_key=True,
         sa_type=SAUUID
     )
-    vector: list[float] = Field(sa_column=Column(Vector(3072)))
-    result: dict[str, Any] = Field(
-        sa_column=Column(JSONB)
+    vector: list[float] | None = Field(
+        default=None,
+        sa_column=Column(Vector(3072), nullable=True, default=None)
+    )
+    result: dict[str, Any] | None = Field(
+        default=None,
+        sa_column=Column(JSONB, nullable=True, default=None)
     )
 
 class Resume(SQLModel, table=True):
@@ -267,6 +273,7 @@ class Resume(SQLModel, table=True):
         primary_key=True,
         sa_type=SAUUID
     )
-    result: dict[str, Any] = Field(
-        sa_column=Column(JSONB)
+    result: dict[str, Any] | None = Field(
+        default=None,
+        sa_column=Column(JSONB, nullable=True, default=None)
     )

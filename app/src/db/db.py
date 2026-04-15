@@ -10,7 +10,7 @@ DATABASE_URL = f"postgresql://{getenv("POSTGRES_USER")}:{getenv("POSTGRES_PASSWO
 engine = create_engine(DATABASE_URL)
 
 def create_db_and_tables():
-    with engine.connect() as conn:
+    with engine.begin() as conn:
         _ = conn.execute(text("CREATE EXTENSION IF NOT EXISTS vector"))
         conn.commit()
     SQLModel.metadata.create_all(engine)
