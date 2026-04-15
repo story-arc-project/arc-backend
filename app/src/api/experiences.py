@@ -1,5 +1,6 @@
 from copy import deepcopy
 import json
+import traceback
 from typing import Annotated
 from uuid import UUID
 from fastapi import APIRouter, Depends, Response
@@ -38,7 +39,8 @@ async def post_experience(body: ExperiencePostRequest, session: SessionDep, resp
         session.add(new_experience)
         session.commit()
         session.refresh(new_experience)
-    except:
+    except Exception:
+        traceback.print_exc()
         session.rollback()
         raise AppException(
             500,

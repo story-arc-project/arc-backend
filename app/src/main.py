@@ -5,6 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from os import getenv
 
 from fastapi.responses import JSONResponse
+from src.api.analysis import analysis_router
 from src.api.experiences import experiences_router
 from src.api.internal import internal_router
 from src.api.libraries import libraries_router
@@ -74,4 +75,8 @@ app.include_router(
 app.include_router(
     presets_router,
     prefix="/presets"
+)
+app.include_router(
+    analysis_router,
+    prefix="/analysis"
 )
