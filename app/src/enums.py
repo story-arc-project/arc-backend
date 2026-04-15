@@ -31,6 +31,7 @@ class ErrorResponseCode(str, enum.Enum):
     NOT_FOUND = "NOT_FOUND"
     RESOURCE_NOT_ALLOWED = "RESOURCE_NOT_ALLOWED"
     BAD_REQUEST = "BAD_REQUEST"
+    INTERNAL_ERROR = "INTERNAL_ERROR"
 
 class ExperiencePriority(str, enum.Enum):
     HIGH = "high"

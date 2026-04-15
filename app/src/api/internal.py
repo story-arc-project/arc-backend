@@ -1,45 +1,40 @@
-import hashlib
-import hmac
 import json
-from os import getenv
 from sqlmodel import select
-from typing import Any
+from typing import Annotated, Any
 from uuid import UUID
-from fastapi import APIRouter, HTTPException, Request, Response
+from fastapi import APIRouter, Depends, Response
 
+from src.api.models.base import ErrorResponse
+from src.api.models.exc import AppException
 from src.db.db import SessionDep
 from src.db.models import IndividualAnalysis
-from src.enums import AnalysisStatus
-
-INTERNAL_SECRET_KEY = "INTERNAL_SECRET"
+from src.enums import AnalysisStatus, ErrorResponseCode
+from src.utils.internal import check_internal
 
 internal_router = APIRouter()
 
-def verify_signature(body: dict[str, Any], signature: str):
-    key = getenv(INTERNAL_SECRET_KEY)
-    if key is None:
-        raise ValueError("Internal secret not set.")
-    expected = hmac.new(
-        key.encode(),
-        json.dumps(body, separators=(",", ":")).encode(),
-        hashlib.sha256
-    ).hexdigest()
-    return hmac.compare_digest(expected, signature)
-
 @internal_router.post("/individual/success")
-async def success_individual(request: Request, session: SessionDep, response: Response):
-    body: dict[str, Any] = await request.json()
-    signature = request.headers.get("X-Signature")
-    if not signature or not verify_signature(body, signature):
-        raise HTTPException(status_code=403)
+async def success_individual(body: Annotated[dict[str, Any], Depends(check_internal)], session: SessionDep, response: Response):
     analysis_id: str | None = body.get("analysis_id")
     result: str | None = body.get("result")
     if analysis_id is None or result is None:
-        raise HTTPException(status_code=400)
+        raise AppException(
+            status_code = 400,
+            error = ErrorResponse(
+                code = ErrorResponseCode.BAD_REQUEST,
+                message = ""
+            )
+        )
     statement = select(IndividualAnalysis).where(IndividualAnalysis.id == UUID(analysis_id))
     analysis = session.exec(statement).one_or_none()
     if analysis is None:
-        return HTTPException(status_code=404)
+        raise AppException(
+            status_code = 404,
+            error = ErrorResponse(
+                code = ErrorResponseCode.NOT_FOUND,
+                message = ""
+            )
+        )
     analysis_result: dict[str, Any] = json.loads(result)
     analysis.vector = analysis_result.get("vector")
     analysis.result = analysis_result.get("result")
