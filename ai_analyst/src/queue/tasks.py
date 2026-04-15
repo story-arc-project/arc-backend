@@ -1,11 +1,14 @@
 import hashlib
 import hmac
+import importlib
 import json
 from os import getenv
 from typing import Any
 import requests
 from src.queue.celery_app import celery
-from src.ai.individual import main as individual
+
+def _load_main():
+    return importlib.import_module("src.ai.individual").main
 
 FRONTEND_API_URL = "http://app:8000"
 INTERNAL_SECRET_KEY = "INTERNAL_SECRET"
@@ -30,7 +33,8 @@ def call_frontend(endpoint: str, body: dict[str, Any]):
 
 @celery.task
 def process_individual(analysis_id: str, user_input: list[str]):
-    result = individual(user_input)
+    main = _load_main()
+    result = main(user_input)
     return call_frontend(
         f"/{getenv("INTERNAL_ROUTE", "internal")}/individual/success",
         {"analysis_id": analysis_id, "result": result}

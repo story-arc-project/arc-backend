@@ -41,15 +41,15 @@ def client(celery_app):
     yield TestClient(app)
 
 
-individual_return_data = {"summary": "test result"}
+individual_return_data = '{"summary": "test result"}'
 
 
 @pytest.fixture
 def mocked_tasks():
-    with patch("src.queue.tasks.individual") as mock_individual, \
+    with patch("src.queue.tasks._load_main") as mock_load_main, \
          patch("src.queue.tasks.call_frontend") as mock_call:
-        mock_individual.return_value = individual_return_data
-        yield mock_individual, mock_call
+        mock_load_main.return_value = lambda x: individual_return_data
+        yield mock_load_main, mock_call
 
 
 def test_task_individual_enqueue(client: TestClient, mocked_tasks: tuple[MagicMock, MagicMock]):
