@@ -102,6 +102,12 @@ class PresetsResponseData(BaseModel):
     count: int
     contents: list[PresetResponseData]
 
+class IndividualAnalysisData(BaseModel):
+    id: UUID
+    status: AnalysisStatus
+    experience_id: UUID
+    result: dict[str, Any]
+
 class IndividualAnalysisListData(BaseModel):
     id: UUID
     status: AnalysisStatus
