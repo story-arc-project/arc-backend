@@ -9,6 +9,7 @@ class IndividualRequest(BaseModel):
 
 
 class ComprehensiveRequest(BaseModel):
+    analysis_id: UUID
     input: list[str]
     school: str
     department: str

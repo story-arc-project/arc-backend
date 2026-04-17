@@ -1,5 +1,6 @@
 from datetime import date
 from typing import Any
+from uuid import UUID
 from pydantic import BaseModel, EmailStr, field_validator
 
 class LoginRequest(BaseModel):
@@ -85,3 +86,6 @@ class LibraryPostRequest(BaseModel):
         if len(v) == 0:
             raise ValueError("Name must not be empty")
         return v
+
+class ComprehensiveAnalysisPostRequest(BaseModel):
+    experiences: list[UUID]

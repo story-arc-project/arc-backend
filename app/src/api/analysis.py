@@ -1,13 +1,16 @@
+import traceback
+import requests
 from typing import Annotated
 from uuid import UUID
 from fastapi import APIRouter, Depends, Response
-from sqlmodel import select
+from sqlmodel import col, select
 
-from src.api.models.base import ErrorResponse, IndividualAnalysisData, IndividualAnalysisList, IndividualAnalysisListData
+from src.api.models.base import ErrorResponse, IndividualAnalysisData, IndividualAnalysisList, IndividualAnalysisListData, SuccessResponse
 from src.api.models.exc import AppException
+from src.api.models.request import ComprehensiveAnalysisPostRequest
 from src.api.models.response import IndividualAnalysisListResponse, IndividualAnalysisResponse
 from src.db.db import SessionDep
-from src.db.models import Experience, IndividualAnalysis
+from src.db.models import ComprehensiveAnalysis, Experience, IndividualAnalysis
 from src.enums import ErrorResponseCode
 from src.utils.auth import check_auth
 from src.utils.token import AccessTokenPayload
@@ -64,4 +67,39 @@ async def get_individual_analysis(analysis_id: UUID, session: SessionDep, respon
     return IndividualAnalysisResponse(
         message = "Fetch success.",
         data = IndividualAnalysisData(**analysis.model_dump())
+    )
+
+@analysis_router.post("/analysis/comprehensive")
+async def post_comprehensive_analysis(body: ComprehensiveAnalysisPostRequest, session: SessionDep, response: Response, payload: Annotated[AccessTokenPayload, Depends(check_auth)]):
+    statement = select(Experience).where(col(Experience.id).in_(body.experiences))
+    result = session.exec(statement).all()
+    user_input: list[str] = []
+    for experience in result:
+        user_input.append(str(experience.content))
+    try:
+        new_comprehensive_analysis = ComprehensiveAnalysis(
+            experiences = [experience for experience in result]
+        )
+        req = requests.post("http://ai_analyst:8001/comprehensive", json={
+            "analysis_id": new_comprehensive_analysis.id,
+            "input": user_input
+        })
+        req.raise_for_status()
+        new_comprehensive_analysis.task_id = req.json()["task_id"]
+        session.add(new_comprehensive_analysis)
+        session.commit()
+        session.refresh(new_comprehensive_analysis)
+    except Exception:
+        traceback.print_exc()
+        session.rollback()
+        raise AppException(
+            500,
+            ErrorResponse(
+                code=ErrorResponseCode.SERVER_ERROR,
+                message="Server side error."
+            )
+        )
+    response.status_code = 200
+    return SuccessResponse(
+        message = "Queued new comprehensive analysis."
     )

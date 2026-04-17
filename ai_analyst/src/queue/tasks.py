@@ -3,12 +3,12 @@ import hmac
 import importlib
 import json
 from os import getenv
-from typing import Any
+from typing import Any, Literal
 import requests
 from src.queue.celery_app import celery
 
-def _load_main():
-    return importlib.import_module("src.ai.individual").main
+def _load_main(type: Literal["individual", "comprehensive"]):
+    return importlib.import_module(f"src.ai.{type}").main
 
 FRONTEND_API_URL = "http://app:8000"
 INTERNAL_SECRET_KEY = "INTERNAL_SECRET"
@@ -33,9 +33,18 @@ def call_frontend(endpoint: str, body: dict[str, Any]):
 
 @celery.task
 def process_individual(analysis_id: str, user_input: list[str]):
-    main = _load_main()
+    main = _load_main("individual")
     result = main(user_input)
     return call_frontend(
         f"/{getenv("INTERNAL_ROUTE", "internal")}/individual/success",
+        {"analysis_id": analysis_id, "result": result}
+    )
+
+@celery.task
+def process_comprehensive(analysis_id: str, user_input: list[str], school: str, department: str):
+    main = _load_main("comprehensive")
+    result = main(user_input, school, department)
+    return call_frontend(
+        f"/{getenv("INTERNAL_ROUTE", "internal")}/comprehensive/success",
         {"analysis_id": analysis_id, "result": result}
     )

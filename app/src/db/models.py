@@ -4,7 +4,7 @@ import uuid
 from sqlalchemy import DateTime, func, Column, UUID as SAUUID
 from sqlalchemy.sql.functions import now
 from src.enums import AnalysisStatus, ExperiencePriority, OauthProviderId, UserStatus
-from sqlmodel import ARRAY, Field, SQLModel, String, UniqueConstraint
+from sqlmodel import ARRAY, Field, Relationship, SQLModel, String, UniqueConstraint
 from sqlalchemy.dialects.postgresql import JSONB
 from pgvector.sqlalchemy import Vector
 
@@ -250,12 +250,22 @@ class IndividualAnalysis(SQLModel, table=True):
         sa_column=Column(JSONB, nullable=True, default=None)
     )
 
+class ComprehensiveAnalysisExperienceLink(SQLModel, table=True):
+    comprehensive_analysis_id: uuid.UUID = Field(foreign_key="comprehensive_analyses.id", primary_key=True)
+    experience_id: uuid.UUID = Field(foreign_key="experiences.id", primary_key=True)
+
 class ComprehensiveAnalysis(SQLModel, table=True):
     __tablename__: str = "comprehensive_analyses"  # pyright: ignore[reportIncompatibleVariableOverride]
     id: uuid.UUID = Field(
         default_factory=uuid.uuid4,
         primary_key=True,
         sa_type=SAUUID
+    )
+    task_id: str | None = Field(nullable=True, index=True, default=None)
+    status: AnalysisStatus = AnalysisStatus.QUEUED
+    experiences: list[Experience] = Relationship(
+        back_populates="comprehensive_analyses",
+        link_model=ComprehensiveAnalysisExperienceLink
     )
     vector: list[float] | None = Field(
         default=None,
