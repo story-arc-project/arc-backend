@@ -69,7 +69,7 @@ async def get_individual_analysis(analysis_id: UUID, session: SessionDep, respon
         data = IndividualAnalysisData(**analysis.model_dump())
     )
 
-@analysis_router.post("/analysis/comprehensive")
+@analysis_router.post("/comprehensive")
 async def post_comprehensive_analysis(body: ComprehensiveAnalysisPostRequest, session: SessionDep, response: Response, payload: Annotated[AccessTokenPayload, Depends(check_auth)]):
     statement = select(Experience).where(col(Experience.id).in_(body.experiences))
     result = session.exec(statement).all()
