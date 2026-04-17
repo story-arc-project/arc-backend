@@ -31,12 +31,13 @@ async def post_experience(body: ExperiencePostRequest, session: SessionDep, resp
             experience_id = new_experience.id
         )
         req = requests.post("http://ai_analyst:8001/individual", json={
-            "analysis_id": new_individual_analysis.id,
-            "input": json.dumps(body.content)
+            "analysis_id": str(new_individual_analysis.id),
+            "input": [json.dumps(body.content)]
         })
         req.raise_for_status()
         new_individual_analysis.task_id = req.json()["task_id"]
         session.add(new_experience)
+        session.add(new_individual_analysis)
         session.commit()
         session.refresh(new_experience)
     except Exception:
