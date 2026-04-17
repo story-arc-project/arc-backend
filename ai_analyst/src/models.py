@@ -26,3 +26,8 @@ class ResumeRequest(BaseModel):
     language: Literal["ko", "en", "both"]
     output_path: str
     deep_crawl: bool
+
+class KeywordRequest(BaseModel):
+    analysis_id: UUID
+    input: str
+    keywords: list[str]

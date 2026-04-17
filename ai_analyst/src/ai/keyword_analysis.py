@@ -961,3 +961,7 @@ def show_keywords():
         print(f"\n[{category}]")
         print(f"  {', '.join(kws)}")
 
+
+def main(keywords: list[str], user_input: str):
+    careers = parse_careers(user_input)
+    return analyze_keywords(keywords, careers)

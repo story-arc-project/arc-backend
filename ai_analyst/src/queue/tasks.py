@@ -7,7 +7,7 @@ from typing import Any, Literal
 import requests
 from src.queue.celery_app import celery
 
-def _load_main(type: Literal["individual", "comprehensive"]):
+def _load_main(type: Literal["individual", "comprehensive", "keyword_analysis"]):
     return importlib.import_module(f"src.ai.{type}").main
 
 FRONTEND_API_URL = "http://app:8000"
@@ -46,5 +46,14 @@ def process_comprehensive(analysis_id: str, user_input: list[str], school: str, 
     result = main(user_input, school, department)
     return call_frontend(
         f"/{getenv("INTERNAL_ROUTE", "internal")}/comprehensive/success",
+        {"analysis_id": analysis_id, "result": result}
+    )
+
+@celery.task
+def process_keyword(analysis_id: str, user_input: str, keywords: list[str]):
+    main = _load_main("keyword_analysis")
+    result = main(keywords, user_input)
+    return call_frontend(
+        f"/{getenv("INTERNAL_ROUTE", "internal")}/keyword/success",
         {"analysis_id": analysis_id, "result": result}
     )
