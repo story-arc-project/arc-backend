@@ -80,6 +80,15 @@ async def post_comprehensive_analysis(body: ComprehensiveAnalysisPostRequest, se
         new_comprehensive_analysis = ComprehensiveAnalysis(
             experiences = [experience for experience in result]
         )
+        for experience in result:
+            if experience.user_id != payload.sub:
+                raise AppException(
+                    403,
+                    ErrorResponse(
+                        code = ErrorResponseCode.RESOURCE_NOT_ALLOWED,
+                        message = "Access for the resource is not allowed"
+                    )
+                )
         req = requests.post("http://ai_analyst:8001/comprehensive", json={
             "analysis_id": new_comprehensive_analysis.id,
             "input": user_input
