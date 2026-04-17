@@ -5,10 +5,10 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, Response
 from sqlmodel import col, select
 
-from src.api.models.base import ErrorResponse, IndividualAnalysisData, IndividualAnalysisList, IndividualAnalysisListData, SuccessResponse
+from src.api.models.base import ComprehensiveAnalysisList, ComprehensiveAnalysisListData, ErrorResponse, IndividualAnalysisData, IndividualAnalysisList, IndividualAnalysisListData, SuccessResponse
 from src.api.models.exc import AppException
 from src.api.models.request import ComprehensiveAnalysisPostRequest
-from src.api.models.response import IndividualAnalysisListResponse, IndividualAnalysisResponse
+from src.api.models.response import ComprehensiveAnalysisListResponse, IndividualAnalysisListResponse, IndividualAnalysisResponse
 from src.db.db import SessionDep
 from src.db.models import ComprehensiveAnalysis, Experience, IndividualAnalysis
 from src.enums import ErrorResponseCode
@@ -111,4 +111,24 @@ async def post_comprehensive_analysis(body: ComprehensiveAnalysisPostRequest, se
     response.status_code = 200
     return SuccessResponse(
         message = "Queued new comprehensive analysis."
+    )
+
+@analysis_router.get("/comprehensive")
+async def get_comprehensive_analyses(session: SessionDep, response: Response, payload: Annotated[AccessTokenPayload, Depends(check_auth)]):
+    statement = (
+        select(ComprehensiveAnalysis)
+        .where(ComprehensiveAnalysis.experiences[0].user_id == payload.sub)
+    )
+    result = session.exec(statement).all()
+    response.status_code = 200
+    return ComprehensiveAnalysisListResponse(
+        message = "Fetch success.",
+        data = ComprehensiveAnalysisList(
+            count = len(result),
+            contents = [ComprehensiveAnalysisListData(
+                id = analysis.id,
+                status = analysis.status,
+                experience_ids = [experience.id for experience in analysis.experiences]
+            ) for analysis in result]
+        )
     )

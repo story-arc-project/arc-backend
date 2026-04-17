@@ -116,3 +116,18 @@ class IndividualAnalysisListData(BaseModel):
 class IndividualAnalysisList(BaseModel):
     count: int
     contents: list[IndividualAnalysisListData]
+
+class ComprehensiveAnalysisData(BaseModel):
+    id: UUID
+    status: AnalysisStatus
+    experience_ids: list[UUID]
+    result: dict[str, Any]
+
+class ComprehensiveAnalysisListData(BaseModel):
+    id: UUID
+    status: AnalysisStatus
+    experience_ids: list[UUID]
+
+class ComprehensiveAnalysisList(BaseModel):
+    count: int
+    contents: list[ComprehensiveAnalysisListData]
