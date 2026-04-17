@@ -5,10 +5,10 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, Response
 from sqlmodel import col, select
 
-from src.api.models.base import ComprehensiveAnalysisList, ComprehensiveAnalysisListData, ErrorResponse, IndividualAnalysisData, IndividualAnalysisList, IndividualAnalysisListData, SuccessResponse
+from src.api.models.base import ComprehensiveAnalysisData, ComprehensiveAnalysisList, ComprehensiveAnalysisListData, ErrorResponse, IndividualAnalysisData, IndividualAnalysisList, IndividualAnalysisListData, SuccessResponse
 from src.api.models.exc import AppException
 from src.api.models.request import ComprehensiveAnalysisPostRequest
-from src.api.models.response import ComprehensiveAnalysisListResponse, IndividualAnalysisListResponse, IndividualAnalysisResponse
+from src.api.models.response import ComprehensiveAnalysisListResponse, ComprehensiveAnalysisResponse, IndividualAnalysisListResponse, IndividualAnalysisResponse
 from src.db.db import SessionDep
 from src.db.models import ComprehensiveAnalysis, Experience, IndividualAnalysis
 from src.enums import ErrorResponseCode
@@ -130,5 +130,39 @@ async def get_comprehensive_analyses(session: SessionDep, response: Response, pa
                 status = analysis.status,
                 experience_ids = [experience.id for experience in analysis.experiences]
             ) for analysis in result]
+        )
+    )
+
+@analysis_router.get("/comprehensive/{analysis_id}")
+async def get_comprehensive_analysis(analysis_id: UUID, session: SessionDep, response: Response, payload: Annotated[AccessTokenPayload, Depends(check_auth)]):
+    statement = (
+        select(ComprehensiveAnalysis)
+        .where(ComprehensiveAnalysis.id == analysis_id)
+    )
+    result = session.exec(statement).one_or_none()
+    if result is None:
+        raise AppException(
+            404,
+            ErrorResponse(
+                code = ErrorResponseCode.NOT_FOUND,
+                message = "Analysis not found"
+            )
+        )
+    if result.experiences[0].user_id != payload.sub:
+        raise AppException(
+            403,
+            ErrorResponse(
+                code = ErrorResponseCode.RESOURCE_NOT_ALLOWED,
+                message = "Access for the resource is not allowed"
+            )
+        )
+    response.status_code = 200
+    return ComprehensiveAnalysisResponse(
+        message = "Fetch success.",
+        data = ComprehensiveAnalysisData(
+            id = result.id,
+            status = result.status,
+            experience_ids = [experience.id for experience in result.experiences],
+            result = result.result
         )
     )

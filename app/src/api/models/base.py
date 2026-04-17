@@ -106,7 +106,7 @@ class IndividualAnalysisData(BaseModel):
     id: UUID
     status: AnalysisStatus
     experience_id: UUID
-    result: dict[str, Any]
+    result: dict[str, Any] | None
 
 class IndividualAnalysisListData(BaseModel):
     id: UUID
@@ -121,7 +121,7 @@ class ComprehensiveAnalysisData(BaseModel):
     id: UUID
     status: AnalysisStatus
     experience_ids: list[UUID]
-    result: dict[str, Any]
+    result: dict[str, Any] | None
 
 class ComprehensiveAnalysisListData(BaseModel):
     id: UUID
