@@ -8,7 +8,7 @@ from sqlmodel import col, select
 from src.api.models.base import ComprehensiveAnalysisData, ComprehensiveAnalysisList, ComprehensiveAnalysisListData, ErrorResponse, IndividualAnalysisData, IndividualAnalysisList, IndividualAnalysisListData, SuccessResponse
 from src.api.models.exc import AppException
 from src.api.models.request import ComprehensiveAnalysisPostRequest
-from src.api.models.response import ComprehensiveAnalysisListResponse, ComprehensiveAnalysisResponse, IndividualAnalysisListResponse, IndividualAnalysisResponse
+from src.api.models.response import ComprehensiveAnalysisListResponse, ComprehensiveAnalysisResponse, DeleteSuccessResponse, IndividualAnalysisListResponse, IndividualAnalysisResponse
 from src.db.db import SessionDep
 from src.db.models import ComprehensiveAnalysis, Experience, IndividualAnalysis
 from src.enums import ErrorResponseCode
@@ -165,4 +165,44 @@ async def get_comprehensive_analysis(analysis_id: UUID, session: SessionDep, res
             experience_ids = [experience.id for experience in result.experiences],
             result = result.result
         )
+    )
+
+@analysis_router.delete("/comprehensive/{analysis_id}")
+async def delete_comprehensive_analysis(analysis_id: UUID, session: SessionDep, response: Response, payload: Annotated[AccessTokenPayload, Depends(check_auth)]):
+    statement = (
+        select(ComprehensiveAnalysis)
+        .where(ComprehensiveAnalysis.id == analysis_id)
+    )
+    result = session.exec(statement).one_or_none()
+    if result is None:
+        raise AppException(
+            404,
+            ErrorResponse(
+                code = ErrorResponseCode.NOT_FOUND,
+                message = "Analysis not found"
+            )
+        )
+    if result.experiences[0].user_id != payload.sub:
+        raise AppException(
+            403,
+            ErrorResponse(
+                code = ErrorResponseCode.RESOURCE_NOT_ALLOWED,
+                message = "Access for the resource is not allowed"
+            )
+        )
+    try:
+        session.delete(result)
+        session.commit()
+    except:
+        session.rollback()
+        raise AppException(
+            500,
+            ErrorResponse(
+                code=ErrorResponseCode.SERVER_ERROR,
+                message="Server side error."
+            )
+        )
+    response.status_code = 204
+    return DeleteSuccessResponse(
+        message = "Comprehensive analysis deleted."
     )
