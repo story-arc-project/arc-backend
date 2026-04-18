@@ -89,3 +89,6 @@ class LibraryPostRequest(BaseModel):
 
 class ComprehensiveAnalysisPostRequest(BaseModel):
     experiences: list[UUID]
+
+class KeywordAnalysisPostRequest(BaseModel):
+    keywords: list[str]

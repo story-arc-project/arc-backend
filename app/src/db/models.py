@@ -287,3 +287,19 @@ class Resume(SQLModel, table=True):
         default=None,
         sa_column=Column(JSONB, nullable=True, default=None)
     )
+
+class KeywordAnalysis(SQLModel, table=True):
+    __tablename__: str = "keyword_analyses"  # pyright: ignore[reportIncompatibleVariableOverride]
+    id: uuid.UUID = Field(
+        default_factory=uuid.uuid4,
+        primary_key=True,
+        sa_type=SAUUID
+    )
+    user_id: uuid.UUID = Field(foreign_key="users.id", index=True)
+    keywords: list[str] = Field(sa_column=Column(ARRAY(String)))
+    task_id: str | None = Field(nullable=True, index=True, default=None)
+    status: AnalysisStatus = AnalysisStatus.QUEUED
+    result: dict[str, Any] | None = Field(
+        default=None,
+        sa_column=Column(JSONB, nullable=True, default=None)
+    )

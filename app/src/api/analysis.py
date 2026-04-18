@@ -7,10 +7,10 @@ from sqlmodel import col, select
 
 from src.api.models.base import ComprehensiveAnalysisData, ComprehensiveAnalysisList, ComprehensiveAnalysisListData, ErrorResponse, IndividualAnalysisData, IndividualAnalysisList, IndividualAnalysisListData, SuccessResponse
 from src.api.models.exc import AppException
-from src.api.models.request import ComprehensiveAnalysisPostRequest
+from src.api.models.request import ComprehensiveAnalysisPostRequest, KeywordAnalysisPostRequest
 from src.api.models.response import ComprehensiveAnalysisListResponse, ComprehensiveAnalysisResponse, DeleteSuccessResponse, IndividualAnalysisListResponse, IndividualAnalysisResponse
 from src.db.db import SessionDep
-from src.db.models import ComprehensiveAnalysis, Experience, IndividualAnalysis
+from src.db.models import ComprehensiveAnalysis, Experience, IndividualAnalysis, KeywordAnalysis
 from src.enums import ErrorResponseCode
 from src.utils.auth import check_auth
 from src.utils.token import AccessTokenPayload
@@ -205,4 +205,41 @@ async def delete_comprehensive_analysis(analysis_id: UUID, session: SessionDep, 
     response.status_code = 204
     return DeleteSuccessResponse(
         message = "Comprehensive analysis deleted."
+    )
+
+@analysis_router.post("/keyword")
+async def post_keyword_analysis(body: KeywordAnalysisPostRequest, session: SessionDep, response: Response, payload: Annotated[AccessTokenPayload, Depends(check_auth)]):
+    statement = select(Experience).where(Experience.user_id == payload.sub)
+    result = session.exec(statement).all()
+    user_input: list[str] = []
+    for experience in result:
+        user_input.append(str(experience.content))
+    try:
+        new_keyword_analysis = KeywordAnalysis(
+            user_id = payload.sub,
+            keywords = body.keywords
+        )
+        req = requests.post("http://ai_analyst:8001/keyword", json={
+            "analysis_id": new_keyword_analysis.id,
+            "input": user_input,
+            "keywords": body.keywords
+        })
+        req.raise_for_status()
+        new_keyword_analysis.task_id = req.json()["task_id"]
+        session.add(new_keyword_analysis)
+        session.commit()
+        session.refresh(new_keyword_analysis)
+    except Exception:
+        traceback.print_exc()
+        session.rollback()
+        raise AppException(
+            500,
+            ErrorResponse(
+                code=ErrorResponseCode.SERVER_ERROR,
+                message="Server side error."
+            )
+        )
+    response.status_code = 200
+    return SuccessResponse(
+        message = "Queued new keyword analysis."
     )
