@@ -296,3 +296,43 @@ async def get_keyword_analysis(analysis_id: UUID, session: SessionDep, response:
             result = result.result
         )
     )
+
+@analysis_router.delete("/keyword/{analysis_id}")
+async def delete_keyword_analysis(analysis_id: UUID, session: SessionDep, response: Response, payload: Annotated[AccessTokenPayload, Depends(check_auth)]):
+    statement = (
+        select(KeywordAnalysis)
+        .where(KeywordAnalysis.id == analysis_id)
+    )
+    result = session.exec(statement).one_or_none()
+    if result is None:
+        raise AppException(
+            404,
+            ErrorResponse(
+                code = ErrorResponseCode.NOT_FOUND,
+                message = "Analysis not found"
+            )
+        )
+    if result.user_id != payload.sub:
+        raise AppException(
+            403,
+            ErrorResponse(
+                code = ErrorResponseCode.RESOURCE_NOT_ALLOWED,
+                message = "Access for the resource is not allowed"
+            )
+        )
+    try:
+        session.delete(result)
+        session.commit()
+    except:
+        session.rollback()
+        raise AppException(
+            500,
+            ErrorResponse(
+                code=ErrorResponseCode.SERVER_ERROR,
+                message="Server side error."
+            )
+        )
+    response.status_code = 204
+    return DeleteSuccessResponse(
+        message = "Keyword analysis deleted."
+    )
