@@ -5,10 +5,10 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, Response
 from sqlmodel import col, select
 
-from src.api.models.base import ComprehensiveAnalysisData, ComprehensiveAnalysisList, ComprehensiveAnalysisListData, ErrorResponse, IndividualAnalysisData, IndividualAnalysisList, IndividualAnalysisListData, SuccessResponse
+from src.api.models.base import ComprehensiveAnalysisData, ComprehensiveAnalysisList, ComprehensiveAnalysisListData, ErrorResponse, IndividualAnalysisData, IndividualAnalysisList, IndividualAnalysisListData, SuccessResponse, KeywordAnalysisList, KeywordAnalysisListData
 from src.api.models.exc import AppException
 from src.api.models.request import ComprehensiveAnalysisPostRequest, KeywordAnalysisPostRequest
-from src.api.models.response import ComprehensiveAnalysisListResponse, ComprehensiveAnalysisResponse, DeleteSuccessResponse, IndividualAnalysisListResponse, IndividualAnalysisResponse
+from src.api.models.response import ComprehensiveAnalysisListResponse, ComprehensiveAnalysisResponse, DeleteSuccessResponse, IndividualAnalysisListResponse, IndividualAnalysisResponse, KeywordAnalysisListResponse
 from src.db.db import SessionDep
 from src.db.models import ComprehensiveAnalysis, Experience, IndividualAnalysis, KeywordAnalysis
 from src.enums import ErrorResponseCode
@@ -242,4 +242,23 @@ async def post_keyword_analysis(body: KeywordAnalysisPostRequest, session: Sessi
     response.status_code = 200
     return SuccessResponse(
         message = "Queued new keyword analysis."
+    )
+
+@analysis_router.get("/keyword")
+async def get_keyword_analyses(session: SessionDep, response: Response, payload: Annotated[AccessTokenPayload, Depends(check_auth)]):
+    statement = (
+        select(KeywordAnalysis).where(KeywordAnalysis.user_id == payload.sub)
+    )
+    result = session.exec(statement).all()
+    response.status_code = 200
+    return KeywordAnalysisListResponse(
+        message = "Fetch success.",
+        data = KeywordAnalysisList(
+            count = len(result),
+            contents = [KeywordAnalysisListData(
+                id = analysis.id,
+                status = analysis.status,
+                keywords = analysis.keywords
+            ) for analysis in result]
+        )
     )

@@ -131,3 +131,18 @@ class ComprehensiveAnalysisListData(BaseModel):
 class ComprehensiveAnalysisList(BaseModel):
     count: int
     contents: list[ComprehensiveAnalysisListData]
+
+class KeywordAnalysisData(BaseModel):
+    id: UUID
+    status: AnalysisStatus
+    keywords: list[str]
+    result: dict[str, Any] | None
+
+class KeywordAnalysisListData(BaseModel):
+    id: UUID
+    status: AnalysisStatus
+    keywords: list[str]
+
+class KeywordAnalysisList(BaseModel):
+    count: int
+    contents: list[KeywordAnalysisListData]
