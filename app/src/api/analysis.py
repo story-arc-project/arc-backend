@@ -5,10 +5,10 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, Response
 from sqlmodel import col, select
 
-from src.api.models.base import ComprehensiveAnalysisData, ComprehensiveAnalysisList, ComprehensiveAnalysisListData, ErrorResponse, IndividualAnalysisData, IndividualAnalysisList, IndividualAnalysisListData, SuccessResponse, KeywordAnalysisList, KeywordAnalysisListData
+from src.api.models.base import ComprehensiveAnalysisData, ComprehensiveAnalysisList, ComprehensiveAnalysisListData, ErrorResponse, IndividualAnalysisData, IndividualAnalysisList, IndividualAnalysisListData, SuccessResponse, KeywordAnalysisList, KeywordAnalysisListData, KeywordAnalysisData
 from src.api.models.exc import AppException
 from src.api.models.request import ComprehensiveAnalysisPostRequest, KeywordAnalysisPostRequest
-from src.api.models.response import ComprehensiveAnalysisListResponse, ComprehensiveAnalysisResponse, DeleteSuccessResponse, IndividualAnalysisListResponse, IndividualAnalysisResponse, KeywordAnalysisListResponse
+from src.api.models.response import ComprehensiveAnalysisListResponse, ComprehensiveAnalysisResponse, DeleteSuccessResponse, IndividualAnalysisListResponse, IndividualAnalysisResponse, KeywordAnalysisListResponse, KeywordAnalysisResponse
 from src.db.db import SessionDep
 from src.db.models import ComprehensiveAnalysis, Experience, IndividualAnalysis, KeywordAnalysis
 from src.enums import ErrorResponseCode
@@ -260,5 +260,39 @@ async def get_keyword_analyses(session: SessionDep, response: Response, payload:
                 status = analysis.status,
                 keywords = analysis.keywords
             ) for analysis in result]
+        )
+    )
+
+@analysis_router.get("/keyword/{analysis_id}")
+async def get_keyword_analysis(analysis_id: UUID, session: SessionDep, response: Response, payload: Annotated[AccessTokenPayload, Depends(check_auth)]):
+    statement = (
+        select(KeywordAnalysis)
+        .where(KeywordAnalysis.id == analysis_id)
+    )
+    result = session.exec(statement).one_or_none()
+    if result is None:
+        raise AppException(
+            404,
+            ErrorResponse(
+                code = ErrorResponseCode.NOT_FOUND,
+                message = "Analysis not found"
+            )
+        )
+    if result.user_id != payload.sub:
+        raise AppException(
+            403,
+            ErrorResponse(
+                code = ErrorResponseCode.RESOURCE_NOT_ALLOWED,
+                message = "Access for the resource is not allowed"
+            )
+        )
+    response.status_code = 200
+    return KeywordAnalysisResponse(
+        message = "Fetch success.",
+        data = KeywordAnalysisData(
+            id = result.id,
+            status = result.status,
+            keywords = result.keywords,
+            result = result.result
         )
     )
