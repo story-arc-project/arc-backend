@@ -75,6 +75,9 @@ services:
       rabbitmq:
         condition: service_healthy
     restart: unless-stopped
+    environment:
+      RABBITMQ_USER: ${RABBITMQ_USER}
+      RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD}
   rabbitmq:
     image: rabbitmq:4.2.5-management-alpine
     environment:
