@@ -238,6 +238,7 @@ class IndividualAnalysis(SQLModel, table=True):
         primary_key=True,
         sa_type=SAUUID
     )
+    user_id: uuid.UUID = Field(foreign_key="users.id", index=True)
     task_id: str | None = Field(nullable=True, index=True, default=None)
     status: AnalysisStatus = AnalysisStatus.QUEUED
     experience_id: uuid.UUID = Field(foreign_key="experiences.id")
@@ -250,10 +251,6 @@ class IndividualAnalysis(SQLModel, table=True):
         sa_column=Column(JSONB, nullable=True, default=None)
     )
 
-class ComprehensiveAnalysisExperienceLink(SQLModel, table=True):
-    comprehensive_analysis_id: uuid.UUID = Field(foreign_key="comprehensive_analyses.id", primary_key=True)
-    experience_id: uuid.UUID = Field(foreign_key="experiences.id", primary_key=True)
-
 class ComprehensiveAnalysis(SQLModel, table=True):
     __tablename__: str = "comprehensive_analyses"  # pyright: ignore[reportIncompatibleVariableOverride]
     id: uuid.UUID = Field(
@@ -261,11 +258,11 @@ class ComprehensiveAnalysis(SQLModel, table=True):
         primary_key=True,
         sa_type=SAUUID
     )
+    user_id: uuid.UUID = Field(foreign_key="users.id", index=True)
     task_id: str | None = Field(nullable=True, index=True, default=None)
     status: AnalysisStatus = AnalysisStatus.QUEUED
-    experiences: list[Experience] = Relationship(
-        back_populates="comprehensive_analyses",
-        link_model=ComprehensiveAnalysisExperienceLink
+    experience_ids: list[uuid.UUID] = Field(
+        sa_column=Column(ARRAY(SAUUID))
     )
     vector: list[float] | None = Field(
         default=None,
@@ -283,6 +280,7 @@ class Resume(SQLModel, table=True):
         primary_key=True,
         sa_type=SAUUID
     )
+    user_id: uuid.UUID = Field(foreign_key="users.id", index=True)
     result: dict[str, Any] | None = Field(
         default=None,
         sa_column=Column(JSONB, nullable=True, default=None)

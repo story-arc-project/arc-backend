@@ -28,6 +28,7 @@ async def post_experience(body: ExperiencePostRequest, session: SessionDep, resp
             content = body.content
         )
         new_individual_analysis = IndividualAnalysis(
+            user_id=payload.sub,
             experience_id = new_experience.id
         )
         req = requests.post("http://ai_analyst:8001/individual", json={

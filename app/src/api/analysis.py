@@ -78,7 +78,8 @@ async def post_comprehensive_analysis(body: ComprehensiveAnalysisPostRequest, se
         user_input.append(str(experience.content))
     try:
         new_comprehensive_analysis = ComprehensiveAnalysis(
-            experiences = [experience for experience in result]
+            user_id = payload.sub,
+            experience_ids = [experience.id for experience in result]
         )
         for experience in result:
             if experience.user_id != payload.sub:
@@ -117,7 +118,7 @@ async def post_comprehensive_analysis(body: ComprehensiveAnalysisPostRequest, se
 async def get_comprehensive_analyses(session: SessionDep, response: Response, payload: Annotated[AccessTokenPayload, Depends(check_auth)]):
     statement = (
         select(ComprehensiveAnalysis)
-        .where(ComprehensiveAnalysis.experiences[0].user_id == payload.sub)
+        .where(ComprehensiveAnalysis.user_id == payload.sub)
     )
     result = session.exec(statement).all()
     response.status_code = 200
@@ -128,7 +129,7 @@ async def get_comprehensive_analyses(session: SessionDep, response: Response, pa
             contents = [ComprehensiveAnalysisListData(
                 id = analysis.id,
                 status = analysis.status,
-                experience_ids = [experience.id for experience in analysis.experiences]
+                experience_ids = analysis.experience_ids
             ) for analysis in result]
         )
     )
@@ -148,7 +149,7 @@ async def get_comprehensive_analysis(analysis_id: UUID, session: SessionDep, res
                 message = "Analysis not found"
             )
         )
-    if result.experiences[0].user_id != payload.sub:
+    if result.user_id != payload.sub:
         raise AppException(
             403,
             ErrorResponse(
@@ -162,7 +163,7 @@ async def get_comprehensive_analysis(analysis_id: UUID, session: SessionDep, res
         data = ComprehensiveAnalysisData(
             id = result.id,
             status = result.status,
-            experience_ids = [experience.id for experience in result.experiences],
+            experience_ids = result.experience_ids,
             result = result.result
         )
     )
@@ -182,7 +183,7 @@ async def delete_comprehensive_analysis(analysis_id: UUID, session: SessionDep, 
                 message = "Analysis not found"
             )
         )
-    if result.experiences[0].user_id != payload.sub:
+    if result.user_id != payload.sub:
         raise AppException(
             403,
             ErrorResponse(
