@@ -36,3 +36,9 @@ class ExperiencePriority(str, enum.Enum):
     HIGH = "high"
     MEDIUM = "medium"
     LOW = "low"
+
+class Affiliation(str, enum.Enum):
+    STUDENT = "student"
+    EMPLOYED = "employed"
+    JOBSEEKER = "jobseeker"
+    OTHER = "other"

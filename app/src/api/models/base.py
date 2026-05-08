@@ -3,7 +3,7 @@ from uuid import UUID
 from pydantic import BaseModel, EmailStr
 from typing import Any, Generic, TypeVar
 
-from src.enums import ErrorResponseCode, ExperiencePriority, OauthProviderId
+from src.enums import Affiliation, ErrorResponseCode, ExperiencePriority, OauthProviderId
 
 T = TypeVar("T")
 
@@ -42,8 +42,13 @@ class AccountData(BaseModel):
 class ProfileData(BaseModel):
     name: str
     birth: date
+    affiliation: Affiliation
+    school: str | None
+    department: str | None
+    company: str | None
+    desiredRole: str | None
+    affiliationDetail: str | None
     phone: str
-    education: str
     worry: list[str]
     interest: list[str]
 

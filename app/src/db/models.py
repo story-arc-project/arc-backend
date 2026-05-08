@@ -3,7 +3,7 @@ from typing import Any
 import uuid
 from sqlalchemy import DateTime, func, Column, UUID as SAUUID
 from sqlalchemy.sql.functions import now
-from src.enums import ExperiencePriority, OauthProviderId, UserStatus
+from src.enums import Affiliation, ExperiencePriority, OauthProviderId, UserStatus
 from sqlmodel import ARRAY, Field, SQLModel, String, UniqueConstraint
 from sqlalchemy.dialects.postgresql import JSONB
 
@@ -45,10 +45,13 @@ class UserProfile(SQLModel, table=True):
     user_id: uuid.UUID = Field(foreign_key="users.id", unique=True)
     name: str
     birth: date
-    phone: str = Field(max_length=11)
-    education: str
+    affiliation: Affiliation
     school: str | None = None
     department: str | None = None
+    company: str | None = None
+    desiredRole: str | None = None
+    affiliationDetail: str | None = None
+    phone: str = Field(max_length=11)
     worry: list[str] = Field(
         sa_column=Column(ARRAY(String))
     )

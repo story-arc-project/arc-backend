@@ -1,6 +1,8 @@
 from datetime import date
 from typing import Any
-from pydantic import BaseModel, EmailStr, field_validator
+from pydantic import BaseModel, EmailStr, field_validator, model_validator
+
+from src.enums import Affiliation
 
 class LoginRequest(BaseModel):
     email: EmailStr
@@ -24,8 +26,13 @@ class SocialLoginRequest(BaseModel):
 class OnboardRequest(BaseModel):
     name: str
     birth: date
+    affiliation: Affiliation
+    school: str | None
+    department: str | None
+    company: str | None
+    desiredRole: str | None
+    affiliationDetail: str | None
     phone: str
-    education: str
     worry: list[str]
     interest: list[str]
 
@@ -57,6 +64,22 @@ class OnboardRequest(BaseModel):
         if not v.isdigit():
             raise ValueError("Phone number must contain digits only")
         return v
+
+    @model_validator(mode="after")
+    def validate_affiliation_fields(self):
+        if self.affiliation == Affiliation.STUDENT:
+            if self.company or self.desiredRole or self.affiliationDetail:
+                raise ValueError("student can only have school and department")
+        elif self.affiliation == Affiliation.EMPLOYED:
+            if self.school or self.department or self.desiredRole or self.affiliationDetail:
+                raise ValueError("employed can only have company")
+        elif self.affiliation == Affiliation.JOBSEEKER:
+            if self.school or self.department or self.company or self.affiliationDetail:
+                raise ValueError("jobseeker can only have desiredRole")
+        elif self.affiliation == Affiliation.OTHER:
+            if self.school or self.department or self.company or self.desiredRole:
+                raise ValueError("other can only have affiliationDetail")
+        return self
 
 class ExperiencePostRequest(BaseModel):
     type: str
