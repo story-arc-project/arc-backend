@@ -686,7 +686,7 @@ def _keyword_analysis_prompt(keywords: list[str], target_scenario: str = "") -> 
   "keywords": ["키워드1", "키워드2"],
   "target_scenario": "목표 시나리오",
 
-  "A_keyword_definitions": [
+  "keyword_definitions": [
     {{
       "keyword": "키워드명",
       "definition": "키워드 재정의 (1-2문장)",
@@ -701,12 +701,12 @@ def _keyword_analysis_prompt(keywords: list[str], target_scenario: str = "") -> 
     }}
   ],
 
-  "B_selection_criteria": {{
+  "selection_criteria": {{
     "summary": "AI가 어떤 규칙으로 경험을 골랐는지 3-5줄 요약",
     "criteria": ["기준 매칭", "근거 강도", "반복성", "맥락 적합성"]
   }},
 
-  "C_coverage": [
+  "coverage": [
     {{
       "keyword": "키워드명",
       "related_count": 5,
@@ -715,7 +715,7 @@ def _keyword_analysis_prompt(keywords: list[str], target_scenario: str = "") -> 
     }}
   ],
 
-  "D_matched_experiences": [
+  "matched_experiences": [
     {{
       "keyword": "키워드명",
       "experiences": [
@@ -739,7 +739,7 @@ def _keyword_analysis_prompt(keywords: list[str], target_scenario: str = "") -> 
     }}
   ],
 
-  "E_storylines": [
+  "storylines": [
     {{
       "keyword": "관련 키워드",
       "storyline_title": "스토리라인 제목",
@@ -763,7 +763,7 @@ def _keyword_analysis_prompt(keywords: list[str], target_scenario: str = "") -> 
     }}
   ],
 
-  "F_improvement_guide": {{
+  "improvement_guide": {{
     "information_enhancement": [
       {{
         "target": "보강 대상 경력 제목",
