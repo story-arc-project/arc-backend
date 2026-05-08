@@ -3,7 +3,7 @@ from typing import Any
 import uuid
 from sqlalchemy import DateTime, func, Column, UUID as SAUUID
 from sqlalchemy.sql.functions import now
-from src.enums import Affiliation, AnalysisStatus, ExperiencePriority, OauthProviderId, UserStatus
+from src.enums import Affiliation, AnalysisStatus, OauthProviderId, UserStatus
 from sqlmodel import ARRAY, Field, SQLModel, String, UniqueConstraint
 from sqlalchemy.dialects.postgresql import JSONB
 from pgvector.sqlalchemy import Vector
@@ -131,7 +131,7 @@ class Experience(SQLModel, table=True):
     )
     user_id: uuid.UUID = Field(foreign_key="users.id")
     type: str
-    priority: ExperiencePriority = ExperiencePriority.MEDIUM
+    importance: int | None
     content: dict[str, Any] = Field(
         sa_column=Column(JSONB)
     )

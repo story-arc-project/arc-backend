@@ -33,11 +33,6 @@ class ErrorResponseCode(str, enum.Enum):
     BAD_REQUEST = "BAD_REQUEST"
     INTERNAL_ERROR = "INTERNAL_ERROR"
 
-class ExperiencePriority(str, enum.Enum):
-    HIGH = "high"
-    MEDIUM = "medium"
-    LOW = "low"
-
 class AnalysisStatus(str, enum.Enum):
     PENDING = "pending"
     QUEUED = "queued"

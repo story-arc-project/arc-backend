@@ -3,7 +3,7 @@ from uuid import UUID
 from pydantic import BaseModel, EmailStr
 from typing import Any, Generic, TypeVar
 
-from src.enums import Affiliation, AnalysisStatus, ErrorResponseCode, ExperiencePriority, OauthProviderId
+from src.enums import Affiliation, AnalysisStatus, ErrorResponseCode, OauthProviderId
 
 T = TypeVar("T")
 
@@ -65,7 +65,7 @@ class ExperienceResponseData(BaseModel):
     id: UUID
     user_id: UUID
     type: str
-    priority: ExperiencePriority
+    importance: int | None
     content: dict[str, Any]
     created_at: datetime
     updated_at: datetime

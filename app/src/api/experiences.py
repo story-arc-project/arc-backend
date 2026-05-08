@@ -25,6 +25,7 @@ async def post_experience(body: ExperiencePostRequest, session: SessionDep, resp
         new_experience = Experience(
             user_id = payload.sub,
             type = body.type,
+            importance = body.importance,
             content = body.content
         )
         new_individual_analysis = IndividualAnalysis(
@@ -198,7 +199,7 @@ async def duplicate_experience_by_id(experience_id: UUID, session: SessionDep, r
         new = Experience(
             user_id = result.user_id,
             type = result.type,
-            priority = result.priority,
+            importance = result.importance,
             content = deepcopy(result.content)
         )
         session.add(new)

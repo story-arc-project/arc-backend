@@ -86,12 +86,20 @@ class OnboardRequest(BaseModel):
 class ExperiencePostRequest(BaseModel):
     type: str
     content: dict[str, Any]
+    importance: int | None
 
     @field_validator("type", mode="after")
     @classmethod
     def validate_type(cls, v: str):
         if len(v) == 0:
             raise ValueError("Type must not be empty")
+        return v
+    
+    @field_validator("importance", mode="after")
+    @classmethod
+    def validate_importance(cls, v: int | None):
+        if isinstance(v, int) and (v < 1 or v > 5):
+            raise ValueError("Importance must be between 1 and 5")
         return v
 
 class ExperiencePutRequest(BaseModel):
