@@ -1,15 +1,18 @@
 from copy import deepcopy
+import json
+import traceback
 from typing import Annotated
 from uuid import UUID
 from fastapi import APIRouter, Depends, Response
 from sqlmodel import select
+import requests
 
 from src.api.models.base import ErrorResponse, ExperienceResponseData, ExperiencesResponseData, SuccessResponseWithData, UUIDData
 from src.api.models.exc import AppException
 from src.api.models.request import ExperiencePostRequest, ExperiencePutRequest
 from src.api.models.response import DeleteSuccessResponse, PostSuccessResponse, PutSuccessResponse
 from src.db.db import SessionDep
-from src.db.models import Experience
+from src.db.models import Experience, IndividualAnalysis
 from src.enums import ErrorResponseCode
 from src.utils.auth import check_auth
 from src.utils.token import AccessTokenPayload
@@ -24,10 +27,22 @@ async def post_experience(body: ExperiencePostRequest, session: SessionDep, resp
             type = body.type,
             content = body.content
         )
+        new_individual_analysis = IndividualAnalysis(
+            user_id=payload.sub,
+            experience_id = new_experience.id
+        )
+        req = requests.post("http://ai_analyst:8001/individual", json={
+            "analysis_id": str(new_individual_analysis.id),
+            "input": [json.dumps(body.content)]
+        })
+        req.raise_for_status()
+        new_individual_analysis.task_id = req.json()["task_id"]
         session.add(new_experience)
+        session.add(new_individual_analysis)
         session.commit()
         session.refresh(new_experience)
-    except:
+    except Exception:
+        traceback.print_exc()
         session.rollback()
         raise AppException(
             500,

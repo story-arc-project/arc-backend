@@ -5,7 +5,9 @@ from fastapi.middleware.cors import CORSMiddleware
 from os import getenv
 
 from fastapi.responses import JSONResponse
+from src.api.analysis import analysis_router
 from src.api.experiences import experiences_router
+from src.api.internal import internal_router
 from src.api.libraries import libraries_router
 from src.api.models.exc import AppException
 from src.api.presets import presets_router
@@ -55,6 +57,10 @@ async def validation_exception_handler(request: Request, exc: ValidationExceptio
     )
 
 app.include_router(
+    internal_router,
+    prefix=f"/{getenv("INTERNAL_ROUTE", "internal")}"
+)
+app.include_router(
     auth_router,
     prefix="/auth"
 )
@@ -69,4 +75,8 @@ app.include_router(
 app.include_router(
     presets_router,
     prefix="/presets"
+)
+app.include_router(
+    analysis_router,
+    prefix="/analysis"
 )

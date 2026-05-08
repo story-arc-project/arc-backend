@@ -3,7 +3,7 @@ from uuid import UUID
 from pydantic import BaseModel, EmailStr
 from typing import Any, Generic, TypeVar
 
-from src.enums import Affiliation, ErrorResponseCode, ExperiencePriority, OauthProviderId
+from src.enums import Affiliation, AnalysisStatus, ErrorResponseCode, ExperiencePriority, OauthProviderId
 
 T = TypeVar("T")
 
@@ -106,3 +106,48 @@ class PresetResponseData(BaseModel):
 class PresetsResponseData(BaseModel):
     count: int
     contents: list[PresetResponseData]
+
+class IndividualAnalysisData(BaseModel):
+    id: UUID
+    status: AnalysisStatus
+    experience_id: UUID
+    result: dict[str, Any] | None
+
+class IndividualAnalysisListData(BaseModel):
+    id: UUID
+    status: AnalysisStatus
+    experience_id: UUID
+
+class IndividualAnalysisList(BaseModel):
+    count: int
+    contents: list[IndividualAnalysisListData]
+
+class ComprehensiveAnalysisData(BaseModel):
+    id: UUID
+    status: AnalysisStatus
+    experience_ids: list[UUID]
+    result: dict[str, Any] | None
+
+class ComprehensiveAnalysisListData(BaseModel):
+    id: UUID
+    status: AnalysisStatus
+    experience_ids: list[UUID]
+
+class ComprehensiveAnalysisList(BaseModel):
+    count: int
+    contents: list[ComprehensiveAnalysisListData]
+
+class KeywordAnalysisData(BaseModel):
+    id: UUID
+    status: AnalysisStatus
+    keywords: list[str]
+    result: dict[str, Any] | None
+
+class KeywordAnalysisListData(BaseModel):
+    id: UUID
+    status: AnalysisStatus
+    keywords: list[str]
+
+class KeywordAnalysisList(BaseModel):
+    count: int
+    contents: list[KeywordAnalysisListData]

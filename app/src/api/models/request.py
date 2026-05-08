@@ -1,8 +1,10 @@
 from datetime import date
 from typing import Any
+from uuid import UUID
 from pydantic import BaseModel, EmailStr, field_validator, model_validator
 
 from src.enums import Affiliation
+from pydantic import BaseModel, EmailStr, field_validator
 
 class LoginRequest(BaseModel):
     email: EmailStr
@@ -108,3 +110,9 @@ class LibraryPostRequest(BaseModel):
         if len(v) == 0:
             raise ValueError("Name must not be empty")
         return v
+
+class ComprehensiveAnalysisPostRequest(BaseModel):
+    experiences: list[UUID]
+
+class KeywordAnalysisPostRequest(BaseModel):
+    keywords: list[str]

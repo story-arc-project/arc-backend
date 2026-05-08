@@ -1,16 +1,20 @@
 services:
   db:
-    image: postgres:16
+    image: pgvector/pgvector:pg16
     environment:
       POSTGRES_USER: ${DB_USER}
       POSTGRES_PASSWORD: ${DB_PASSWORD}
       POSTGRES_DB: ${DB_NAME}
-    ports:
-      - "5432:5432"
     volumes:
       - db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER} -d ${DB_NAME}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
   app:
-    image: arc-backend-app:latest
+    build: ./app
     environment:
       POSTGRES_USER: ${DB_USER}
       POSTGRES_PASSWORD: ${DB_PASSWORD}
@@ -22,16 +26,19 @@ services:
       GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID}
       GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET}
       HMAC_KEY: ${HMAC_KEY}
+      INTERNAL_SECRET: ${INTERNAL_SECRET}
+      INTERNAL_ROUTE: ${INTERNAL_ROUTE}
     depends_on:
-      - db
-      - redis
-    ports:
-      - "8000:8000"
+      ai_analyst:
+        condition: service_started
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    restart: unless-stopped
   redis:
     image: redis:8.6.2
     command: ["redis-server", "--appendonly", "yes"]
-    ports:
-      - "6379:6379"
     restart: unless-stopped
   nginx:
     image: nginx:1.28.3
@@ -48,6 +55,7 @@ services:
       - certbot-var:/var/www/certbot
     depends_on:
       - app
+    restart: unless-stopped
   certbot:
     image: certbot/certbot
     volumes:
@@ -60,8 +68,47 @@ services:
       - nginx
     entrypoint: >
       sh -c "while true; do certbot renew --non-interactive --webroot -w /var/www/certbot --quiet; sleep 12h; done"
+  ai_analyst:
+    build: ./ai_analyst
+    command: uv run --no-sync uvicorn src.main:app --host 0.0.0.0 --port 8001
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    restart: unless-stopped
+    environment:
+      RABBITMQ_USER: ${RABBITMQ_USER}
+      RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD}
+  rabbitmq:
+    image: rabbitmq:4.2.5-management-alpine
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD}
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+  worker:
+    build: ./ai_analyst
+    command: uv run --no-sync celery -A src.queue.celery_app worker --loglevel=info
+    environment:
+      GEMINI_API_KEY: ${GEMINI_API_KEY}
+      RABBITMQ_USER: ${RABBITMQ_USER}
+      RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD}
+      INTERNAL_SECRET: ${INTERNAL_SECRET}
+      INTERNAL_ROUTE: ${INTERNAL_ROUTE}
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+      app:
+        condition: service_started
+    restart: unless-stopped
 
 volumes:
   db_data:
   certbot-etc:
   certbot-var:
+  rabbitmq_data:

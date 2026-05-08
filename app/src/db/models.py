@@ -3,9 +3,10 @@ from typing import Any
 import uuid
 from sqlalchemy import DateTime, func, Column, UUID as SAUUID
 from sqlalchemy.sql.functions import now
-from src.enums import Affiliation, ExperiencePriority, OauthProviderId, UserStatus
+from src.enums import Affiliation, AnalysisStatus, ExperiencePriority, OauthProviderId, UserStatus
 from sqlmodel import ARRAY, Field, SQLModel, String, UniqueConstraint
 from sqlalchemy.dialects.postgresql import JSONB
+from pgvector.sqlalchemy import Vector
 
 class User(SQLModel, table=True):
     __tablename__: str = "users"  # pyright: ignore[reportIncompatibleVariableOverride]
@@ -231,4 +232,75 @@ class Preset(SQLModel, table=True):
             onupdate=func.now(),
             nullable=False
         )
+    )
+
+class IndividualAnalysis(SQLModel, table=True):
+    __tablename__: str = "individual_analyses"  # pyright: ignore[reportIncompatibleVariableOverride]
+    id: uuid.UUID = Field(
+        default_factory=uuid.uuid4,
+        primary_key=True,
+        sa_type=SAUUID
+    )
+    user_id: uuid.UUID = Field(foreign_key="users.id", index=True)
+    task_id: str | None = Field(nullable=True, index=True, default=None)
+    status: AnalysisStatus = AnalysisStatus.QUEUED
+    experience_id: uuid.UUID = Field(foreign_key="experiences.id")
+    vector: list[float] | None = Field(
+        default=None,
+        sa_column=Column(Vector(3072), nullable=True, default=None)
+    )
+    result: dict[str, Any] | None = Field(
+        default=None,
+        sa_column=Column(JSONB, nullable=True, default=None)
+    )
+
+class ComprehensiveAnalysis(SQLModel, table=True):
+    __tablename__: str = "comprehensive_analyses"  # pyright: ignore[reportIncompatibleVariableOverride]
+    id: uuid.UUID = Field(
+        default_factory=uuid.uuid4,
+        primary_key=True,
+        sa_type=SAUUID
+    )
+    user_id: uuid.UUID = Field(foreign_key="users.id", index=True)
+    task_id: str | None = Field(nullable=True, index=True, default=None)
+    status: AnalysisStatus = AnalysisStatus.QUEUED
+    experience_ids: list[uuid.UUID] = Field(
+        sa_column=Column(ARRAY(SAUUID))
+    )
+    vector: list[float] | None = Field(
+        default=None,
+        sa_column=Column(Vector(3072), nullable=True, default=None)
+    )
+    result: dict[str, Any] | None = Field(
+        default=None,
+        sa_column=Column(JSONB, nullable=True, default=None)
+    )
+
+class Resume(SQLModel, table=True):
+    __tablename__: str = "resume"  # pyright: ignore[reportIncompatibleVariableOverride]
+    id: uuid.UUID = Field(
+        default_factory=uuid.uuid4,
+        primary_key=True,
+        sa_type=SAUUID
+    )
+    user_id: uuid.UUID = Field(foreign_key="users.id", index=True)
+    result: dict[str, Any] | None = Field(
+        default=None,
+        sa_column=Column(JSONB, nullable=True, default=None)
+    )
+
+class KeywordAnalysis(SQLModel, table=True):
+    __tablename__: str = "keyword_analyses"  # pyright: ignore[reportIncompatibleVariableOverride]
+    id: uuid.UUID = Field(
+        default_factory=uuid.uuid4,
+        primary_key=True,
+        sa_type=SAUUID
+    )
+    user_id: uuid.UUID = Field(foreign_key="users.id", index=True)
+    keywords: list[str] = Field(sa_column=Column(ARRAY(String)))
+    task_id: str | None = Field(nullable=True, index=True, default=None)
+    status: AnalysisStatus = AnalysisStatus.QUEUED
+    result: dict[str, Any] | None = Field(
+        default=None,
+        sa_column=Column(JSONB, nullable=True, default=None)
     )
