@@ -349,7 +349,12 @@ def test_refresh(session: Session, client: TestClient, mock_mail: MagicMock):
 valid_onboarding_data = {
     "name": "홍길동",
     "birth": "2001-01-01",
-    "education": "서울대학교",
+    "affiliation": "student",
+    "school": "서울대학교",
+    "department": "컴퓨터공학부",
+    "company": None,
+    "desiredRole": None,
+    "affiliationDetail": None,
     "phone": "01000000000",
     "worry": ["진로", "이력"],
     "interest": ["컴퓨터", "AI"]
@@ -363,25 +368,54 @@ def test_onboarding_valid_data(authenticated_client: TestClient):
     # Missing required fields
     ({"name": None}, 400),
     ({"birth": None}, 400),
+    ({"affiliation": None}, 400),
     ({"phone": None}, 400),
+    ({"worry": None}, 400),
+    ({"interest": None}, 400),
 
-    # Invalid formats
+    # Invalid name
+    ({"name": ""}, 400),
+
+    # Invalid birth formats
     ({"birth": "01-01-2001"}, 400),    # wrong date format
     ({"birth": "not-a-date"}, 400),
     ({"birth": "2099-01-01"}, 400),    # future date
+    ({"birth": 20010101}, 400),        # int instead of string
+
+    # Invalid phone
     ({"phone": "010-0000-0000"}, 400), # dashes not allowed
-    ({"phone": "0100000000"}, 400),    # too short
-    ({"phone": "010000000000"}, 400),  # too long
+    ({"phone": "0100000000"}, 400),    # too short (10 digits)
+    ({"phone": "010000000000"}, 400),  # too long (12 digits)
     ({"phone": "abcdefghijk"}, 400),   # non-numeric
 
-    # Empty values
-    ({"name": ""}, 400),
-
-    # Wrong types
+    # Invalid types for lists
     ({"worry": "진로"}, 400),           # string instead of list
-    ({"interest": 123}, 400),
-    ({"birth": 20010101}, 400),        # int instead of string
+    ({"interest": 123}, 400),          # int instead of list
+
+    # Affiliation validation - STUDENT can't have company/desiredRole/affiliationDetail
+    ({"affiliation": "student", "company": "SomeCompany"}, 400),
+    ({"affiliation": "student", "desiredRole": "Engineer"}, 400),
+    ({"affiliation": "student", "affiliationDetail": "Detail"}, 400),
+
+    # Affiliation validation - EMPLOYED can't have school/department/desiredRole/affiliationDetail
+    ({"affiliation": "employed", "school": "SomeSchool"}, 400),
+    ({"affiliation": "employed", "department": "CS"}, 400),
+    ({"affiliation": "employed", "desiredRole": "Engineer"}, 400),
+    ({"affiliation": "employed", "affiliationDetail": "Detail"}, 400),
+
+    # Affiliation validation - JOBSEEKER can't have school/department/company/affiliationDetail
+    ({"affiliation": "jobseeker", "school": "SomeSchool"}, 400),
+    ({"affiliation": "jobseeker", "department": "CS"}, 400),
+    ({"affiliation": "jobseeker", "company": "SomeCompany"}, 400),
+    ({"affiliation": "jobseeker", "affiliationDetail": "Detail"}, 400),
+
+    # Affiliation validation - OTHER can't have school/department/company/desiredRole
+    ({"affiliation": "other", "school": "SomeSchool"}, 400),
+    ({"affiliation": "other", "department": "CS"}, 400),
+    ({"affiliation": "other", "company": "SomeCompany"}, 400),
+    ({"affiliation": "other", "desiredRole": "Engineer"}, 400),
 ])
+
 
 def test_onboarding_invalid_data(authenticated_client: TestClient, override: dict[str, str | list[str] | int | None], expected_status: int):
     data = {**valid_onboarding_data, **{k: v for k, v in override.items() if v is not None}}
