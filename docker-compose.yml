@@ -28,6 +28,8 @@ services:
       HMAC_KEY: ${HMAC_KEY}
       INTERNAL_SECRET: ${INTERNAL_SECRET}
       INTERNAL_ROUTE: ${INTERNAL_ROUTE}
+    ports:
+      - "8000:8000"
     depends_on:
       ai_analyst:
         condition: service_started

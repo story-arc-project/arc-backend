@@ -44,6 +44,11 @@ def process_individual(analysis_id: str, user_input: list[str]):
 def process_comprehensive(analysis_id: str, user_input: list[str], school: str, department: str):
     main = _load_main("comprehensive")
     result = main(user_input, school, department)
+    if result is None:
+        return call_frontend(
+            f"/{getenv("INTERNAL_ROUTE", "internal")}/comprehensive/failed",
+            {"analysis_id": analysis_id, "result": result}
+        )
     return call_frontend(
         f"/{getenv("INTERNAL_ROUTE", "internal")}/comprehensive/success",
         {"analysis_id": analysis_id, "result": result}
@@ -53,6 +58,11 @@ def process_comprehensive(analysis_id: str, user_input: list[str], school: str, 
 def process_keyword(analysis_id: str, user_input: str, keywords: list[str]):
     main = _load_main("keyword_analysis")
     result = main(keywords, user_input)
+    if result.get("status") == "error":
+        return call_frontend(
+            f"/{getenv("INTERNAL_ROUTE", "internal")}/keyword/failed",
+            {"analysis_id": analysis_id, "result": result}
+        )
     return call_frontend(
         f"/{getenv("INTERNAL_ROUTE", "internal")}/keyword/success",
         {"analysis_id": analysis_id, "result": result}
