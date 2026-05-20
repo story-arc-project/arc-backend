@@ -4,6 +4,7 @@ from celery import Celery
 celery = Celery(
     "tasks",
     broker=f"amqp://{getenv("RABBITMQ_USER")}:{getenv("RABBITMQ_PASSWORD")}@rabbitmq:5672//",
+    include=["src.queue.tasks"],
 )
 
 celery.conf.update(
