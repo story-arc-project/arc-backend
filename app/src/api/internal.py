@@ -97,8 +97,7 @@ async def success_keyword(body: Annotated[dict[str, Any], Depends(check_internal
                 message = ""
             )
         )
-    analysis_result: dict[str, Any] = json.loads(result)
-    analysis.result = analysis_result.get("result")
+    analysis.result = json.loads(result)
     analysis.status = AnalysisStatus.SUCCESS
     session.add(analysis)
     session.commit()
