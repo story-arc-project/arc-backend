@@ -91,7 +91,7 @@ async def post_comprehensive_analysis(body: ComprehensiveAnalysisPostRequest, se
                     )
                 )
         req = requests.post("http://ai_analyst:8001/comprehensive", json={
-            "analysis_id": new_comprehensive_analysis.id,
+            "analysis_id": str(new_comprehensive_analysis.id),
             "input": user_input
         })
         req.raise_for_status()
