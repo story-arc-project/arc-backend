@@ -1,4 +1,4 @@
-from src.api.models.base import AuthMeData, ComprehensiveAnalysisData, ComprehensiveAnalysisList, IndividualAnalysisData, IndividualAnalysisList, OnboardResponseData, RefreshData, SuccessResponseWithData, LoginData, SuccessResponse, UUIDData, KeywordAnalysisList, KeywordAnalysisData
+from src.api.models.base import AuthMeData, ComprehensiveAnalysisData, ComprehensiveAnalysisList, IndividualAnalysisData, IndividualAnalysisList, OnboardResponseData, RefreshData, ResumeData, ResumeList, SuccessResponseWithData, LoginData, SuccessResponse, UUIDData, KeywordAnalysisList, KeywordAnalysisData
 
 class LoginResponse(SuccessResponseWithData[LoginData]):
     pass
@@ -46,4 +46,10 @@ class KeywordAnalysisListResponse(SuccessResponseWithData[KeywordAnalysisList]):
     pass
 
 class KeywordAnalysisResponse(SuccessResponseWithData[KeywordAnalysisData]):
+    pass
+
+class ResumeListResponse(SuccessResponseWithData[ResumeList]):
+    pass
+
+class ResumeResponse(SuccessResponseWithData[ResumeData]):
     pass

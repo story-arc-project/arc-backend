@@ -151,3 +151,14 @@ class KeywordAnalysisListData(BaseModel):
 class KeywordAnalysisList(BaseModel):
     count: int
     contents: list[KeywordAnalysisListData]
+
+class ResumeListData(BaseModel):
+    id: UUID
+
+class ResumeList(BaseModel):
+    count: int
+    contents: list[ResumeListData]
+
+class ResumeData(BaseModel):
+    id: UUID
+    result: dict[str, Any] | None

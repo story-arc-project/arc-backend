@@ -4,9 +4,10 @@ from fastapi import APIRouter, Depends, Response
 from sqlmodel import select
 import requests
 
-from src.api.models.base import ErrorResponse, SuccessResponse
+from src.api.models.base import ErrorResponse, ResumeList, ResumeListData, SuccessResponse
 from src.api.models.exc import AppException
 from src.api.models.request import ResumePostRequest
+from src.api.models.response import ResumeListResponse
 from src.db.db import SessionDep
 from src.db.models import Experience, Resume, User, UserProfile
 from src.enums import ErrorResponseCode
@@ -70,4 +71,22 @@ async def post_resume(body: ResumePostRequest, session: SessionDep, response: Re
     response.status_code = 200
     return SuccessResponse(
         message = "Resume generation queued successfully."
+    )
+
+@export_router.get("/resume")
+async def get_resumes(session: SessionDep, response: Response, payload: Annotated[AccessTokenPayload, Depends(check_auth)]):
+    statement = (
+        select(Resume)
+        .where(Resume.user_id == payload.sub)
+    )
+    result = session.exec(statement).all()
+    response.status_code = 200
+    return ResumeListResponse(
+        message = "Fetch success.",
+        data = ResumeList(
+            count = len(result),
+            contents = [ResumeListData(
+                id = analysis.id
+            ) for analysis in result]
+        )
     )
