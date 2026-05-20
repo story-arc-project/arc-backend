@@ -10,7 +10,7 @@ from src.api.models.exc import AppException
 from src.api.models.request import ComprehensiveAnalysisPostRequest, KeywordAnalysisPostRequest
 from src.api.models.response import ComprehensiveAnalysisListResponse, ComprehensiveAnalysisResponse, DeleteSuccessResponse, IndividualAnalysisListResponse, IndividualAnalysisResponse, KeywordAnalysisListResponse, KeywordAnalysisResponse
 from src.db.db import SessionDep
-from src.db.models import ComprehensiveAnalysis, Experience, IndividualAnalysis, KeywordAnalysis
+from src.db.models import ComprehensiveAnalysis, Experience, IndividualAnalysis, KeywordAnalysis, UserProfile
 from src.enums import ErrorResponseCode
 from src.utils.auth import check_auth
 from src.utils.token import AccessTokenPayload
@@ -73,6 +73,15 @@ async def get_individual_analysis(analysis_id: UUID, session: SessionDep, respon
 async def post_comprehensive_analysis(body: ComprehensiveAnalysisPostRequest, session: SessionDep, response: Response, payload: Annotated[AccessTokenPayload, Depends(check_auth)]):
     statement = select(Experience).where(col(Experience.id).in_(body.experiences))
     result = session.exec(statement).all()
+    user_profile = session.exec(select(UserProfile).where(UserProfile.user_id == payload.sub)).one_or_none()
+    if user_profile is None:
+        raise AppException(
+            404,
+            ErrorResponse(
+                code = ErrorResponseCode.NOT_FOUND,
+                message = "User profile not found"
+            )
+        )
     user_input: list[str] = []
     for experience in result:
         user_input.append(str(experience.content))
@@ -92,7 +101,9 @@ async def post_comprehensive_analysis(body: ComprehensiveAnalysisPostRequest, se
                 )
         req = requests.post("http://ai_analyst:8001/comprehensive", json={
             "analysis_id": str(new_comprehensive_analysis.id),
-            "input": user_input
+            "input": user_input,
+            "school": user_profile.school,
+            "department": user_profile.department
         })
         req.raise_for_status()
         new_comprehensive_analysis.task_id = req.json()["task_id"]
