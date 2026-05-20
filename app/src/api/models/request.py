@@ -105,6 +105,9 @@ class ExperiencePostRequest(BaseModel):
 class ExperiencePutRequest(BaseModel):
     content: dict[str, Any]
 
+class ExperiencePatchRequest(BaseModel):
+    importance: int | None
+
 class LibraryPostRequest(BaseModel):
     name: str
     color: str

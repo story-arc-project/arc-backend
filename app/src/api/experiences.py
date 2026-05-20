@@ -9,7 +9,7 @@ import requests
 
 from src.api.models.base import ErrorResponse, ExperienceResponseData, ExperiencesResponseData, SuccessResponseWithData, UUIDData
 from src.api.models.exc import AppException
-from src.api.models.request import ExperiencePostRequest, ExperiencePutRequest
+from src.api.models.request import ExperiencePatchRequest, ExperiencePostRequest, ExperiencePutRequest
 from src.api.models.response import DeleteSuccessResponse, PostSuccessResponse, PutSuccessResponse
 from src.db.db import SessionDep
 from src.db.models import Experience, IndividualAnalysis
@@ -136,6 +136,45 @@ async def put_experience_by_id(body: ExperiencePutRequest, experience_id: UUID, 
     response.status_code = 200
     return PutSuccessResponse(
         message = "Experience edit success."
+    )
+
+@experiences_router.patch("/{experience_id}/importance")
+async def patch_experience_importance(body: ExperiencePatchRequest, experience_id: UUID, session: SessionDep, response: Response, payload: Annotated[AccessTokenPayload, Depends(check_auth)]):
+    statement = select(Experience).where(Experience.id == experience_id)
+    result = session.exec(statement).one_or_none()
+    if result is None:
+        raise AppException(
+            404,
+            ErrorResponse(
+                code = ErrorResponseCode.NOT_FOUND,
+                message = "Experience not found"
+            )
+        )
+    if result.user_id != payload.sub:
+        raise AppException(
+            403,
+            ErrorResponse(
+                code = ErrorResponseCode.RESOURCE_NOT_ALLOWED,
+                message = "Access for the resource is not allowed"
+            )
+        )
+    try:
+        result.importance = body.importance
+        session.add(result)
+        session.commit()
+        session.refresh(result)
+    except:
+        session.rollback()
+        raise AppException(
+            500,
+            ErrorResponse(
+                code=ErrorResponseCode.SERVER_ERROR,
+                message="Server side error."
+            )
+        )
+    response.status_code = 200
+    return PutSuccessResponse(
+        message = "Experience importance patch success."
     )
 
 @experiences_router.delete("/{experience_id}")
