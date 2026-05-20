@@ -1,6 +1,5 @@
 from typing import Annotated
-from src.queue.tasks import process_individual, process_keyword
-from src.queue.tasks import process_comprehensive
+from src.queue.tasks import process_comprehensive, process_individual, process_keyword, process_resume
 # from src.resume import main as resume_main
 from fastapi import Body, FastAPI, Response
 
@@ -27,6 +26,14 @@ async def comprehensive(body: Annotated[ComprehensiveRequest, Body()], response:
 @app.post("/keyword")
 async def keyword(body: Annotated[KeywordRequest, Body()], response: Response):
     task = process_keyword.delay(str(body.analysis_id), body.input, body.keywords)
+    response.status_code = 200
+    return {
+        "task_id": task.id
+    }
+
+@app.post("/resume")
+async def resume(body: Annotated[ResumeRequest, Body()], response: Response):
+    task = process_resume.delay(body.resume_id, body.sources, body.name_ko, body.email, body.phone, body.school, body.department, body.language)
     response.status_code = 200
     return {
         "task_id": task.id

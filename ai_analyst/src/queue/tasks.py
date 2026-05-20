@@ -7,7 +7,7 @@ from typing import Any, Literal
 import requests
 from src.queue.celery_app import celery
 
-def _load_main(type: Literal["individual", "comprehensive", "keyword_analysis"]):
+def _load_main(type: Literal["individual", "comprehensive", "keyword_analysis", "resume"]):
     return importlib.import_module(f"src.ai.{type}").main
 
 FRONTEND_API_URL = "http://app:8000"
@@ -56,4 +56,24 @@ def process_keyword(analysis_id: str, user_input: str, keywords: list[str]):
     return call_frontend(
         f"/{getenv("INTERNAL_ROUTE", "internal")}/keyword/success",
         {"analysis_id": analysis_id, "result": result}
+    )
+
+@celery.task
+def process_resume(
+    resume_id: str,
+    sources: list[str],
+    name_ko: str = "",
+    name_en: str = "",
+    email: str = "",
+    phone: str = "",
+    school: str = "",
+    department: str = "",
+    links: str = "",
+    language: str = "both",
+):
+    main = _load_main("resume")
+    result = main(sources, name_ko, name_en, email, phone, school, department, links, language)
+    return call_frontend(
+        f"/{getenv("INTERNAL_ROUTE", "internal")}/resume/success",
+        {"resume_id": resume_id, "result": result}
     )

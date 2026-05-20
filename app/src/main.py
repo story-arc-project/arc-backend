@@ -7,6 +7,7 @@ from os import getenv
 from fastapi.responses import JSONResponse
 from src.api.analysis import analysis_router
 from src.api.experiences import experiences_router
+from src.api.export import export_router
 from src.api.internal import internal_router
 from src.api.libraries import libraries_router
 from src.api.models.exc import AppException
@@ -79,4 +80,8 @@ app.include_router(
 app.include_router(
     analysis_router,
     prefix="/analysis"
+)
+app.include_router(
+    export_router,
+    prefix="/export"
 )

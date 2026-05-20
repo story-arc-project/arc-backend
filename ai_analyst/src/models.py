@@ -15,17 +15,14 @@ class ComprehensiveRequest(BaseModel):
     department: str
 
 class ResumeRequest(BaseModel):
+    resume_id: UUID
     sources: list[str]
     name_ko: str
-    name_en: str
     email: str
     phone: str
     school: str
     department: str
-    links: str
     language: Literal["ko", "en", "both"]
-    output_path: str
-    deep_crawl: bool
 
 class KeywordRequest(BaseModel):
     analysis_id: UUID

@@ -7,7 +7,7 @@ from fastapi import APIRouter, Depends, Response
 from src.api.models.base import ErrorResponse
 from src.api.models.exc import AppException
 from src.db.db import SessionDep
-from src.db.models import ComprehensiveAnalysis, IndividualAnalysis, KeywordAnalysis
+from src.db.models import ComprehensiveAnalysis, IndividualAnalysis, KeywordAnalysis, Resume
 from src.enums import AnalysisStatus, ErrorResponseCode
 from src.utils.internal import check_internal
 
@@ -100,6 +100,34 @@ async def success_keyword(body: Annotated[dict[str, Any], Depends(check_internal
     analysis.result = json.loads(result)
     analysis.status = AnalysisStatus.SUCCESS
     session.add(analysis)
+    session.commit()
+    response.status_code = 200
+    return {}
+
+@internal_router.post("/resume/success")
+async def success_resume(body: Annotated[dict[str, Any], Depends(check_internal)], session: SessionDep, response: Response):
+    resume_id: str | None = body.get("resume_id")
+    result: str | None = body.get("result")
+    if resume_id is None or result is None:
+        raise AppException(
+            status_code = 400,
+            error = ErrorResponse(
+                code = ErrorResponseCode.BAD_REQUEST,
+                message = ""
+            )
+        )
+    statement = select(Resume).where(Resume.id == UUID(resume_id))
+    resume = session.exec(statement).one_or_none()
+    if resume is None:
+        raise AppException(
+            status_code = 404,
+            error = ErrorResponse(
+                code = ErrorResponseCode.NOT_FOUND,
+                message = ""
+            )
+        )
+    resume.result = json.loads(result)
+    session.add(resume)
     session.commit()
     response.status_code = 200
     return {}

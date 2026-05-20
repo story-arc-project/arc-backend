@@ -127,3 +127,6 @@ class ComprehensiveAnalysisPostRequest(BaseModel):
 
 class KeywordAnalysisPostRequest(BaseModel):
     keywords: list[str]
+
+class ResumePostRequest(BaseModel):
+    language: str
