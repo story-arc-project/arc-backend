@@ -4,6 +4,7 @@ from typing import Annotated
 from uuid import UUID
 from fastapi import APIRouter, Depends, Response
 from sqlmodel import col, select
+import json
 
 from src.api.models.base import ComprehensiveAnalysisData, ComprehensiveAnalysisList, ComprehensiveAnalysisListData, ErrorResponse, IndividualAnalysisData, IndividualAnalysisList, IndividualAnalysisListData, SuccessResponse, KeywordAnalysisList, KeywordAnalysisListData, KeywordAnalysisData
 from src.api.models.exc import AppException
@@ -232,8 +233,8 @@ async def post_keyword_analysis(body: KeywordAnalysisPostRequest, session: Sessi
             keywords = body.keywords
         )
         req = requests.post("http://ai_analyst:8001/keyword", json={
-            "analysis_id": new_keyword_analysis.id,
-            "input": user_input,
+            "analysis_id": str(new_keyword_analysis.id),
+            "input": json.dumps(user_input),
             "keywords": body.keywords
         })
         req.raise_for_status()
