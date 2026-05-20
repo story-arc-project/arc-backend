@@ -80,7 +80,7 @@ class LibraryResponseData(BaseModel):
     name: str
     color: str
     icon: str
-    filter: dict[str, Any]
+    filter: dict[str, Any] | None
     sort_order: int
     created_at: datetime
     updated_at: datetime
