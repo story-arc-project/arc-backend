@@ -9,7 +9,7 @@ from src.api.models.exc import AppException
 from src.utils.auth import check_auth
 from src.utils.cors import check_cors
 from src.utils.oauth import google_login
-from src.const import ACCESS_TOKEN_KEY, LOGIN_REDIRECT_ENDPOINT_PREFIX, REFRESH_TOKEN_KEY
+from src.const import ACCESS_TOKEN_KEY, LOGIN_REDIRECT_ENDPOINT_PREFIX, REFRESH_TOKEN_KEY, SHOW_REMAINING_VERIFICATION_ATTEMPTS
 from src.utils.verify import send_code, verify_code
 from src.api.models.base import AccountData, AuthMeData, EmailVerificationErrorResponse, ErrorResponse, LoginData, OnboardResponseData, ProfileData, RefreshData, UserInfo
 from src.api.models.request import LoginRequest, OnboardRequest, SignupRequest, SocialLoginRequest, VerificationRequest, VerifyCodeRequest
@@ -185,11 +185,17 @@ async def verify(body: VerifyCodeRequest, session: SessionDep, response: Respons
         )
     if verification_result.is_verified == False:
         response.status_code = 401
-        return EmailVerificationErrorResponse(
-            code = ErrorResponseCode.INVALID_CODE,
-            message = "The verification code is incorrect.",
-            remaining_attempts = verification_result.remaining_attempts
-        )
+        if SHOW_REMAINING_VERIFICATION_ATTEMPTS:
+            return EmailVerificationErrorResponse(
+                code = ErrorResponseCode.INVALID_CODE,
+                message = "The verification code is incorrect.",
+                remaining_attempts = verification_result.remaining_attempts
+            )
+        else:
+            return ErrorResponse(
+                code = ErrorResponseCode.INVALID_CODE,
+                message = "The verification code is incorrect."
+            )
     result.status = UserStatus.VERIFIED
     session.add(result)
     session.commit()
