@@ -9,7 +9,7 @@ from email.mime.multipart import MIMEMultipart
 from freezegun import freeze_time
 
 from src.utils.token import hash_jti, verify_refresh_token
-from src.const import REFRESH_TOKEN_EXPIRE
+from src.const import REFRESH_TOKEN_EXPIRE, VERIFICATION_MAX_ATTEMPTS
 from src.db.models import Token
 from src.utils.mail import send_mail
 from src.enums import ErrorResponseCode, JWTTokenStatus
@@ -128,6 +128,30 @@ def test_verification(client: TestClient, mock_mail: MagicMock):
 
     code = sent_mail["Body"]
 
+    # Test that remaining_attempts decrements with each wrong attempt
+    prev_remaining = None
+    for _ in range(VERIFICATION_MAX_ATTEMPTS):
+        response = client.post(
+            "/auth/verify-email",
+            json={
+                "email": email,
+                "code": "1234"
+            }
+        )
+
+        assert response.status_code == 401
+        assert response.cookies.get("accessToken") is None
+        assert response.cookies.get("refreshToken") is None
+
+        data = response.json()
+        assert "remaining_attempts" in data
+        remaining = data["remaining_attempts"]
+        assert remaining >= 0
+        if prev_remaining is not None:
+            assert remaining == prev_remaining - 1
+        prev_remaining = remaining
+
+    # Final wrong attempt exhausts the code; remaining_attempts is 0, not negative
     response = client.post(
         "/auth/verify-email",
         json={
@@ -139,6 +163,40 @@ def test_verification(client: TestClient, mock_mail: MagicMock):
     assert response.status_code == 401
     assert response.cookies.get("accessToken") is None
     assert response.cookies.get("refreshToken") is None
+    data = response.json()
+    assert "remaining_attempts" in data
+    assert data["remaining_attempts"] == 0
+
+    # Correct code also fails now since attempts are exhausted
+    response = client.post(
+        "/auth/verify-email",
+        json={
+            "email": email,
+            "code": code
+        }
+    )
+
+    assert response.status_code == 401
+    assert response.cookies.get("accessToken") is None
+    assert response.cookies.get("refreshToken") is None
+    data = response.json()
+    assert "remaining_attempts" in data
+    assert data["remaining_attempts"] == 0
+
+    # Resend and verify successfully
+    response = client.post(
+        "/auth/resend-verification",
+        json={
+            "email": email
+        }
+    )
+
+    assert response.status_code == 200
+
+    sent_mail = get_sent_mail(mock_mail)
+    assert sent_mail["To"] == email
+
+    code = sent_mail["Body"]
 
     response = client.post(
         "/auth/verify-email",
