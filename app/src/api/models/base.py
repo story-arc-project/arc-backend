@@ -19,6 +19,9 @@ class ErrorResponse(BaseModel):
     code: ErrorResponseCode
     message: str
 
+class EmailVerificationErrorResponse(ErrorResponse):
+    remaining_attempts: int
+
 class UserInfo(BaseModel):
     email: EmailStr
 

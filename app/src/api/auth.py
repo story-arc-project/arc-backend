@@ -11,7 +11,7 @@ from src.utils.cors import check_cors
 from src.utils.oauth import google_login
 from src.const import ACCESS_TOKEN_KEY, LOGIN_REDIRECT_ENDPOINT_PREFIX, REFRESH_TOKEN_KEY
 from src.utils.verify import send_code, verify_code
-from src.api.models.base import AccountData, AuthMeData, ErrorResponse, LoginData, OnboardResponseData, ProfileData, RefreshData, UserInfo
+from src.api.models.base import AccountData, AuthMeData, EmailVerificationErrorResponse, ErrorResponse, LoginData, OnboardResponseData, ProfileData, RefreshData, UserInfo
 from src.api.models.request import LoginRequest, OnboardRequest, SignupRequest, SocialLoginRequest, VerificationRequest, VerifyCodeRequest
 from src.api.models.response import AuthMeResponse, LoginResponse, LogoutResponse, OnboardResponse, RefreshResponse, SignupResponse, VerificationSentResponse
 from src.db.db import SessionDep
@@ -176,11 +176,19 @@ async def send_verification(body: VerificationRequest, session: SessionDep, resp
 async def verify(body: VerifyCodeRequest, session: SessionDep, response: Response):
     statement = select(User).where(User.email == body.email)
     result = session.exec(statement).one_or_none()
-    if result is None or not verify_code(body.email, body.code):
+    verification_result = verify_code(body.email, body.code)
+    if result is None:
         response.status_code = 401
         return ErrorResponse(
             code = ErrorResponseCode.INVALID_CODE,
             message = "The verification code is incorrect."
+        )
+    if verification_result.is_verified == False:
+        response.status_code = 401
+        return EmailVerificationErrorResponse(
+            code = ErrorResponseCode.INVALID_CODE,
+            message = "The verification code is incorrect.",
+            remaining_attempts = verification_result.remaining_attempts
         )
     result.status = UserStatus.VERIFIED
     session.add(result)
