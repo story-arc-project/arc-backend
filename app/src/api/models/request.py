@@ -29,11 +29,11 @@ class OnboardRequest(BaseModel):
     name: str
     birth: date
     affiliation: Affiliation
-    school: str | None
-    department: str | None
-    company: str | None
-    desiredRole: str | None
-    affiliationDetail: str | None
+    school: str | None = None
+    department: str | None = None
+    company: str | None = None
+    desiredRole: str | None = None
+    affiliationDetail: str | None = None
     phone: str
     worry: list[str]
     interest: list[str]
