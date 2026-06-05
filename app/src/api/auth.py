@@ -10,7 +10,7 @@ from src.utils.auth import check_auth
 from src.utils.cors import check_cors
 from src.utils.oauth import google_login
 from src.utils.req import get_ip
-from src.const import ACCESS_TOKEN_KEY, LOGIN_REDIRECT_ENDPOINT_PREFIX, REFRESH_TOKEN_KEY, SHOW_REMAINING_VERIFICATION_ATTEMPTS, MAX_RETRY_COUNT, RETRY_COOLDOWN
+from src.const import ACCESS_TOKEN_KEY, LOGIN_REDIRECT_ENDPOINT_PREFIX, REFRESH_TOKEN_KEY, SHOW_REMAINING_VERIFICATION_ATTEMPTS, LOGIN_MAX_RETRY_COUNT, LOGIN_RETRY_COOLDOWN, VERIFY_EMAIL_MAX_RETRY_COUNT, VERIFY_EMAIL_RETRY_COOLDOWN
 from src.utils.verify import send_code, verify_code
 from src.api.models.base import AccountData, AuthMeData, EmailVerificationErrorResponse, ErrorResponse, LoginData, OnboardResponseData, ProfileData, RefreshData, UserInfo
 from src.api.models.request import LoginRequest, OnboardRequest, SignupRequest, SocialLoginRequest, VerificationRequest, VerifyCodeRequest
@@ -151,7 +151,7 @@ async def login(request: Request, body: LoginRequest, session: SessionDep, respo
     result = session.exec(statement).one_or_none()
     if result is None or result.password_hash is None or not verify_password(body.password, result.password_hash):
         for key in check_lock_keys:
-            count = increment_attempt(key)
+            count = increment_attempt(key, LOGIN_RETRY_COOLDOWN)
             if count is None:
                 raise AppException(
                     status_code = 500,
@@ -160,13 +160,13 @@ async def login(request: Request, body: LoginRequest, session: SessionDep, respo
                         message = "Lockdown attempt counter"
                     )
                 )
-            if count >= MAX_RETRY_COUNT:
-                set_lockout(key)
+            if count >= LOGIN_MAX_RETRY_COUNT:
+                set_lockout(key, LOGIN_RETRY_COOLDOWN)
                 raise AppException(
                     status_code = 429,
                     error = ErrorResponse(
                         code = ErrorResponseCode.ACCOUNT_LOCKED,
-                        message = f"Locked out for {RETRY_COOLDOWN} minutes."
+                        message = f"Locked out for {LOGIN_RETRY_COOLDOWN} minutes."
                     )
                 )
         response.status_code = 401
@@ -201,7 +201,7 @@ async def send_verification(request: Request, body: VerificationRequest, session
                 )
             )
     for key in check_lock_keys:
-        count = increment_attempt(key)
+        count = increment_attempt(key, VERIFY_EMAIL_RETRY_COOLDOWN)
         if count is None:
             raise AppException(
                 status_code = 500,
@@ -210,13 +210,13 @@ async def send_verification(request: Request, body: VerificationRequest, session
                     message = "Lockdown attempt counter"
                 )
             )
-        if count > MAX_RETRY_COUNT:
-            set_lockout(key)
+        if count > VERIFY_EMAIL_MAX_RETRY_COUNT:
+            set_lockout(key, VERIFY_EMAIL_RETRY_COOLDOWN)
             raise AppException(
                 status_code = 429,
                 error = ErrorResponse(
                     code = ErrorResponseCode.ACCOUNT_LOCKED,
-                    message = f"Locked out for {RETRY_COOLDOWN} minutes."
+                    message = f"Locked out for {VERIFY_EMAIL_RETRY_COOLDOWN} minutes."
                 )
             )
     statement = select(User).where(User.email == body.email)

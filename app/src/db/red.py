@@ -1,11 +1,11 @@
 from pydantic import EmailStr
 import redis
 
-from src.const import VERIFICATION_CODE_EXPIRE, VERIFICATION_MAX_ATTEMPTS, RETRY_COOLDOWN
+from src.const import VERIFICATION_CODE_EXPIRE, VERIFICATION_MAX_ATTEMPTS
+
+MIN_IN_SEC = 60
 
 r = redis.Redis("redis", 6379, decode_responses=True)
-
-COOLDOWN_SECONDS = RETRY_COOLDOWN * 60
 
 def _verify_keygen(email: EmailStr):
     return f"verify:{email}"
@@ -14,8 +14,8 @@ def _limit_keygen(email: EmailStr):
     return f"limit:{email}"
 
 def store_code(email: EmailStr, code: str):
-    _ = r.set(_verify_keygen(email), code, int(VERIFICATION_CODE_EXPIRE * 60))
-    _ = r.set(_limit_keygen(email), VERIFICATION_MAX_ATTEMPTS, int(VERIFICATION_CODE_EXPIRE * 60))
+    _ = r.set(_verify_keygen(email), code, int(VERIFICATION_CODE_EXPIRE * MIN_IN_SEC))
+    _ = r.set(_limit_keygen(email), VERIFICATION_MAX_ATTEMPTS, int(VERIFICATION_CODE_EXPIRE * MIN_IN_SEC))
 
 def get_code(email: EmailStr):
     return r.get(_verify_keygen(email))
@@ -43,16 +43,16 @@ def is_locked(key: str):
         return True, ttl
     return False, 0
 
-def increment_attempt(key: str):
+def increment_attempt(key: str, cooldown_minutes: int):
     count = r.incr(_get_attempts_key(key))
     if not isinstance(count, int):
         return None
     if count == 1:
-        r.expire(_get_attempts_key(key), COOLDOWN_SECONDS)
+        r.expire(_get_attempts_key(key), cooldown_minutes * MIN_IN_SEC)
     return count
 
-def set_lockout(key: str):
-    r.setex(_get_cooldown_key(key), COOLDOWN_SECONDS, 1)
+def set_lockout(key: str, cooldown_minutes: int):
+    r.setex(_get_cooldown_key(key), cooldown_minutes * MIN_IN_SEC, 1)
     r.delete(_get_attempts_key(key))
 
 def clear(key: str):

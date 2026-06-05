@@ -9,7 +9,7 @@ from email.mime.multipart import MIMEMultipart
 from freezegun import freeze_time
 
 from src.utils.token import hash_jti, verify_refresh_token
-from src.const import REFRESH_TOKEN_EXPIRE, VERIFICATION_MAX_ATTEMPTS, MAX_RETRY_COUNT, RETRY_COOLDOWN
+from src.const import REFRESH_TOKEN_EXPIRE, VERIFICATION_MAX_ATTEMPTS, LOGIN_MAX_RETRY_COUNT, LOGIN_RETRY_COOLDOWN
 from src.db.models import Token
 from src.utils.mail import send_mail
 from src.enums import ErrorResponseCode, JWTTokenStatus
@@ -285,7 +285,6 @@ def test_login(client: TestClient, mock_mail: MagicMock):
     assert response.cookies.get("accessToken") is not None
     assert response.cookies.get("refreshToken") is not None
 
-COOLDOWN_SECONDS = RETRY_COOLDOWN * 60
 class TestLockdown:
 
     # --- is_locked ---
@@ -296,37 +295,37 @@ class TestLockdown:
         assert ttl == 0
 
     def test_locked_after_set_lockout(self):
-        set_lockout("login:email:test@test.com")
+        set_lockout("login:email:test@test.com", LOGIN_RETRY_COOLDOWN)
         locked, ttl = is_locked("login:email:test@test.com")
         assert locked is True
-        assert 0 < ttl <= COOLDOWN_SECONDS
+        assert 0 < ttl <= LOGIN_RETRY_COOLDOWN * 60
 
     # --- increment_attempt ---
 
     def test_first_attempt_returns_one(self):
-        count = increment_attempt("login:email:test@test.com")
+        count = increment_attempt("login:email:test@test.com", LOGIN_RETRY_COOLDOWN)
         assert count == 1
 
     def test_attempt_increments_correctly(self):
-        for expected in range(1, MAX_RETRY_COUNT):
-            count = increment_attempt("login:email:test@test.com")
+        for expected in range(1, LOGIN_MAX_RETRY_COUNT):
+            count = increment_attempt("login:email:test@test.com", LOGIN_RETRY_COOLDOWN)
             assert count == expected
 
     def test_attempt_counter_has_ttl_after_first(self):
-        increment_attempt("login:email:test@test.com")
+        increment_attempt("login:email:test@test.com", LOGIN_RETRY_COOLDOWN)
         assert get_attempt_count("login:email:test@test.com") == 1
 
     # --- set_lockout ---
 
     def test_lockout_clears_attempt_counter(self):
-        for _ in range(MAX_RETRY_COUNT):
-            increment_attempt("login:email:test@test.com")
+        for _ in range(LOGIN_MAX_RETRY_COUNT):
+            increment_attempt("login:email:test@test.com", LOGIN_RETRY_COOLDOWN)
 
-        set_lockout("login:email:test@test.com")
+        set_lockout("login:email:test@test.com", LOGIN_RETRY_COOLDOWN)
         assert get_attempt_count("login:email:test@test.com") == 0
 
     def test_lockout_sets_cooldown(self):
-        set_lockout("login:email:test@test.com")
+        set_lockout("login:email:test@test.com", LOGIN_RETRY_COOLDOWN)
         locked, _ = is_locked("login:email:test@test.com")
         assert locked is True
 
@@ -334,13 +333,13 @@ class TestLockdown:
 
     def test_clear_resets_attempt_counter(self):
         for _ in range(3):
-            increment_attempt("login:email:test@test.com")
+            increment_attempt("login:email:test@test.com", LOGIN_RETRY_COOLDOWN)
 
         clear("login:email:test@test.com")
         assert get_attempt_count("login:email:test@test.com") == 0
 
     def test_clear_removes_lockout(self):
-        set_lockout("login:email:test@test.com")
+        set_lockout("login:email:test@test.com", LOGIN_RETRY_COOLDOWN)
         clear("login:email:test@test.com")
         locked, _ = is_locked("login:email:test@test.com")
         assert locked is False
@@ -350,10 +349,10 @@ class TestLockdown:
     def test_lockout_triggers_at_max_attempts(self):
         key = "login:email:test@test.com"
 
-        for _ in range(MAX_RETRY_COUNT):
-            count = increment_attempt(key)
+        for _ in range(LOGIN_MAX_RETRY_COUNT):
+            count = increment_attempt(key, LOGIN_RETRY_COOLDOWN)
 
-        set_lockout(key)
+        set_lockout(key, LOGIN_RETRY_COOLDOWN)
 
         locked, ttl = is_locked(key)
         assert locked is True
@@ -363,9 +362,9 @@ class TestLockdown:
     def test_fresh_attempts_after_clear(self):
         key = "login:email:test@test.com"
 
-        for _ in range(MAX_RETRY_COUNT):
-            increment_attempt(key)
-        set_lockout(key)
+        for _ in range(LOGIN_MAX_RETRY_COUNT):
+            increment_attempt(key, LOGIN_RETRY_COOLDOWN)
+        set_lockout(key, LOGIN_RETRY_COOLDOWN)
         clear(key)
 
         locked, _ = is_locked(key)
@@ -374,18 +373,18 @@ class TestLockdown:
 
     def test_ip_and_email_are_independent(self):
         """Lockout on IP should not affect email key and vice versa."""
-        for _ in range(MAX_RETRY_COUNT):
-            increment_attempt("login:ip:192.168.0.1")
-        set_lockout("login:ip:192.168.0.1")
+        for _ in range(LOGIN_MAX_RETRY_COUNT):
+            increment_attempt("login:ip:192.168.0.1", LOGIN_RETRY_COOLDOWN)
+        set_lockout("login:ip:192.168.0.1", LOGIN_RETRY_COOLDOWN)
 
         locked, _ = is_locked("login:email:test@test.com")
         assert locked is False
 
     def test_different_users_are_isolated(self):
         """Failures for one user should not affect another."""
-        for _ in range(MAX_RETRY_COUNT):
-            increment_attempt("login:email:attacker@evil.com")
-        set_lockout("login:email:attacker@evil.com")
+        for _ in range(LOGIN_MAX_RETRY_COUNT):
+            increment_attempt("login:email:attacker@evil.com", LOGIN_RETRY_COOLDOWN)
+        set_lockout("login:email:attacker@evil.com", LOGIN_RETRY_COOLDOWN)
 
         locked, _ = is_locked("login:email:innocent@test.com")
         assert locked is False
@@ -406,7 +405,7 @@ class TestLockdown:
         code = get_sent_mail(mock_mail)["Body"]
         client.post("/auth/verify-email", json={"email": email, "code": code})
 
-        for _ in range(MAX_RETRY_COUNT - 1):
+        for _ in range(LOGIN_MAX_RETRY_COUNT - 1):
             response = client.post("/auth/login", json={"email": email, "password": "wrongpassword"})
             assert response.status_code == 401
 
@@ -424,7 +423,7 @@ class TestLockdown:
         client.post("/auth/verify-email", json={"email": email, "code": code})
 
         # force lockout
-        set_lockout(f"login:email:{email}")
+        set_lockout(f"login:email:{email}", LOGIN_RETRY_COOLDOWN)
 
         # even correct password is rejected
         response = client.post("/auth/login", json={"email": email, "password": password})
@@ -454,7 +453,7 @@ class TestLockdown:
 
         # simulate IP lockout directly
         ip = "testclient"  # default IP from Starlette TestClient
-        set_lockout(f"login:ip:{ip}")
+        set_lockout(f"login:ip:{ip}", LOGIN_RETRY_COOLDOWN)
 
         response = client.post("/auth/login", json={"email": email, "password": password})
         assert response.status_code == 429
@@ -469,7 +468,7 @@ class TestLockdown:
         code = get_sent_mail(mock_mail)["Body"]
         client.post("/auth/verify-email", json={"email": email, "code": code})
 
-        for _ in range(MAX_RETRY_COUNT):
+        for _ in range(LOGIN_MAX_RETRY_COUNT):
             client.post("/auth/login", json={"email": email, "password": "wrongpassword"})
 
         locked, _ = is_locked(f"login:email:{email}")
