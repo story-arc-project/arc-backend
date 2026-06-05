@@ -185,8 +185,40 @@ async def login(request: Request, body: LoginRequest, session: SessionDep, respo
     return get_login_response(session, response, result, "Login successful")
 
 @auth_router.post("/resend-verification")
-async def send_verification(body: VerificationRequest, session: SessionDep, response: Response):
-    # TODO: Add rate limit
+async def send_verification(request: Request, body: VerificationRequest, session: SessionDep, response: Response):
+    ip = get_ip(request)
+    check_lock_keys = [f"verify:email:{body.email}"]
+    if ip is not None:
+        check_lock_keys.append(f"verify:ip:{ip}")
+    for key in check_lock_keys:
+        locked, ttl = is_locked(key)
+        if locked:
+            raise AppException(
+                status_code = 429,
+                error = ErrorResponse(
+                    code = ErrorResponseCode.ACCOUNT_LOCKED,
+                    message = f"Too many attempts. Retry in {ttl}s."
+                )
+            )
+    for key in check_lock_keys:
+        count = increment_attempt(key)
+        if count is None:
+            raise AppException(
+                status_code = 500,
+                error = ErrorResponse(
+                    code = ErrorResponseCode.SERVER_ERROR,
+                    message = "Lockdown attempt counter"
+                )
+            )
+        if count > MAX_RETRY_COUNT:
+            set_lockout(key)
+            raise AppException(
+                status_code = 429,
+                error = ErrorResponse(
+                    code = ErrorResponseCode.ACCOUNT_LOCKED,
+                    message = f"Locked out for {RETRY_COOLDOWN} minutes."
+                )
+            )
     statement = select(User).where(User.email == body.email)
     result = session.exec(statement).one_or_none()
     if result is None:
