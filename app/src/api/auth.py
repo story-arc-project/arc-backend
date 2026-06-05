@@ -136,7 +136,8 @@ def check_email_verification_ratelimit(ip: str | None, email: EmailStr):
             )
 
 @auth_router.post("/signup")
-async def signup(body: SignupRequest, session: SessionDep, response: Response):
+async def signup(request: Request, body: SignupRequest, session: SessionDep, response: Response):
+    check_email_verification_ratelimit(get_ip(request), body.email)
     statement = select(User).where(User.email == body.email)
     if session.exec(statement).one_or_none() is not None:
         response.status_code = 409
