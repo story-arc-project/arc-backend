@@ -2,7 +2,7 @@ from datetime import datetime, timezone
 from typing import Annotated
 from uuid import UUID
 from fastapi import APIRouter, Depends, Request, Response
-from pydantic import BaseModel
+from pydantic import BaseModel, EmailStr
 from sqlmodel import select
 
 from src.api.models.exc import AppException
@@ -101,6 +101,40 @@ def get_login_response(session: SessionDep, response: Response, result: User, me
         )
     )
 
+def check_email_verification_ratelimit(ip: str | None, email: EmailStr):
+    check_lock_keys = [f"verify:email:{email}"]
+    if ip is not None:
+        check_lock_keys.append(f"verify:ip:{ip}")
+    for key in check_lock_keys:
+        locked, ttl = is_locked(key)
+        if locked:
+            raise AppException(
+                status_code = 429,
+                error = ErrorResponse(
+                    code = ErrorResponseCode.ACCOUNT_LOCKED,
+                    message = f"Too many attempts. Retry in {ttl}s."
+                )
+            )
+    for key in check_lock_keys:
+        count = increment_attempt(key, VERIFY_EMAIL_RETRY_COOLDOWN)
+        if count is None:
+            raise AppException(
+                status_code = 500,
+                error = ErrorResponse(
+                    code = ErrorResponseCode.SERVER_ERROR,
+                    message = "Lockdown attempt counter"
+                )
+            )
+        if count > VERIFY_EMAIL_MAX_RETRY_COUNT:
+            set_lockout(key, VERIFY_EMAIL_RETRY_COOLDOWN)
+            raise AppException(
+                status_code = 429,
+                error = ErrorResponse(
+                    code = ErrorResponseCode.ACCOUNT_LOCKED,
+                    message = f"Locked out for {VERIFY_EMAIL_RETRY_COOLDOWN} minutes."
+                )
+            )
+
 @auth_router.post("/signup")
 async def signup(body: SignupRequest, session: SessionDep, response: Response):
     statement = select(User).where(User.email == body.email)
@@ -186,39 +220,7 @@ async def login(request: Request, body: LoginRequest, session: SessionDep, respo
 
 @auth_router.post("/resend-verification")
 async def send_verification(request: Request, body: VerificationRequest, session: SessionDep, response: Response):
-    ip = get_ip(request)
-    check_lock_keys = [f"verify:email:{body.email}"]
-    if ip is not None:
-        check_lock_keys.append(f"verify:ip:{ip}")
-    for key in check_lock_keys:
-        locked, ttl = is_locked(key)
-        if locked:
-            raise AppException(
-                status_code = 429,
-                error = ErrorResponse(
-                    code = ErrorResponseCode.ACCOUNT_LOCKED,
-                    message = f"Too many attempts. Retry in {ttl}s."
-                )
-            )
-    for key in check_lock_keys:
-        count = increment_attempt(key, VERIFY_EMAIL_RETRY_COOLDOWN)
-        if count is None:
-            raise AppException(
-                status_code = 500,
-                error = ErrorResponse(
-                    code = ErrorResponseCode.SERVER_ERROR,
-                    message = "Lockdown attempt counter"
-                )
-            )
-        if count > VERIFY_EMAIL_MAX_RETRY_COUNT:
-            set_lockout(key, VERIFY_EMAIL_RETRY_COOLDOWN)
-            raise AppException(
-                status_code = 429,
-                error = ErrorResponse(
-                    code = ErrorResponseCode.ACCOUNT_LOCKED,
-                    message = f"Locked out for {VERIFY_EMAIL_RETRY_COOLDOWN} minutes."
-                )
-            )
+    check_email_verification_ratelimit(get_ip(request), body.email)
     statement = select(User).where(User.email == body.email)
     result = session.exec(statement).one_or_none()
     if result is None:
