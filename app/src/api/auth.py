@@ -134,9 +134,9 @@ async def signup(body: SignupRequest, session: SessionDep, response: Response):
 @auth_router.post("/login")
 async def login(request: Request, body: LoginRequest, session: SessionDep, response: Response):
     ip = get_ip(request)
-    check_lock_keys = [f"email:{body.email}"]
+    check_lock_keys = [f"login:email:{body.email}"]
     if ip is not None:
-        check_lock_keys.append(f"ip:{ip}")
+        check_lock_keys.append(f"login:ip:{ip}")
     for key in check_lock_keys:
         locked, ttl = is_locked(key)
         if locked:
