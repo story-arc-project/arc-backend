@@ -182,7 +182,6 @@ async def login(request: Request, body: LoginRequest, session: SessionDep, respo
             code = ErrorResponseCode.EMAIL_NOT_VERIFIED,
             message = "Email verification needed."
         )
-    # TODO: Add account lock when too many requests
     return get_login_response(session, response, result, "Login successful")
 
 @auth_router.post("/resend-verification")
