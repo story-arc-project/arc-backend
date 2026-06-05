@@ -9,10 +9,11 @@ from email.mime.multipart import MIMEMultipart
 from freezegun import freeze_time
 
 from src.utils.token import hash_jti, verify_refresh_token
-from src.const import REFRESH_TOKEN_EXPIRE, VERIFICATION_MAX_ATTEMPTS
+from src.const import REFRESH_TOKEN_EXPIRE, VERIFICATION_MAX_ATTEMPTS, MAX_RETRY_COUNT, RETRY_COOLDOWN
 from src.db.models import Token
 from src.utils.mail import send_mail
 from src.enums import ErrorResponseCode, JWTTokenStatus
+from src.db.red import is_locked, increment_attempt, set_lockout, clear, get_attempt_count
 
 
 # Test data
@@ -283,6 +284,204 @@ def test_login(client: TestClient, mock_mail: MagicMock):
     assert response.status_code == 200
     assert response.cookies.get("accessToken") is not None
     assert response.cookies.get("refreshToken") is not None
+
+COOLDOWN_SECONDS = RETRY_COOLDOWN * 60
+class TestLockdown:
+
+    # --- is_locked ---
+
+    def test_not_locked_by_default(self):
+        locked, ttl = is_locked("email:test@test.com")
+        assert locked is False
+        assert ttl == 0
+
+    def test_locked_after_set_lockout(self):
+        set_lockout("email:test@test.com")
+        locked, ttl = is_locked("email:test@test.com")
+        assert locked is True
+        assert 0 < ttl <= COOLDOWN_SECONDS
+
+    # --- increment_attempt ---
+
+    def test_first_attempt_returns_one(self):
+        count = increment_attempt("email:test@test.com")
+        assert count == 1
+
+    def test_attempt_increments_correctly(self):
+        for expected in range(1, MAX_RETRY_COUNT):
+            count = increment_attempt("email:test@test.com")
+            assert count == expected
+
+    def test_attempt_counter_has_ttl_after_first(self):
+        increment_attempt("email:test@test.com")
+        assert get_attempt_count("email:test@test.com") == 1
+
+    # --- set_lockout ---
+
+    def test_lockout_clears_attempt_counter(self):
+        for _ in range(MAX_RETRY_COUNT):
+            increment_attempt("email:test@test.com")
+
+        set_lockout("email:test@test.com")
+        assert get_attempt_count("email:test@test.com") == 0
+
+    def test_lockout_sets_cooldown(self):
+        set_lockout("email:test@test.com")
+        locked, _ = is_locked("email:test@test.com")
+        assert locked is True
+
+    # --- clear ---
+
+    def test_clear_resets_attempt_counter(self):
+        for _ in range(3):
+            increment_attempt("email:test@test.com")
+
+        clear("email:test@test.com")
+        assert get_attempt_count("email:test@test.com") == 0
+
+    def test_clear_removes_lockout(self):
+        set_lockout("email:test@test.com")
+        clear("email:test@test.com")
+        locked, _ = is_locked("email:test@test.com")
+        assert locked is False
+
+    # --- integration: full lockout flow ---
+
+    def test_lockout_triggers_at_max_attempts(self):
+        key = "email:test@test.com"
+
+        for _ in range(MAX_RETRY_COUNT):
+            count = increment_attempt(key)
+
+        set_lockout(key)
+
+        locked, ttl = is_locked(key)
+        assert locked is True
+        assert ttl > 0
+        assert get_attempt_count(key) == 0
+
+    def test_fresh_attempts_after_clear(self):
+        key = "email:test@test.com"
+
+        for _ in range(MAX_RETRY_COUNT):
+            increment_attempt(key)
+        set_lockout(key)
+        clear(key)
+
+        locked, _ = is_locked(key)
+        assert locked is False
+        assert get_attempt_count(key) == 0
+
+    def test_ip_and_email_are_independent(self):
+        """Lockout on IP should not affect email key and vice versa."""
+        for _ in range(MAX_RETRY_COUNT):
+            increment_attempt("ip:192.168.0.1")
+        set_lockout("ip:192.168.0.1")
+
+        locked, _ = is_locked("email:test@test.com")
+        assert locked is False
+
+    def test_different_users_are_isolated(self):
+        """Failures for one user should not affect another."""
+        for _ in range(MAX_RETRY_COUNT):
+            increment_attempt("email:attacker@evil.com")
+        set_lockout("email:attacker@evil.com")
+
+        locked, _ = is_locked("email:innocent@test.com")
+        assert locked is False
+
+    def test_login_wrong_password_increments_attempts(self, client: TestClient, mock_mail: MagicMock, fake_redis):
+        # signup and verify first
+        client.post("/auth/signup", json={"email": email, "password": password})
+        code = get_sent_mail(mock_mail)["Body"]
+        client.post("/auth/verify-email", json={"email": email, "code": code})
+
+        response = client.post("/auth/login", json={"email": email, "password": "wrongpassword"})
+
+        assert response.status_code == 401
+        assert get_attempt_count(f"email:{email}") == 1
+
+    def test_login_lockout_after_max_attempts(self, client: TestClient, mock_mail: MagicMock, fake_redis):
+        client.post("/auth/signup", json={"email": email, "password": password})
+        code = get_sent_mail(mock_mail)["Body"]
+        client.post("/auth/verify-email", json={"email": email, "code": code})
+
+        for _ in range(MAX_RETRY_COUNT - 1):
+            response = client.post("/auth/login", json={"email": email, "password": "wrongpassword"})
+            assert response.status_code == 401
+
+        # final attempt triggers lockout
+        response = client.post("/auth/login", json={"email": email, "password": "wrongpassword"})
+        assert response.status_code == 429
+
+        locked, ttl = is_locked(f"email:{email}")
+        assert locked is True
+        assert ttl > 0
+
+    def test_login_blocked_when_locked(self, client: TestClient, mock_mail: MagicMock, fake_redis):
+        client.post("/auth/signup", json={"email": email, "password": password})
+        code = get_sent_mail(mock_mail)["Body"]
+        client.post("/auth/verify-email", json={"email": email, "code": code})
+
+        # force lockout
+        set_lockout(f"email:{email}")
+
+        # even correct password is rejected
+        response = client.post("/auth/login", json={"email": email, "password": password})
+        assert response.status_code == 429
+
+    def test_login_clears_attempts_on_success(self, client: TestClient, mock_mail: MagicMock, fake_redis):
+        client.post("/auth/signup", json={"email": email, "password": password})
+        code = get_sent_mail(mock_mail)["Body"]
+        client.post("/auth/verify-email", json={"email": email, "code": code})
+
+        # fail a couple times
+        for _ in range(2):
+            client.post("/auth/login", json={"email": email, "password": "wrongpassword"})
+        assert get_attempt_count(f"email:{email}") == 2
+
+        # succeed
+        response = client.post("/auth/login", json={"email": email, "password": password})
+        assert response.status_code == 200  # unverified would be 403, here it's verified so 200
+        assert get_attempt_count(f"email:{email}") == 0
+        locked, _ = is_locked(f"email:{email}")
+        assert locked is False
+
+    def test_login_ip_lockout_blocks_request(self, client: TestClient, mock_mail: MagicMock, fake_redis):
+        client.post("/auth/signup", json={"email": email, "password": password})
+        code = get_sent_mail(mock_mail)["Body"]
+        client.post("/auth/verify-email", json={"email": email, "code": code})
+
+        # simulate IP lockout directly
+        ip = "testclient"  # default IP from Starlette TestClient
+        set_lockout(f"ip:{ip}")
+
+        response = client.post("/auth/login", json={"email": email, "password": password})
+        assert response.status_code == 429
+
+    def test_login_nonexistent_email_still_increments(self, client: TestClient, fake_redis):
+        response = client.post("/auth/login", json={"email": "ghost@test.com", "password": "whatever"})
+        assert response.status_code == 401
+        assert get_attempt_count("email:ghost@test.com") == 1
+    
+    def test_login_allowed_after_cooldown(self, client: TestClient, mock_mail: MagicMock, fake_redis):
+        client.post("/auth/signup", json={"email": email, "password": password})
+        code = get_sent_mail(mock_mail)["Body"]
+        client.post("/auth/verify-email", json={"email": email, "code": code})
+
+        for _ in range(MAX_RETRY_COUNT):
+            client.post("/auth/login", json={"email": email, "password": "wrongpassword"})
+
+        locked, _ = is_locked(f"email:{email}")
+        assert locked is True
+
+        # manually expire the cooldown key to simulate time passing
+        fake_redis.delete(f"cooldown:email:{email}")
+
+        response = client.post("/auth/login", json={"email": email, "password": password})
+        assert response.status_code == 200
+        assert response.cookies.get("accessToken") is not None
+
 
 def test_refresh(session: Session, client: TestClient, mock_mail: MagicMock):
     # 1. Missing cookie

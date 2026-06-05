@@ -61,6 +61,9 @@ def clear(key: str):
 
 def get_attempt_count(key: str):
     val = r.get(_get_attempts_key(key))
-    if not isinstance(val, int):
+    if val is None:
         return 0
-    return val
+    try:
+        return int(val)
+    except:
+        return None
