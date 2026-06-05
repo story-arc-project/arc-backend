@@ -9,7 +9,8 @@ from src.api.models.exc import AppException
 from src.utils.auth import check_auth
 from src.utils.cors import check_cors
 from src.utils.oauth import google_login
-from src.const import ACCESS_TOKEN_KEY, LOGIN_REDIRECT_ENDPOINT_PREFIX, REFRESH_TOKEN_KEY, SHOW_REMAINING_VERIFICATION_ATTEMPTS
+from src.utils.req import get_ip
+from src.const import ACCESS_TOKEN_KEY, LOGIN_REDIRECT_ENDPOINT_PREFIX, REFRESH_TOKEN_KEY, SHOW_REMAINING_VERIFICATION_ATTEMPTS, MAX_RETRY_COUNT, RETRY_COOLDOWN
 from src.utils.verify import send_code, verify_code
 from src.api.models.base import AccountData, AuthMeData, EmailVerificationErrorResponse, ErrorResponse, LoginData, OnboardResponseData, ProfileData, RefreshData, UserInfo
 from src.api.models.request import LoginRequest, OnboardRequest, SignupRequest, SocialLoginRequest, VerificationRequest, VerifyCodeRequest
@@ -19,6 +20,7 @@ from src.db.models import OauthAccount, Token, User, UserProfile
 from src.enums import ErrorResponseCode, JWTTokenStatus, OauthProviderId, UserStatus
 from src.utils.pwd import hash_password, verify_password
 from src.utils.token import AccessTokenPayload, create_access_token, create_refresh_token, hash_jti, verify_refresh_token
+from src.db.red import is_locked, increment_attempt, set_lockout, clear
 
 auth_router = APIRouter()
 
@@ -130,15 +132,50 @@ async def signup(body: SignupRequest, session: SessionDep, response: Response):
     )
 
 @auth_router.post("/login")
-async def login(body: LoginRequest, session: SessionDep, response: Response):
+async def login(request: Request, body: LoginRequest, session: SessionDep, response: Response):
+    ip = get_ip(request)
+    check_lock_keys = [f"email:{body.email}"]
+    if ip is not None:
+        check_lock_keys.append(f"ip:{ip}")
+    for key in check_lock_keys:
+        locked, ttl = is_locked(key)
+        if locked:
+            raise AppException(
+                status_code = 429,
+                error = ErrorResponse(
+                    code = ErrorResponseCode.ACCOUNT_LOCKED,
+                    message = f"Too many attempts. Retry in {ttl}s."
+                )
+            )
     statement = select(User).where(User.email == body.email)
     result = session.exec(statement).one_or_none()
     if result is None or result.password_hash is None or not verify_password(body.password, result.password_hash):
+        for key in check_lock_keys:
+            count = increment_attempt(key)
+            if count is None:
+                raise AppException(
+                    status_code = 500,
+                    error = ErrorResponse(
+                        code = ErrorResponseCode.SERVER_ERROR,
+                        message = "Lockdown attempt counter"
+                    )
+                )
+            if count >= MAX_RETRY_COUNT:
+                set_lockout(key)
+                raise AppException(
+                    status_code = 429,
+                    error = ErrorResponse(
+                        code = ErrorResponseCode.ACCOUNT_LOCKED,
+                        message = f"Locked out for {RETRY_COOLDOWN} minutes."
+                    )
+                )
         response.status_code = 401
         return ErrorResponse(
             code = ErrorResponseCode.INVALID_CREDENTIALS,
             message = "The email or password is incorrect."
         )
+    for key in check_lock_keys:
+        clear(key)
     if result.status == UserStatus.UNVERIFIED:
         response.status_code = 403
         return ErrorResponse(

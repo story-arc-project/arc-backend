@@ -32,6 +32,7 @@ class ErrorResponseCode(str, enum.Enum):
     RESOURCE_NOT_ALLOWED = "RESOURCE_NOT_ALLOWED"
     BAD_REQUEST = "BAD_REQUEST"
     INTERNAL_ERROR = "INTERNAL_ERROR"
+    ACCOUNT_LOCKED = "ACCOUNT_LOCKED"
 
 class AnalysisStatus(str, enum.Enum):
     PENDING = "pending"

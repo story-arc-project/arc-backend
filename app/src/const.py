@@ -7,3 +7,7 @@ SHOW_REMAINING_VERIFICATION_ATTEMPTS = False # boolean
 ACCESS_TOKEN_KEY = "accessToken"
 REFRESH_TOKEN_KEY = "refreshToken"
 LOGIN_REDIRECT_ENDPOINT_PREFIX = "/callback/"
+
+# Retry limits
+MAX_RETRY_COUNT = 5
+RETRY_COOLDOWN = 10 # minutes
