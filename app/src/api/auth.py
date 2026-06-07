@@ -12,11 +12,11 @@ from src.utils.oauth import google_login
 from src.utils.req import get_ip
 from src.const import ACCESS_TOKEN_KEY, LOGIN_REDIRECT_ENDPOINT_PREFIX, REFRESH_TOKEN_KEY, SHOW_REMAINING_VERIFICATION_ATTEMPTS, LOGIN_MAX_RETRY_COUNT, LOGIN_RETRY_COOLDOWN, VERIFY_EMAIL_MAX_RETRY_COUNT, VERIFY_EMAIL_RETRY_COOLDOWN
 from src.utils.verify import send_code, verify_code
-from src.api.models.base import AccountData, AuthMeData, EmailVerificationErrorResponse, ErrorResponse, LoginData, OnboardResponseData, ProfileData, RefreshData, UserInfo
-from src.api.models.request import LoginRequest, OnboardRequest, SignupRequest, SocialLoginRequest, VerificationRequest, VerifyCodeRequest
+from src.api.models.base import AccountData, AuthMeData, EmailVerificationErrorResponse, ErrorResponse, LoginData, OnboardResponseData, ProfileData, RefreshData, SuccessResponse, UserInfo
+from src.api.models.request import LoginRequest, OnboardRequest, SignupRequest, SocialLoginRequest, UserDeleteByPasswordRequest, VerificationRequest, VerifyCodeRequest
 from src.api.models.response import AuthMeResponse, LoginResponse, LogoutResponse, OnboardResponse, RefreshResponse, SignupResponse, VerificationSentResponse
 from src.db.db import SessionDep
-from src.db.models import OauthAccount, Token, User, UserProfile
+from src.db.models import DeletedUser, OauthAccount, Token, User, UserProfile
 from src.enums import ErrorResponseCode, JWTTokenStatus, OauthProviderId, UserStatus
 from src.utils.pwd import hash_password, verify_password
 from src.utils.token import AccessTokenPayload, create_access_token, create_refresh_token, hash_jti, verify_refresh_token
@@ -507,3 +507,42 @@ async def me(session: SessionDep, response: Response, payload: Annotated[AccessT
     )
     response.status_code = 200
     return AuthMeResponse(data=data)
+
+@auth_router.delete("/account/password")
+async def delete_account_by_password(request: Request, session: SessionDep, body: UserDeleteByPasswordRequest, response: Response, payload: Annotated[AccessTokenPayload, Depends(check_auth)]):
+    user = session.get(User, payload.sub)
+    if user is None:
+        response.status_code = 401
+        return ErrorResponse(
+            code = ErrorResponseCode.AUTH_TOKEN_INVALID,
+            message = "Login required."
+        )
+    limiter = LoginRateLimiter(get_ip(request), user.email)
+    if user.password_hash is None or not verify_password(body.password, user.password_hash):
+        limiter.record_failure()
+        response.status_code = 401
+        return ErrorResponse(
+            code = ErrorResponseCode.INVALID_CREDENTIALS,
+            message = "The email or password is incorrect."
+        )
+    limiter.clear()
+    deleted = DeletedUser(user_id=payload.sub)
+    try:
+        tokens = session.exec(select(Token).where(Token.user_id == payload.sub)).all()
+        for token in tokens:
+            token.revoked = True
+            session.add(token)
+        session.add(deleted)
+        session.commit()
+    except:
+        session.rollback()
+        raise AppException(
+            status_code = 500,
+            error = ErrorResponse(
+                code = ErrorResponseCode.SERVER_ERROR,
+                message = "Delete failed"
+            )
+        )
+    response.status_code = 200
+    remove_tokens(response)
+    return SuccessResponse(message="Delete successful")

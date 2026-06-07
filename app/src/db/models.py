@@ -304,3 +304,15 @@ class KeywordAnalysis(SQLModel, table=True):
         default=None,
         sa_column=Column(JSONB, nullable=True, default=None)
     )
+
+class DeletedUser(SQLModel, table=True):
+    __tablename__: str = "deleted_users"  # pyright: ignore[reportIncompatibleVariableOverride]
+    user_id: uuid.UUID = Field(foreign_key="users.id", primary_key=True, sa_type=SAUUID)
+    deleted_at: datetime = Field(
+        default_factory=now,
+        sa_column=Column(
+            DateTime(timezone=True),
+            server_default=func.now(),
+            nullable=False
+        )
+    )

@@ -130,3 +130,6 @@ class KeywordAnalysisPostRequest(BaseModel):
 
 class ResumePostRequest(BaseModel):
     language: str
+
+class UserDeleteByPasswordRequest(BaseModel):
+    password: str
