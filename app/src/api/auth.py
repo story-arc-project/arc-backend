@@ -208,23 +208,41 @@ async def signup(request: Request, body: SignupRequest, session: SessionDep, res
 @auth_router.post("/login")
 async def login(request: Request, body: LoginRequest, session: SessionDep, response: Response):
     limiter = LoginRateLimiter(get_ip(request), body.email)
-    statement = select(User).where(User.email == body.email)
+    statement = (
+        select(User, DeletedUser)
+        .outerjoin(DeletedUser)
+        .where(User.email == body.email)
+    )
     result = session.exec(statement).one_or_none()
-    if result is None or result.password_hash is None or not verify_password(body.password, result.password_hash):
+    if result is None:
         limiter.record_failure()
         response.status_code = 401
         return ErrorResponse(
             code = ErrorResponseCode.INVALID_CREDENTIALS,
             message = "The email or password is incorrect."
         )
+    user, deleted_user = result
+    if user.password_hash is None or not verify_password(body.password, user.password_hash):
+        limiter.record_failure()
+        response.status_code = 401
+        return ErrorResponse(
+            code = ErrorResponseCode.INVALID_CREDENTIALS,
+            message = "The email or password is incorrect."
+        )
+    if deleted_user is not None:
+        response.status_code = 403
+        return ErrorResponse(
+            code = ErrorResponseCode.ACCOUNT_DELETED,
+            message = "This account has been deleted."
+        )
     limiter.clear()
-    if result.status == UserStatus.UNVERIFIED:
+    if user.status == UserStatus.UNVERIFIED:
         response.status_code = 403
         return ErrorResponse(
             code = ErrorResponseCode.EMAIL_NOT_VERIFIED,
             message = "Email verification needed."
         )
-    return get_login_response(session, response, result, "Login successful")
+    return get_login_response(session, response, user, "Login successful")
 
 @auth_router.post("/resend-verification")
 async def send_verification(request: Request, body: VerificationRequest, session: SessionDep, response: Response):
