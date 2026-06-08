@@ -86,7 +86,7 @@ class OnboardRequest(BaseModel):
 class ExperiencePostRequest(BaseModel):
     type: str
     content: dict[str, Any]
-    importance: int | None
+    importance: int | None = None
 
     @field_validator("type", mode="after")
     @classmethod
