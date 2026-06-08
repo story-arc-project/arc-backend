@@ -13,7 +13,7 @@ from src.utils.req import get_ip
 from src.const import ACCESS_TOKEN_KEY, LOGIN_REDIRECT_ENDPOINT_PREFIX, REFRESH_TOKEN_KEY, SHOW_REMAINING_VERIFICATION_ATTEMPTS, LOGIN_MAX_RETRY_COUNT, LOGIN_RETRY_COOLDOWN, VERIFY_EMAIL_MAX_RETRY_COUNT, VERIFY_EMAIL_RETRY_COOLDOWN
 from src.utils.verify import send_code, verify_code
 from src.api.models.base import AccountData, AuthMeData, EmailVerificationErrorResponse, ErrorResponse, LoginData, OnboardResponseData, ProfileData, RefreshData, SuccessResponse, UserInfo
-from src.api.models.request import LoginRequest, OnboardRequest, SignupRequest, SocialLoginRequest, UserDeleteByPasswordRequest, VerificationRequest, VerifyCodeRequest
+from src.api.models.request import LoginRequest, OnboardRequest, SignupRequest, SocialLoginRequest, UserDeleteByPasswordRequest, UserDeleteByTokenRequest, VerificationRequest, VerifyCodeRequest
 from src.api.models.response import AuthMeResponse, LoginResponse, LogoutResponse, OnboardResponse, RefreshResponse, SignupResponse, VerificationSentResponse
 from src.db.db import SessionDep
 from src.db.models import DeletedUser, OauthAccount, Token, User, UserProfile
@@ -542,6 +542,69 @@ async def delete_account_by_password(request: Request, session: SessionDep, body
         return ErrorResponse(
             code = ErrorResponseCode.INVALID_CREDENTIALS,
             message = "The email or password is incorrect."
+        )
+    limiter.clear()
+    deleted = DeletedUser(user_id=payload.sub)
+    try:
+        tokens = session.exec(select(Token).where(Token.user_id == payload.sub)).all()
+        for token in tokens:
+            token.revoked = True
+            session.add(token)
+        session.add(deleted)
+        session.commit()
+    except:
+        session.rollback()
+        raise AppException(
+            status_code = 500,
+            error = ErrorResponse(
+                code = ErrorResponseCode.SERVER_ERROR,
+                message = "Delete failed"
+            )
+        )
+    response.status_code = 200
+    remove_tokens(response)
+    return SuccessResponse(message="Delete successful")
+
+@auth_router.delete("/account/social")
+async def delete_account_by_token(request: Request, session: SessionDep, body: UserDeleteByTokenRequest, response: Response, payload: Annotated[AccessTokenPayload, Depends(check_auth)]):
+    origin = check_cors(request)
+    if origin is None:
+        response.status_code = 403
+        return ErrorResponse(
+            code = ErrorResponseCode.CORS_NOT_ALLOWED,
+            message = "Origin not allowed"
+        )
+    user = session.get(User, payload.sub)
+    if user is None:
+        response.status_code = 401
+        return ErrorResponse(
+            code = ErrorResponseCode.AUTH_TOKEN_INVALID,
+            message = "Login required."
+        )
+    limiter = LoginRateLimiter(get_ip(request), user.email)
+    res = google_login(
+        code = body.token,
+        redirect_uri = origin + LOGIN_REDIRECT_ENDPOINT_PREFIX + OauthProviderId.GOOGLE
+    )
+    if res is None:
+        limiter.record_failure()
+        response.status_code = 401
+        return ErrorResponse(
+            code = ErrorResponseCode.SOCIAL_AUTH_FAILED,
+            message = "Could not verify social credentials with Google."
+        )
+    id: str | None = res.get("sub")
+    statement = select(OauthAccount).where(
+        OauthAccount.provider == OauthProviderId.GOOGLE,
+        OauthAccount.provider_user_id == id
+    )
+    _oauth = session.exec(statement).one_or_none()
+    if _oauth is None or _oauth.user_id != payload.sub:
+        limiter.record_failure()
+        response.status_code = 401
+        return ErrorResponse(
+            code = ErrorResponseCode.SOCIAL_AUTH_FAILED,
+            message = "Could not verify social credentials with Google."
         )
     limiter.clear()
     deleted = DeletedUser(user_id=payload.sub)

@@ -133,3 +133,6 @@ class ResumePostRequest(BaseModel):
 
 class UserDeleteByPasswordRequest(BaseModel):
     password: str
+
+class UserDeleteByTokenRequest(BaseModel):
+    token: str
