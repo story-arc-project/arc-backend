@@ -104,9 +104,24 @@ class ExperiencePostRequest(BaseModel):
 
 class ExperiencePutRequest(BaseModel):
     content: dict[str, Any]
+    importance: int | None
+    
+    @field_validator("importance", mode="after")
+    @classmethod
+    def validate_importance(cls, v: int | None):
+        if isinstance(v, int) and (v < 1 or v > 5):
+            raise ValueError("Importance must be between 1 and 5")
+        return v
 
 class ExperiencePatchRequest(BaseModel):
     importance: int | None
+    
+    @field_validator("importance", mode="after")
+    @classmethod
+    def validate_importance(cls, v: int | None):
+        if isinstance(v, int) and (v < 1 or v > 5):
+            raise ValueError("Importance must be between 1 and 5")
+        return v
 
 class LibraryPostRequest(BaseModel):
     name: str

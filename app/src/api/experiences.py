@@ -121,6 +121,7 @@ async def put_experience_by_id(body: ExperiencePutRequest, experience_id: UUID, 
         )
     try:
         result.content = body.content
+        result.importance = body.importance
         session.add(result)
         session.commit()
         session.refresh(result)
