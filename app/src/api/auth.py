@@ -281,6 +281,12 @@ async def verify(body: VerifyCodeRequest, session: SessionDep, response: Respons
         )
     if verification_result.is_verified == False:
         response.status_code = 401
+        if verification_result.remaining_attempts <= 0:
+            response.status_code = 429
+            return ErrorResponse(
+                code = ErrorResponseCode.TOO_MANY_ATTEMPTS,
+                message = "Too many attempts. Please request a new code."
+            )
         if SHOW_REMAINING_VERIFICATION_ATTEMPTS:
             return EmailVerificationErrorResponse(
                 code = ErrorResponseCode.INVALID_CODE,
@@ -685,3 +691,36 @@ async def forgot_password(request: Request, body: ForgotPasswordRequest, session
         )
     response.status_code = 200
     return SuccessResponse(message="If an account with that email exists, a password reset code has been sent.")
+
+@auth_router.post("/reset-password/verify")
+async def verify_reset_password_code(body: VerifyCodeRequest, session: SessionDep, response: Response):
+    statement = select(User).where(User.email == body.email)
+    result = session.exec(statement).one_or_none()
+    verification_result = verify_code(body.email, body.code, purpose="reset")
+    if result is None:
+        response.status_code = 400
+        return ErrorResponse(
+            code = ErrorResponseCode.INVALID_CODE,
+            message = "The verification code is incorrect."
+        )
+    if verification_result.is_verified == False:
+        response.status_code = 401
+        if verification_result.remaining_attempts <= 0:
+            response.status_code = 429
+            return ErrorResponse(
+                code = ErrorResponseCode.TOO_MANY_ATTEMPTS,
+                message = "Too many attempts. Please request a new code."
+            )
+        if SHOW_REMAINING_VERIFICATION_ATTEMPTS:
+            return EmailVerificationErrorResponse(
+                code = ErrorResponseCode.INVALID_CODE,
+                message = "The verification code is incorrect.",
+                remaining_attempts = verification_result.remaining_attempts
+            )
+        else:
+            return ErrorResponse(
+                code = ErrorResponseCode.INVALID_CODE,
+                message = "The verification code is incorrect."
+            )
+    response.status_code = 200
+    return SuccessResponse(message="Verification successful. You may now reset your password.")
