@@ -30,6 +30,7 @@ import time
 import urllib.request
 import urllib.parse
 import urllib.error
+import sys
 from html.parser import HTMLParser
 from datetime import date
 from collections import deque
@@ -44,7 +45,7 @@ import pypdf
 GEMINI_API_KEY   = os.getenv("GEMINI_API_KEY")
 client           = genai.Client(api_key=GEMINI_API_KEY)
 
-_ANALYSIS_MODEL  = "gemini-2.5-pro"
+_ANALYSIS_MODEL  = "gemini-2.5-flash"
 _EMBEDDING_MODEL = "gemini-embedding-001"
 
 # 크롤러 설정
@@ -654,6 +655,11 @@ _STRICT_HALLUCINATION_RULES = """
 
 규칙 6. 출력은 순수 JSON만
   - 마크다운 코드블록, 설명 텍스트, 주석 절대 포함 금지.
+
+규칙 7. STAR 분석은 필수가 아님.
+  - STAR 분석 시 분석 할 데이터가 부족하면, 절대 임의로 이야기를 지어내지말 것.
+  - 만약 STAR 분석을 하기에 데이터가 부족하다면, 데이터가 부족하니 STAR 분석이 이루어지지 않았음을 텍스트로 띄우기.
+  - STAR 분석을 생성해서 결과물을 보이는 것보다, 냉철한 판단 기준을 기반으로 데이터가 부족하면, 부족하기에 결과값을 띄울 수 없으며 예시로 어떻게 기록을 하면 좋을지 Comment 달기.
 """
 
 
@@ -708,22 +714,6 @@ def build_system_prompt_individual() -> str:
         '  "item_name": "분석 대상 항목명 (입력에서 추출)",\n'
         '  "item_type": "자격증|직무경력|인턴십|프로젝트|교육|봉사|대외활동|수상|기타",\n'
         '  "brief_summary": "항목의 핵심을 한 문장으로 요약",\n'
-        '  "deep_analysis": {\n'
-        '    "career_value": "이 항목이 커리어에서 갖는 실질적 가치와 의미",\n'
-        '    "strengths": [\n'
-        '      "이 항목이 갖는 구체적 강점 1",\n'
-        '      "강점 2"\n'
-        '    ],\n'
-        '    "limitations": [\n'
-        '      "이 항목만으로는 부족한 점 또는 보완이 필요한 점 1",\n'
-        '      "한계 2"\n'
-        '    ],\n'
-        '    "applicable_roles": [\n'
-        '      "이 항목으로 어필 가능한 직무/포지션 1",\n'
-        '      "직무 2"\n'
-        '    ],\n'
-        '    "market_value": "현재 한국 취업시장에서 이 항목의 수요·희소성·경쟁력 평가"\n'
-        '  },\n'
         '  "star_format": {\n'
         '    "title": "이력서에 쓸 경험 제목",\n'
         '    "S": "Situation — 어떤 상황·배경에서 이 경험을 하게 되었는가",\n'
@@ -731,8 +721,44 @@ def build_system_prompt_individual() -> str:
         '    "A": "Action — 구체적으로 어떤 행동·노력을 했는가",\n'
         '    "R": "Result — 어떤 결과·성과·배움을 얻었는가"\n'
         '  },\n'
+        '  "deep_analysis": {\n'
+        '    "career_value": "이 항목이 커리어에서 갖는 실질적 가치와 의미",\n'
+        '    "market_value": "현재 한국 취업시장에서 이 항목의 수요·희소성·경쟁력 평가"\n'
+        '  },\n'
+        '    "applicable_roles": [\n'
+        '      "이 항목으로 어필 가능한 직무/포지션 1",\n'
+        '      "직무 2"\n'
+        '    ],\n'
+        '  "item_strengths": {\n'
+        '    "has_genuine_strengths": true,\n'
+        '    "one_line_strength_verdict": "이 항목의 핵심 강점 한 문장 — 강점 없으면 null",\n'
+        '    "no_strength_reason": null,\n'
+        '    "summarized_strengths": [\n'
+        '      "이 항목이 갖는 구체적 강점 1",\n'
+        '      "강점 2"\n'
+        '    ],\n'
+        '    "strengths": [\n'
+        '      {\n'
+        '        "id": 1,\n'
+        '        "category": "전문성_희소성|성과_입증|역량_다양성|경험_깊이|도메인_전문성|차별화_포인트",\n'
+        '        "strength_level": "outstanding|notable|moderate",\n'
+        '        "title": "강점 제목 (10자 이내)",\n'
+        '        "analysis": "왜 강점인지 냉정하고 구체적인 근거 — 입력 데이터 기반",\n'
+        '        "evidence": "입력 텍스트에서 이 강점을 직접 확인할 수 있는 구체적 내용",\n'
+        '        "career_impact": "이 강점이 취업·커리어에서 발휘하는 실질적 영향",\n'
+        '        "leverage_action": "이 강점을 극대화하기 위해 지금 해야 할 한 가지 행동 (동사 시작)",\n'
+        '        "showcase_example": "Before: 현재 서술 → After: 강점이 잘 드러나는 개선된 서술 (없으면 null)"\n'
+        '      }\n'
+        '    ],\n'
+        '    "strongest_asset": "가장 강력한 단일 강점 한 줄 요약 — 강점 없으면 null",\n'
+        '    "positioning_tip": "면접·이력서에서 가장 효과적으로 포지셔닝하는 전략 — 강점 없으면 null"\n'
+        '  },\n'
         '  "item_diagnosis": {\n'
         '    "one_line_verdict": "이 항목의 현재 상태를 냉정하게 한 문장으로",\n'
+        '    "limitations": [\n'
+        '      "이 항목만으로는 부족한 점 또는 보완이 필요한 점 1",\n'
+        '      "한계 2"\n'
+        '    ],\n'
         '    "weaknesses": [\n'
         '      {\n'
         '        "id": 1,\n'
@@ -775,10 +801,7 @@ def build_system_prompt_individual() -> str:
 # 11  핵심 분석 함수
 # ══════════════════════════════════════════════
 def analyze_career_individual(item_text: str) -> dict:
-    """
-    단일 항목 심층 분석.
-    입력 텍스트가 URL에서 크롤링된 경우 SOURCE_URL 헤더 처리 포함.
-    """
+    """강점 + 약점 통합 심층 분석. URL 크롤링 입력 처리 포함."""
     source_hint = ""
     if item_text.startswith("[SOURCE_URL:"):
         first_line_end = item_text.find("\n")
@@ -788,14 +811,23 @@ def analyze_career_individual(item_text: str) -> dict:
             f"사용자가 URL을 제출했습니다: {source_url_line}\n"
             f"아래 데이터는 해당 URL에서 크롤링한 결과입니다.\n"
             f"크롤링 제한으로 일부 정보가 누락될 수 있습니다.\n"
-            f"확인 불가 항목은 null 또는 빈 문자열로 두고, 절대 임의로 채우지 마십시오.\n"
+            f"확인 불가 항목은 null 또는 빈 배열로 두고, 절대 임의로 채우지 마십시오.\n"
         )
 
     user_prompt = (
-        f"다음 단일 항목을 심층 분석하고 시너지 추천을 제시하세요.\n"
-        f"item_diagnosis: 입력 데이터에서 실제 확인된 사실에만 근거하여 냉정하게 작성."
-        f" 존재하지 않는 약점을 만들어내지 말고, 반대로 명백한 약점을 완화하거나 숨기지도 말 것."
-        f" improvement_example은 반드시 Before/After 형식으로 구체적인 문장 예시를 제시.\n"
+        "다음 단일 항목을 심층 분석하고 시너지 추천을 제시하세요.\n\n"
+        "━━ [강점 분석 필수 지침] ━━\n"
+        "item_strengths: 입력 데이터에서 실제 확인된 사실에만 근거하여 강점을 구체적으로 작성.\n"
+        "강점이 없거나 데이터가 빈약한 경우:\n"
+        "  → has_genuine_strengths: false / strengths: []\n"
+        "  → no_strength_reason 명시 / 나머지 필드: null\n"
+        "evidence: 반드시 입력 텍스트에서 직접 인용 가능한 내용만 기재.\n"
+        "showcase_example: Before/After 형식으로 구체적인 문장 예시 제시.\n"
+        "strength_level 인플레이션 금지 — outstanding은 근거가 확실할 때만 부여.\n\n"
+        "━━ [약점 분석 필수 지침] ━━\n"
+        "item_diagnosis: 입력 데이터에서 실제 확인된 사실에만 근거하여 냉정하게 작성.\n"
+        "존재하지 않는 약점을 만들어내지 말고, 명백한 약점을 완화하거나 숨기지도 말 것.\n"
+        "improvement_example: Before/After 형식으로 구체적인 문장 예시 제시.\n"
         f"{source_hint}\n"
         f"[분석 대상]\n{item_text}"
     )
@@ -804,6 +836,7 @@ def analyze_career_individual(item_text: str) -> dict:
         user_prompt=user_prompt,
         use_google_search=False,
     )
+
 
 
 # ══════════════════════════════════════════════
@@ -861,24 +894,33 @@ def main(user_input):
 
     print("\n[3] 분석 완료!\n", flush=True)
 
+    # 강점 로그
+    sd = result.get("item_strengths", {})
+    if sd:
+        if sd.get("has_genuine_strengths"):
+            sl = sd.get("strengths", [])
+            o = sum(1 for s in sl if s.get("strength_level") == "outstanding")
+            n = sum(1 for s in sl if s.get("strength_level") == "notable")
+            m = sum(1 for s in sl if s.get("strength_level") == "moderate")
+
+
     # ── 냉정 진단 요약 로그 (stderr로 출력해 JSON stdout과 분리) ──
     diag = result.get("item_diagnosis", {})
     if diag:
-        import sys
         verdict = diag.get("one_line_verdict", "")
-        if verdict:
-            print(f"  [냉정 진단] {verdict}", file=sys.stderr)
         weaknesses = diag.get("weaknesses", [])
         critical_cnt = sum(1 for w in weaknesses if w.get("severity") == "critical")
         major_cnt    = sum(1 for w in weaknesses if w.get("severity") == "major")
         minor_cnt    = sum(1 for w in weaknesses if w.get("severity") == "minor")
-        print(
-            f"  [냉정 진단] 약점 — critical:{critical_cnt}  major:{major_cnt}  minor:{minor_cnt}",
-            file=sys.stderr,
-        )
+
 
     # ── 최종 JSON 출력 ──
     return json.dumps({
         "vector": vector,
         "result": result
     }, ensure_ascii=False, indent=2)
+
+
+
+if __name__ == "__main__":
+    main()

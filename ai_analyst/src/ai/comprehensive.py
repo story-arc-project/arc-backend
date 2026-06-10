@@ -1,41 +1,44 @@
 """
-Career Analysis AI - COMPREHENSIVE Edition v1.0
+Career Analysis AI - COMPREHENSIVE Edition v2.0
 ================================================
-종합 커리어 분석 전용 모듈
+종합 커리어 분석 전용 모듈 (강점 진단 통합 버전)
 
-기능:
-  - 복수 경력/자격증/활동 종합 분석
-  - URL(Notion 포함) / 파일 / 직접 텍스트 입력
-  - Google Search 기반 3단계 검증 (자격증, 동아리, 공모전, 채용공고)
-  - 모든 출력은 순수 JSON
+v1.0 대비 변경사항:
+  - strength_diagnosis 섹션 추가 (critical_diagnosis 보다 먼저 출력)
+  - JSON 출력 순서: ... → action_plan → strength_diagnosis → critical_diagnosis → ...
+  - 분석 항목: F. 강점 진단 → G. 냉정한 보완점 진단 (기존 F가 G로 이동)
+  - main() 에서 강점 요약 로그를 냉정 진단 요약보다 먼저 출력
 
-Hallucination 방지 원칙:
-  - 실재 확인 불가 항목 생성 금지
-  - URL 추측/조합 금지 → null만 허용
-  - 동아리 최소 3개 이상 (학교 있을 때)
-  - 종료된 공모전 현재형 서술 금지
-  - 빈 배열 우선 (채우기용 임의 생성 절대 금지)
+Hallucination 방지 원칙 (strength_diagnosis 포함):
+  - 입력 데이터에 없는 강점 생성 절대 금지
+  - 강점이 없으면 strengths: [] + no_strength_diagnosis 에 이유·개선 방향만 기재
+  - level 판단마다 evidence(근거 문장) 병기 필수
+  - 과장·위로성 서술 금지 (critical_diagnosis 와 동일한 냉정함 유지)
 
-사용법:
-  python career_comprehensive.py
-  → 학교/학과 입력 후 URL, 파일, 또는 텍스트 붙여넣기
-  → JSON 결과 출력 (stdout)
+strength_diagnosis 구조 (critical_diagnosis 와 1:1 대응):
+  one_line_verdict           ↔  one_line_verdict
+  strengths[].category       ↔  weaknesses[].category   (동일 7개 카테고리)
+  strengths[].level          ↔  weaknesses[].severity   (outstanding/strong/notable)
+  strengths[].diagnosis      ↔  weaknesses[].diagnosis
+  strengths[].evidence       ↔  weaknesses[].evidence
+  strengths[].impact         ↔  weaknesses[].impact
+  strengths[].leverage_action ↔ weaknesses[].priority_action
+  no_strength_diagnosis      ↔  missing_experience_types (강점 없음 사유)
+  content_quality_highlights ↔  content_quality_issues
+  competitor_advantage       ↔  competitor_gap
 """
 
 import json
 import re
 import os
 import io
-import sys
 import time
-import threading
 import urllib.request
 import urllib.parse
 import urllib.error
 from html.parser import HTMLParser
 from datetime import datetime, date
 from collections import deque
-from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from google import genai
 from google.genai import types
@@ -60,11 +63,6 @@ _MIN_CRAWL_CHARS = 200
 # 재시도 설정
 _MAX_RETRIES    = 4
 _RETRY_BASE_SEC = 5
-
-# 병렬 처리 설정
-_CRAWL_WORKERS  = 8   # 딥 크롤러 병렬 fetch 스레드 수
-_VERIFY_WORKERS = 3   # URL 검증 병렬 스레드 수
-_print_lock     = threading.Lock()  # 병렬 print 충돌 방지
 
 
 # ══════════════════════════════════════════════
@@ -139,15 +137,6 @@ def _call_model_raw(user_prompt: str, system_prompt: str = "",
         return resp.text.strip()
     except Exception as e:
         return f"ERROR: {e}"
-
-
-# ══════════════════════════════════════════════
-# 1-b  Thread-safe print 헬퍼
-# ══════════════════════════════════════════════
-def _tprint(*args, **kwargs):
-    """병렬 스레드에서 print가 섞이지 않도록 lock을 잡고 출력."""
-    with _print_lock:
-        print(*args, **kwargs)
 
 
 # ══════════════════════════════════════════════
@@ -533,71 +522,47 @@ def deep_crawl_site(start_url: str) -> str:
 
     print(f"    큐 초기 크기: {len(queue)}개 링크", flush=True)
     page_count = 0
-
-    # ── 병렬 fetch: 배치 단위로 동시 다운로드 ──
-    def _fetch_batch(batch: list) -> list:
-        """URL 배치를 ThreadPoolExecutor로 동시 fetch. (url, raw) 쌍 반환."""
-        with ThreadPoolExecutor(max_workers=_CRAWL_WORKERS) as ex:
-            futures = {ex.submit(_fetch_bytes, u): u for u in batch}
-            out = []
-            for fut in as_completed(futures):
-                u = futures[fut]
-                try:
-                    out.append((u, fut.result()))
-                except Exception:
-                    out.append((u, None))
-        return out
-
     while queue and (page_count < _MAX_PAGES or pdf_count < _MAX_PDFS):
-        # 남은 한도 내에서 최대 _CRAWL_WORKERS개씩 배치 처리
-        remaining = min(
-            _CRAWL_WORKERS,
-            (_MAX_PAGES - page_count) + max(0, _MAX_PDFS - pdf_count),
-        )
-        batch = []
-        while queue and len(batch) < remaining:
-            u = queue.popleft()
-            if u not in visited:
-                visited.add(u)
-                batch.append(u)
-        if not batch:
-            break
+        url = queue.popleft()
+        if url in visited:
+            continue
+        visited.add(url)
 
-        for url, sub_raw in _fetch_batch(batch):
-            if sub_raw is None:
+        sub_raw = _fetch_bytes(url)
+        if sub_raw is None:
+            continue
+
+        if _is_pdf_url(url, sub_raw):
+            if pdf_count >= _MAX_PDFS:
+                print(f"    PDF 한도 도달, 건너뜀: {url}", flush=True)
                 continue
+            text = _parse_pdf_bytes(sub_raw)
+            if text.strip():
+                collected.append(f"[PDF: {url}]\n{text}")
+                pdf_count += 1
+                print(f"    PDF collected ({pdf_count}/{_MAX_PDFS}): {url}", flush=True)
+            continue
 
-            if _is_pdf_url(url, sub_raw):
-                if pdf_count >= _MAX_PDFS:
-                    _tprint(f"    PDF 한도 도달, 건너뜀: {url}", flush=True)
-                    continue
-                text = _parse_pdf_bytes(sub_raw)
-                if text.strip():
-                    collected.append(f"[PDF: {url}]\n{text}")
-                    pdf_count += 1
-                    _tprint(f"    PDF collected ({pdf_count}/{_MAX_PDFS}): {url}", flush=True)
+        if page_count >= _MAX_PAGES:
+            continue
+        sub_text, sub_links, sub_html = _parse_html_bytes(sub_raw, url)
+        page_count += 1
+        if sub_text.strip():
+            collected.append(f"[Page: {url}]\n{sub_text}")
+            print(f"    Page {page_count}: {url} ({len(sub_text)} chars)", flush=True)
+
+        sub_raw_links = _extract_links_from_raw_html(sub_html, url)
+        for lnk in list(dict.fromkeys(sub_links + sub_raw_links)):
+            clean = lnk.split("#")[0].rstrip("/")
+            if not clean or clean in seen or clean in visited:
                 continue
-
-            if page_count >= _MAX_PAGES:
+            if clean.startswith(("mailto:", "tel:", "javascript:")):
                 continue
-            sub_text, sub_links, sub_html = _parse_html_bytes(sub_raw, url)
-            page_count += 1
-            if sub_text.strip():
-                collected.append(f"[Page: {url}]\n{sub_text}")
-                _tprint(f"    Page {page_count}: {url} ({len(sub_text)} chars)", flush=True)
-
-            sub_raw_links = _extract_links_from_raw_html(sub_html, url)
-            for lnk in list(dict.fromkeys(sub_links + sub_raw_links)):
-                clean = lnk.split("#")[0].rstrip("/")
-                if not clean or clean in seen or clean in visited:
-                    continue
-                if clean.startswith(("mailto:", "tel:", "javascript:")):
-                    continue
-                seen.add(clean)
-                if _is_pdf_url(clean):
-                    queue.appendleft(clean)
-                elif _same_origin(start_url, clean):
-                    queue.append(clean)
+            seen.add(clean)
+            if _is_pdf_url(clean):
+                queue.appendleft(clean)
+            elif _same_origin(start_url, clean):
+                queue.append(clean)
 
     result = "\n\n".join(collected)
     print(f"  [딥 크롤러 완료] {len(collected)}개 소스, {len(result)} chars", flush=True)
@@ -639,6 +604,7 @@ def get_user_input(lines: list[str]) -> str:
     print("\n" + "-" * 65)
     print("  경력/활동/자격증 정보를 입력하세요.")
     print("  URL(노션 포함), 파일 경로, 또는 직접 텍스트 모두 가능합니다.")
+    print("  입력 완료 후 빈 줄에서 END 를 입력하세요.")
     print("-" * 65 + "\n")
 
     raw = "\n".join(lines).strip()
@@ -715,11 +681,9 @@ _STRICT_HALLUCINATION_RULES = """
   - 동아리·학회: 지정 학교에 현재 실재하는 것만.
   - 채용공고: URL이 확인된 공고만.
 
-규칙 2. URL 절대 금지 (코드 레벨에서 강제 차단)
-  - URL 필드는 반드시 null만 반환. 추측·조합·변형·기억에 의한 생성 모두 금지.
-  - 설령 URL이 기억난다고 해도 null로 반환할 것.
-  - 시스템이 Google Search로 직접 확인하고 HTTP 접근 검증을 통과한 URL만 최종 사용됨.
-  - 빈 문자열 ""도 금지. null 이외 어떤 값도 URL 필드에 넣지 말 것.
+규칙 2. URL 생성 금지
+  - URL은 기억 속에 확실한 공식 URL만 허용. 추측·조합·변형 절대 금지.
+  - 불확실하면 반드시 null (빈 문자열 "" 금지).
 
 규칙 3. 동아리·학회 최소 추천 수
   - 학교 정보가 있을 때: 교내·연합·외부를 합산하여 최소 3개 이상 추천할 것.
@@ -738,11 +702,29 @@ _STRICT_HALLUCINATION_RULES = """
 
 규칙 6. 출력은 순수 JSON만
   - 마크다운 코드블록, 설명 텍스트, 주석 절대 포함 금지.
+
+규칙 7. STAR 분석은 필수가 아님.
+  - STAR 분석 시 분석 할 데이터가 부족하면, 절대 임의로 이야기를 지어내지말 것.
+  - 만약 STAR 분석을 하기에 데이터가 부족하다면, 데이터가 부족하니 STAR 분석이 이루어지지 않았음을 텍스트로 띄우기.
+  - STAR 분석을 생성해서 결과물을 보이는 것보다, 냉철한 판단 기준을 기반으로 데이터가 부족하면, 부족하기에 결과값을 띄울 수 없으며 예시로 어떻게 기록을 하면 좋을지 Comment 달기.
+
+규칙 8. strength_diagnosis Hallucination 금지 (v2.0 추가)
+  - 입력 데이터에 없는 강점 생성 절대 금지
+  - 강점이 없으면 strengths: [] 반환 후 no_strength_diagnosis 에 이유·개선 방향만 기재
+  - 모든 경험에 의례적으로 강점을 부여하는 행위 금지 (객관성 필수)
+  - 없는 강점을 억지로 생성하는 것은 빈 배열 반환보다 훨씬 나쁜 결과물이다.
+
+규칙 9. critical_diagnosis 약점 보존 의무 (v2.0 추가)
+  - strength_diagnosis 를 먼저 출력했다는 이유로 critical_diagnosis 의 약점을 축소하거나 은폐하는 행위 절대 금지
+  - 강점이 많거나 뛰어나더라도 약점 섹션의 완성도와 냉정함은 독립적으로 유지
+  - 강점의 존재가 약점의 severity 를 낮출 근거가 되지 않는다
+  - 두 섹션은 서로 영향을 주지 않으며, critical_diagnosis 는 강점과 무관하게 입력 데이터만 기반으로 판단
+  - 약점을 긍정적으로 포장하거나 "~이지만 괜찮다" 식의 완화 표현 사용 금지
 """
 
 
 # ══════════════════════════════════════════════
-# 11  시스템 프롬프트 빌더
+# 11  시스템 프롬프트 빌더 (v2.0 — strength 먼저, critical 뒤)
 # ══════════════════════════════════════════════
 def build_system_prompt_comprehensive(ref_date: date, school: str, department: str = "") -> str:
     rd = ref_date.strftime("%Y-%m-%d")
@@ -769,36 +751,94 @@ def build_system_prompt_comprehensive(ref_date: date, school: str, department: s
         f"{club_count_rule}"
         f"{dept_rules}"
         f"{_STRICT_HALLUCINATION_RULES}\n"
+        # ── 분석 항목 목록 (F=강점, G=약점 순서) ────────────────────
         "=== 분석 항목 ===\n"
         "A. 역량 클러스터링 + STAR 이력서 초안\n"
         "B. 보유 항목 간 시너지 조합 (2~5개)\n"
         "C. 추가 추천: 자격증, 동아리·학회(최소 3개), 공모전(현재 시점 기준)\n"
         f"D. 채용공고 추천 ({rd} 이후 마감, URL 확인된 것만)\n"
         "E. 단기·중기·장기 액션 플랜\n"
-        "F. 냉정한 보완점 진단 (critical_diagnosis) — 아래 지침 엄수\n\n"
-        "=== 냉정한 보완점 진단(F) 작성 지침 ===\n"
+        "F. 강점 진단 (strength_diagnosis) — 아래 지침 엄수\n"
+        "G. 냉정한 보완점 진단 (critical_diagnosis) — 아래 지침 엄수\n\n"
+        # ── 강점 진단(F) 작성 지침 ──────────────────────────────────
+        "=== 강점 진단(F) 작성 지침 ===\n"
+        "목적: 입력 데이터에서 실제로 확인되는 진짜 강점만을 객관적으로 도출한다.\n"
+        "절대 금지:\n"
+        "  - 위로·칭찬 목적의 과장, 없는 내용으로 강점 창작\n"
+        "  - 모든 경험에 의례적으로 강점을 부여하는 행위 (객관성 필수)\n"
+        "  - strengths 배열을 채우기 위해 근거 없는 항목을 생성하는 행위\n"
+        "판단 기준 (모두 독립적으로 평가, 해당하는 항목만 포함):\n"
+        "  [활동_수량] 직군 평균 대비 활동 총 개수가 풍부한가?\n"
+        "    → 구체적 수치로 표현 (예: '인턴 경험 2회 — 해당 직군 지원자 평균 1.5회 상회')\n"
+        "  [활동_깊이] 각 항목의 서술이 구체적이고 수치·성과가 명확한가?\n"
+        "    → 어떤 항목이, 왜 강한지 입력 근거와 함께 명시\n"
+        "  [직무_연관성] 지원 직군과 연관된 핵심 활동이 있는가?\n"
+        "    → 어떤 직무 카테고리가 잘 갖춰져 있는지 명시\n"
+        "  [스킬_보유] 해당 직군에서 요구하는 기술·자격을 보유하고 있는가?\n"
+        "    → 보유 스킬이 직무 요구와 얼마나 일치하는지 설명\n"
+        "  [기간_연속성] 경력이 일관되고 성장 흐름이 있는가?\n"
+        "    → 일관된 방향성이나 시간적 심화 흐름이 확인될 경우 명시\n"
+        "  [서류_품질] 입력된 내용이 이력서로서 설득력 있게 작성되어 있는가?\n"
+        "    → 구체적으로 어떤 표현·항목이 강점인지 명시\n"
+        "  [경쟁력_우위] 동일 직군·학교 수준 경쟁자 대비 차별화 포인트가 있는가?\n"
+        "    → 경쟁자들이 보통 갖지 못한 것 중 보유한 것을 명시\n"
+        "level 기준 (critical_diagnosis 의 severity 와 1:1 대응):\n"
+        "  outstanding : 이 강점 하나만으로도 서류 합격 가능성을 크게 높임   ↔ critical\n"
+        "  strong      : 합격 가능성을 뚜렷이 높이는 실질적 강점              ↔ major\n"
+        "  notable     : 긍정 인상을 주지만 당장 결정적이지는 않은 장점         ↔ minor\n"
+        "leverage_action: 이 강점을 더욱 극대화하기 위해 지금 당장 해야 할 한 가지 행동 (동사로 시작)\n"
+        "[강점이 없거나 식별이 어려운 경우] — 솔직하게 기재, 절대 창작 금지:\n"
+        "  - strengths 배열을 반드시 빈 배열 [] 로 반환\n"
+        "  - no_strength_diagnosis.has_issue = true 로 설정\n"
+        "  - reason: 강점 식별 불가 이유를 입력 데이터 기반으로 냉정하게 기재\n"
+        "      예) '경험 수 1개로 역량 일관성 및 강점 패턴 식별 불가'\n"
+        "          '활동 내용이 모두 1~2줄로 짧아 강점 판단 근거 부족'\n"
+        "          '성과 수치가 전혀 없어 강점의 크기를 판단할 근거 없음'\n"
+        "  - improvement_direction: 어떻게 입력을 보완하거나 활동을 추가하면 강점이 생기는지\n"
+        "      1~2가지 구체적 방향 제시\n"
+        "  - 없는 강점을 억지로 생성하는 것은 빈 배열 반환보다 훨씬 나쁜 결과물이다.\n\n"
+        # ── 냉정한 보완점 진단(G) 작성 지침 (v2.1 — 강점 섹션과 동등한 깊이로 확충) ──
+        "=== 냉정한 보완점 진단(G) 작성 지침 ===\n"
         "목적: 사용자가 듣기 불편하더라도 반드시 알아야 할 진짜 약점을 직시하게 하는 것.\n"
-        "절대 금지: 칭찬·위로·긍정적 포장 — F 섹션에는 좋은 말 하지 말 것.\n"
+        "절대 금지:\n"
+        "  - 칭찬·위로·긍정적 포장 — G 섹션에는 단 한 줄의 좋은 말도 하지 말 것\n"
+        "  - strength_diagnosis 를 먼저 작성했다는 이유로 약점을 축소하거나 생략하는 행위\n"
+        "  - 강점이 있다는 이유로 약점 severity 를 낮추거나 완화하는 행위\n"
+        "  - 입력 데이터에 없는 약점을 창작하는 행위 (실제 확인된 사실만 기재)\n"
+        "  - '~이지만 괜찮습니다', '~에도 불구하고' 등의 완화 표현 사용\n"
         "판단 기준 (모두 독립적으로 평가하고, 해당하는 항목만 포함):\n"
-        "  [활동 수량] 직군 평균 대비 활동 총 개수가 부족한가?\n"
+        "  [활동_수량] 직군 평균 대비 활동 총 개수가 부족한가?\n"
         "    → 구체적 수치로 표현 (예: '인턴 경험 0회 — 해당 직군 지원자 평균 1.5회')\n"
-        "  [활동 깊이] 각 항목의 서술 내용이 너무 짧거나 수치/성과가 없는가?\n"
+        "  [활동_깊이] 각 항목의 서술 내용이 너무 짧거나 수치/성과가 없는가?\n"
         "    → 어떤 항목이, 왜 얕은지 구체적으로 지적\n"
-        "  [직무 연관성] 지원 직군과 무관한 활동만 있거나, 핵심 직무 경험이 비어있는가?\n"
+        "  [직무_연관성] 지원 직군과 무관한 활동만 있거나, 핵심 직무 경험이 비어있는가?\n"
         "    → 빈 직무 카테고리를 명시 (예: '데이터 분석 직군인데 SQL 경험 전무')\n"
-        "  [스킬 공백] 해당 직군에서 필수로 요구되는 기술/자격이 보이지 않는가?\n"
+        "  [스킬_공백] 해당 직군에서 필수로 요구되는 기술/자격이 보이지 않는가?\n"
         "    → 없는 스킬을 열거, 왜 치명적인지 설명\n"
-        "  [기간/연속성] 경력 공백이 있거나 활동들 사이 단절이 심각한가?\n"
+        "  [기간_연속성] 경력 공백이 있거나 활동들 사이 단절이 심각한가?\n"
         "    → 공백 기간을 명시\n"
-        "  [서류 품질] 입력된 내용이 이력서로서 설득력 없게 작성되어 있는가?\n"
+        "  [서류_품질] 입력된 내용이 이력서로서 설득력 없게 작성되어 있는가?\n"
         "    → 구체적으로 어떤 표현/항목이 문제인지 지적\n"
-        "  [경쟁력 격차] 동일 직군·학교 수준 경쟁자 대비 눈에 띄는 차별점이 없는가?\n"
+        "  [경쟁력_격차] 동일 직군·학교 수준 경쟁자 대비 눈에 띄는 차별점이 없는가?\n"
         "    → 경쟁자들이 보통 갖고 있는 것 중 없는 것을 열거\n"
-        "severity 기준:\n"
-        "  critical   : 이 상태로 지원하면 서류 탈락 가능성 높음\n"
-        "  major      : 합격 가능성을 뚜렷이 낮추는 약점\n"
-        "  minor      : 있으면 좋지만 없어도 당장 치명적이지 않은 부족함\n"
-        "priority_action: 해당 약점을 개선하기 위해 지금 당장 해야 할 한 가지 행동 (동사로 시작)\n\n"
+        "severity 기준 (strength_diagnosis 의 level 과 1:1 대응):\n"
+        "  critical   : 이 상태로 지원하면 서류 탈락 가능성 높음     ↔ outstanding\n"
+        "  major      : 합격 가능성을 뚜렷이 낮추는 약점              ↔ strong\n"
+        "  minor      : 있으면 좋지만 없어도 당장 치명적이지 않은 부족함 ↔ notable\n"
+        "priority_action: 해당 약점을 개선하기 위해 지금 당장 해야 할 한 가지 행동 (동사로 시작)\n"
+        "[앵커링 저항 원칙] — strength_diagnosis 먼저 출력 후 이 섹션을 작성할 때:\n"
+        "  - 앞서 작성한 강점 내용은 이 섹션 판단에 영향을 주지 않는다\n"
+        "  - 강점이 많다고 느껴질수록 약점을 더 의식적으로 냉정하게 기재할 것\n"
+        "  - 두 섹션의 결과물은 서로 독립적 — 강점이 약점을 상쇄하지 않는다\n"
+        "[약점이 없거나 경미한 경우]:\n"
+        "  - 진짜 약점이 전혀 없는 경우에만 weaknesses: [] (매우 드문 경우, 신중히 판단)\n"
+        "  - minor 수준이라도 발견되면 반드시 포함 — 생략은 사용자에게 불이익\n"
+        "  - weaknesses 배열을 비우는 것 자체가 '약점 없음'을 의미하므로 극도로 신중히 결정\n\n"
+        # ── [1순위 수정] 약점 보존 원칙 — Anchoring Effect 방어 ────────
+        "[약점 보존 원칙]\n"
+        "strength_diagnosis 를 먼저 출력했더라도 critical_diagnosis 는 강점과 완전히 독립적으로 판단할 것.\n"
+        "강점이 많다고 약점을 축소하거나 생략하지 말 것.\n"
+        "두 섹션은 서로 영향을 주지 않는다 — 강점은 약점을 상쇄하지 않는다.\n\n"
         "[출력] 순수 JSON만 (코드블록·설명 금지)\n\n"
         "{\n"
         '  "status": "success",\n'
@@ -850,6 +890,39 @@ def build_system_prompt_comprehensive(ref_date: date, school: str, department: s
         '    {"title":"경험명","S":"상황","T":"과제","A":"행동","R":"결과"}\n'
         "  ],\n"
         '  "action_plan": {"단기":"3개월 이내","중기":"6개월~1년","장기":"1년 이상"},\n'
+        # ── [v2.0] strength_diagnosis — critical_diagnosis 보다 먼저 ──
+        '  "strength_diagnosis": {\n'
+        '    "one_line_verdict": "현재 이력 강점의 전반적 상태를 한 문장으로 (강점이 없으면 솔직하게 기재)",\n'
+        '    "strengths": [\n'
+        "      {\n"
+        '        "id": 1,\n'
+        '        "category": "활동_수량|활동_깊이|직무_연관성|스킬_보유|기간_연속성|서류_품질|경쟁력_우위",\n'
+        '        "level": "outstanding|strong|notable",\n'
+        '        "title": "강점 제목 (10자 이내, 핵심만)",\n'
+        '        "diagnosis": "왜 강점인지 냉정하고 구체적인 근거 (입력 데이터에서 확인된 사실 기반, 창작 금지)",\n'
+        '        "evidence": "이 강점을 판단한 구체적 근거 (입력 텍스트 인용 또는 확인된 사실)",\n'
+        '        "impact": "이 강점이 취업·커리어에 미치는 실질적 긍정 영향",\n'
+        '        "leverage_action": "이 강점을 극대화하기 위해 지금 당장 해야 할 한 가지 구체적 행동 (동사로 시작)"\n'
+        "      }\n"
+        "    ],\n"
+        '    "no_strength_diagnosis": {\n'
+        '      "has_issue": false,\n'
+        '      "reason": "강점 없음·식별 불가 이유 (강점이 있으면 빈 문자열 반환)",\n'
+        '      "improvement_direction": "강점을 만들기 위한 구체적 개선 방향 (강점이 있으면 빈 문자열 반환)"\n'
+        "    },\n"
+        '    "standout_experience_types": [\n'
+        '      "현재 이력에서 특히 돋보이는 경험 유형 (없으면 빈 배열)"\n'
+        "    ],\n"
+        '    "content_quality_highlights": [\n'
+        "      {\n"
+        '        "item": "잘 작성된 특정 이력·서술 항목명",\n'
+        '        "highlight": "구체적으로 무엇이 강한가 (수치 있음·역할 명확·성과 구체적 등)",\n'
+        '        "why_effective": "이 표현이 채용담당자에게 설득력 있는 이유"\n'
+        "      }\n"
+        "    ],\n"
+        '    "competitor_advantage": "동일 직군·학교 수준 경쟁자 대비 현재 포트폴리오의 결정적 차별점 (없으면 \'현재 데이터 기준 명확한 차별점 식별 불가\'로 솔직하게 기재)"\n'
+        "  },\n"
+        # ── critical_diagnosis (기존 동일) ──────────────────────────
         '  "critical_diagnosis": {\n'
         '    "one_line_verdict": "현재 이력 전반의 상태를 냉정하게 한 문장으로 (예: 활동은 있으나 직무 연관성과 깊이가 모두 부족한 상태)",\n'
         '    "weaknesses": [\n'
@@ -890,255 +963,92 @@ def build_system_prompt_comprehensive(ref_date: date, school: str, department: s
     )
 
 
-
 # ══════════════════════════════════════════════
-# 12  Embedding 유틸리티
+# 12  검증 프롬프트 빌더
 # ══════════════════════════════════════════════
-# ══════════════════════════════════════════════
-# 12-a  URL Hallucination 완전 차단 레이어
-# ══════════════════════════════════════════════
-#
-# 설계 원칙:
-#   - LLM이 반환한 URL은 절대 신뢰하지 않는다.
-#   - 형식 검사(정규식) → 실제 HTTP 접근(HEAD/GET) 2단계를 모두 통과한 URL만 허용.
-#   - 둘 중 하나라도 실패하면 None 반환 (hallucination URL을 사용자에게 노출 금지).
-#   - 모든 URL 할당 지점에서 raw 문자열 대신 반드시 이 함수를 통과해야 한다.
-
-_URL_VALID_PATTERN = re.compile(
-    r"^https?://"                    # 반드시 http(s) 스킴
-    r"(?:[A-Za-z0-9\-._~!$&'()*+,;=:@]|%[0-9A-Fa-f]{2})+"  # 호스트
-    r"(?:/[^\s<>\x22{}|\^`\[\]]*)?$"  # 경로 (선택, \x22=쌍따옴표)
-)
-
-_URL_SKIP_PATTERNS = re.compile(
-    r"example\.com|placeholder|dummy|your[-_]?url|"
-    r"{{.*?}}|<.*?>|\.\.|\s",        # 템플릿·공백·점점 등
-    re.IGNORECASE,
-)
+def build_prompt_verify_clubs(school: str, clubs: list) -> str:
+    club_list = "\n".join(
+        f"  {i+1}. {c.get('name','?')} (type={c.get('type','?')})"
+        for i, c in enumerate(clubs)
+    )
+    return (
+        f"사용자 학교: '{school}'\n\n"
+        f"[검증 대상]\n{club_list}\n\n"
+        "Google Search로 각 항목을 검색하여:\n"
+        "1. 실제 존재하는지 (verified: true/false)\n"
+        "2. 다른 학교에만 있는지 (wrong_school: true/false)\n"
+        "3. 공식 URL (확인되면 기입, 아니면 null)\n"
+        "4. description: 확인한 실제 활동 내용 (미확인이면 빈 문자열)\n\n"
+        "순수 JSON 배열만 출력:\n"
+        '[\n  {"name":"동아리명","verified":true,"wrong_school":false,'
+        '"actual_school":"확인된 소속 학교","official_url":null,'
+        '"description":"","evidence":"근거"}\n]'
+    )
 
 
-def _validate_url(raw: object, timeout: int = 6) -> str | None:
-    """
-    LLM이 반환한 URL raw 값을 2단계로 검증.
-
-    중요: URL 검증 실패 = URL만 None 반환.
-          동아리·학회·자격증·공모전 항목 자체를 탈락시키지 않는다.
-          URL은 부가 정보이며, 실체 존재 여부는 Google Search 검증이 담당.
-          (채용공고는 URL 없으면 지원 불가이므로 별도 처리)
-
-    STEP 1 — 형식 검사 (즉시, 네트워크 없음)
-      - None / "null" / "" / 비문자열 → None
-      - http(s):// 스킴 없음 → None
-      - 플레이스홀더·템플릿 패턴 탐지 → None
-      - URL 길이 비정상(< 12 or > 500) → None
-
-    STEP 2 — 실제 HTTP 접근 검증 (네트워크)
-      - HEAD 요청 → 200~399 이면 OK
-      - HEAD 미지원 시 GET fallback (최대 4KB 읽기)
-      - 4xx / 5xx / 연결 실패 / 타임아웃 → None (hallucination URL 차단)
-      - 리다이렉트가 다른 도메인으로 이동하면 → None (잘못된 링크 방지)
-
-    반환: 검증 통과한 URL 문자열, 실패하면 None
-    """
-    # ── STEP 1: 형식 검사 ────────────────────────
-    if raw is None:
-        return None
-    url = str(raw).strip()
-
-    if not url or url.lower() in ("null", "none", "undefined", "", "n/a", "-"):
-        return None
-    if len(url) < 12 or len(url) > 500:
-        return None
-    if not _URL_VALID_PATTERN.match(url):
-        return None
-    if _URL_SKIP_PATTERNS.search(url):
-        return None
-
-    # ── STEP 2: 실제 HTTP 접근 ───────────────────
-    parsed = urllib.parse.urlparse(url)
-    original_netloc = parsed.netloc.lower()
-
-    try:
-        req = urllib.request.Request(
-            url,
-            method="HEAD",
-            headers={
-                "User-Agent": (
-                    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
-                    "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36"
-                ),
-                "Accept": "*/*",
-            },
-        )
-        with urllib.request.urlopen(req, timeout=timeout) as resp:
-            final_url  = resp.geturl()
-            status     = resp.status
-            final_netloc = urllib.parse.urlparse(final_url).netloc.lower()
-
-            # 도메인 변경 리다이렉트 차단 (예: 오래된 링크가 광고 페이지로 이동)
-            if final_netloc and final_netloc != original_netloc:
-                # www. 접두사 차이는 허용
-                orig_clean  = original_netloc.removeprefix("www.")
-                final_clean = final_netloc.removeprefix("www.")
-                if orig_clean != final_clean:
-                    print(
-                        f"    [URL 검증] FAIL 도메인 변경: {original_netloc} → {final_netloc} ({url})",
-                        flush=True,
-                    )
-                    return None
-
-            if 200 <= status < 400:
-                return final_url  # 리다이렉트 최종 URL 반환
-            print(f"    [URL 검증] FAIL HTTP {status}: {url}", flush=True)
-            return None
-
-    except urllib.error.HTTPError as e:
-        if e.code == 405:
-            # HEAD 미지원 → GET fallback
-            try:
-                req2 = urllib.request.Request(
-                    url,
-                    headers={
-                        "User-Agent": (
-                            "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
-                            "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36"
-                        ),
-                    },
-                )
-                with urllib.request.urlopen(req2, timeout=timeout) as resp2:
-                    if 200 <= resp2.status < 400:
-                        resp2.read(4096)  # 최소 읽기로 연결 확인
-                        return url
-            except Exception:
-                pass
-        print(f"    [URL 검증] FAIL HTTP {e.code}: {url}", flush=True)
-        return None
-    except Exception as e:
-        print(f"    [URL 검증] FAIL {type(e).__name__}: {url}", flush=True)
-        return None
+def build_prompt_verify_contests(contests: list, ref_date: date) -> str:
+    rd = ref_date.strftime("%Y-%m-%d")
+    c_list = "\n".join(
+        f"  {i+1}. [{c.get('organizer','?')}] {c.get('name','?')}"
+        for i, c in enumerate(contests)
+    )
+    return (
+        f"오늘 날짜(기준일): {rd}\n\n"
+        f"[검증 대상 공모전/프로젝트]\n{c_list}\n\n"
+        f"Google Search로 각 공모전을 '{rd}' 기준으로 실제 검색하여:\n"
+        f"1. 실제 존재하고 정기 개최되는지 (verified: true/false)\n"
+        f"2. 주관기관이 실제 해당 기관인지 (organizer_confirmed: true/false)\n"
+        f"3. {rd} 기준으로 현재 접수 중이거나 {rd} 이후 개최 예정인지\n"
+        f"   (upcoming: true/false) — 이미 종료된 공모전은 반드시 false\n"
+        f"4. 마감일이 {rd} 이후이거나 상시 운영인지 (deadline_ok: true/false)\n"
+        f"5. 공식 URL (확인되면 기입, 아니면 null)\n"
+        f"6. 마감일 (확인되면 YYYY-MM-DD, 모르면 null)\n\n"
+        "순수 JSON 배열만 출력:\n"
+        '[\n  {"name":"공모전명","verified":true,"organizer_confirmed":true,'
+        '"upcoming":true,"deadline_ok":true,"official_url":null,'
+        '"deadline":null,"evidence":"근거"}\n]'
+    )
 
 
-def _validate_url_batch(url_dict: dict[str, object], timeout: int = 6) -> dict[str, str | None]:
-    """
-    {key: raw_url} 딕셔너리를 병렬로 검증.
-    반환: {key: validated_url_or_None}
-    최대 _VERIFY_WORKERS 스레드 사용.
-    """
-    if not url_dict:
-        return {}
-
-    def _one(key: str, raw: object) -> tuple[str, str | None]:
-        return key, _validate_url(raw, timeout=timeout)
-
-    with ThreadPoolExecutor(max_workers=min(_VERIFY_WORKERS, len(url_dict))) as ex:
-        futures = {ex.submit(_one, k, v): k for k, v in url_dict.items()}
-        results = {}
-        for fut in as_completed(futures):
-            key, validated = fut.result()
-            results[key] = validated
-    return results
+def build_prompt_verify_certifications(certs: list) -> str:
+    c_list = "\n".join(
+        f"  {i+1}. {c.get('name','?')}"
+        for i, c in enumerate(certs)
+    )
+    return (
+        f"[검증 대상 자격증]\n{c_list}\n\n"
+        "각 자격증에 대해:\n"
+        "1. 실제 시행 중인 국가공인 또는 민간자격증인지 (verified: true/false)\n"
+        "2. 주관기관 (issuer)\n"
+        "3. 공식 URL (확인되면 기입, 아니면 null)\n\n"
+        "순수 JSON 배열만 출력:\n"
+        '[\n  {"name":"자격증명","verified":true,"issuer":"주관기관","official_url":null}\n]'
+    )
 
 
-
-def _cosine_similarity(a: list, b: list) -> float:
-    """두 벡터의 코사인 유사도. 벡터가 없으면 0.0 반환."""
-    if not a or not b or len(a) != len(b):
-        return 0.0
-    dot   = sum(x * y for x, y in zip(a, b))
-    norm_a = sum(x * x for x in a) ** 0.5
-    norm_b = sum(x * x for x in b) ** 0.5
-    if norm_a == 0 or norm_b == 0:
-        return 0.0
-    return dot / (norm_a * norm_b)
-
-
-def _embed_query(text: str) -> list | None:
-    """단일 텍스트를 RETRIEVAL_QUERY 태스크로 임베딩."""
-    if not text or not text.strip():
-        return None
-    truncated = text[:2000]
-    for kwargs in [
-        {"content": truncated, "config": types.EmbedContentConfig(task_type="RETRIEVAL_QUERY")},
-        {"content": truncated},
-    ]:
-        try:
-            result = client.models.embed_content(model=_EMBEDDING_MODEL, **kwargs)
-            if hasattr(result, "embeddings") and result.embeddings:
-                return list(result.embeddings[0].values)
-            if hasattr(result, "embedding") and result.embedding:
-                return list(result.embedding.values)
-        except Exception:
-            continue
-    return None
-
-
-def _embed_batch(texts: list[str]) -> list[list | None]:
-    """
-    텍스트 목록을 병렬로 임베딩. 실패한 항목은 None 반환.
-    최대 _CRAWL_WORKERS 스레드 사용.
-    """
-    if not texts:
-        return []
-
-    def _one(text: str) -> list | None:
-        return _embed_query(text)
-
-    with ThreadPoolExecutor(max_workers=min(_CRAWL_WORKERS, len(texts))) as ex:
-        futures = [ex.submit(_one, t) for t in texts]
-        return [f.result() for f in futures]
-
-
-def _filter_by_similarity(
-    candidates: list[dict],
-    profile_vec: list,
-    name_key: str = "name",
-    extra_keys: list[str] | None = None,
-    threshold: float = 0.55,
-    top_k: int = 10,
-) -> list[dict]:
-    """
-    후보 목록을 profile_vec 과의 코사인 유사도로 필터링.
-    - name_key: 기본 임베딩 텍스트 필드
-    - extra_keys: 추가로 이어붙일 필드 목록 (맥락 보강용)
-      예) extra_keys=["reason"] → "동아리명 추천이유" 로 임베딩
-    - threshold 미만은 탈락
-    - 유사도 내림차순으로 top_k 반환
-    - profile_vec 없으면 원본 순서 그대로 반환 (안전 폴백)
-    """
-    if not profile_vec or not candidates:
-        return candidates[:top_k]
-
-    def _make_text(c: dict) -> str:
-        parts = [c.get(name_key, "")]
-        for k in (extra_keys or []):
-            v = c.get(k, "")
-            if v:
-                parts.append(str(v))
-        return " ".join(p for p in parts if p).strip()
-
-    texts = [_make_text(c) for c in candidates]
-    vecs  = _embed_batch(texts)
-
-    scored = []
-    for c, vec in zip(candidates, vecs):
-        sim = _cosine_similarity(profile_vec, vec) if vec else 0.0
-        c["_similarity"] = round(sim, 4)
-        scored.append((sim, c))
-
-    # threshold 미만 탈락
-    passed = [(s, c) for s, c in scored if s >= threshold]
-    if not passed:
-        # 전원 탈락 시 threshold를 완화해 최소 1개는 보존 (완전 공백 방지)
-        passed = sorted(scored, key=lambda x: -x[0])[:max(1, top_k // 2)]
-
-    passed.sort(key=lambda x: -x[0])
-    return [c for _, c in passed[:top_k]]
+def build_prompt_verify_jobs(jobs: list, ref_date: date) -> str:
+    rd = ref_date.strftime("%Y-%m-%d")
+    job_list = "\n".join(
+        f"  {i+1}. {j.get('company','?')} | {j.get('role','?')} | "
+        f"마감: {j.get('deadline','?')} | URL: {j.get('url','?')}"
+        for i, j in enumerate(jobs)
+    )
+    return (
+        f"기준일: {rd}\n\n"
+        f"[검증 대상]\n{job_list}\n\n"
+        "Google Search로 각 채용공고를 실제 검색하여:\n"
+        "1. 실제 존재하는지 (verified)\n"
+        f"2. 마감일이 {rd} 이후인지 (deadline_confirmed)\n"
+        "3. 실제 채용공고 URL (확인되면 기입, 아니면 null)\n\n"
+        "순수 JSON 배열만 출력:\n"
+        '[\n  {"company":"회사명","role":"직무","verified":true,'
+        '"deadline_confirmed":true,"correct_url":null,"evidence":"근거"}\n]'
+    )
 
 
 # ══════════════════════════════════════════════
 # 13  채용공고 URL 접근성 검증
 # ══════════════════════════════════════════════
-
 def _verify_url_content(url: str, company: str, role: str, timeout: int = 10) -> dict:
     res = {"accessible": False, "content_match": False, "reason": ""}
     if not url or not url.startswith("http"):
@@ -1155,15 +1065,15 @@ def _verify_url_content(url: str, company: str, role: str, timeout: int = 10) ->
             res["accessible"] = True
             page = resp.read(80_000).decode("utf-8", errors="replace").lower()
 
-        co       = company.lower().strip()
+        co = company.lower().strip()
         co_clean = re.sub(r"\(주\)|주식회사|\s+", "", co)
         co_found = co in page or co_clean in page
 
-        role_kws  = [k for k in re.split(r"[/\s·,]+", role.lower()) if len(k) >= 2]
+        role_kws = [k for k in re.split(r"[/\s·,]+", role.lower()) if len(k) >= 2]
         role_found = sum(1 for k in role_kws if k in page) >= max(1, len(role_kws) // 2)
 
         job_kws = ["채용", "지원", "모집", "recruit", "career", "apply", "job", "hiring"]
-        is_job  = any(k in page for k in job_kws)
+        is_job = any(k in page for k in job_kws)
 
         if co_found and (role_found or is_job):
             res["content_match"] = True
@@ -1182,817 +1092,280 @@ def _verify_url_content(url: str, company: str, role: str, timeout: int = 10) ->
 
 
 def verify_job_urls(jobs: list) -> tuple[list, list]:
-    """채용공고 URL 접근성을 _VERIFY_WORKERS 스레드로 병렬 검증."""
     verified, failed = [], []
-
-    needs_check, no_url = [], []
-    for job in jobs:
-        raw_url = job.get("url") or ""
-        if not raw_url or raw_url == "null":
-            job["_fail_reason"] = "URL 미확보"
-            no_url.append(job)
-            continue
-        # 형식 검사만 먼저 수행 (HTTP 접근은 _check_one에서)
-        if not _URL_VALID_PATTERN.match(raw_url) or _URL_SKIP_PATTERNS.search(raw_url):
-            job["_fail_reason"] = f"URL 형식 불량: {raw_url[:80]}"
-            no_url.append(job)
-            continue
-        needs_check.append(job)
-
-    for job in no_url:
-        label = f"{job.get('company','')} | {job.get('role','')}"
-        _tprint(f"    [{label}] -> FAIL: URL 미확보 -> 제외", flush=True)
-        failed.append(job)
-
-    if not needs_check:
-        return verified, failed
-
-    def _check_one(job: dict) -> tuple[dict, bool, str]:
-        url     = job.get("url", "")
+    for i, job in enumerate(jobs, 1):
+        url = job.get("url") or ""
         company = job.get("company", "")
-        role    = job.get("role", "")
-        check   = _verify_url_content(url, company, role)
-        ok      = check["accessible"] and check["content_match"]
-        reason  = check["reason"] if check["accessible"] else f"접근 실패: {check['reason']}"
-        return job, ok, reason
+        role = job.get("role", "")
+        label = f"{company} | {role}"
+        print(f"    [{i}/{len(jobs)}] {label}", flush=True)
 
-    total = len(needs_check)
-    with ThreadPoolExecutor(max_workers=_VERIFY_WORKERS) as ex:
-        futures  = {ex.submit(_check_one, job): job for job in needs_check}
-        done_idx = 0
-        for fut in as_completed(futures):
-            done_idx += 1
-            job, ok, reason = fut.result()
-            label = f"{job.get('company','?')} | {job.get('role','?')}"
-            if ok:
-                _tprint(f"    [{done_idx}/{total}] {label} -> OK", flush=True)
-                verified.append(job)
-            else:
-                _tprint(f"    [{done_idx}/{total}] {label} -> FAIL: {reason} -> 제외", flush=True)
-                job["_fail_reason"] = reason
-                failed.append(job)
+        if not url or url == "null":
+            print(f"           -> FAIL: URL 미확보 -> 제외", flush=True)
+            job["_fail_reason"] = "URL 미확보"
+            failed.append(job)
+            continue
 
+        print(f"           {url}", flush=True)
+        check = _verify_url_content(url, company, role)
+        if check["accessible"] and check["content_match"]:
+            print(f"           -> OK", flush=True)
+            verified.append(job)
+        else:
+            reason = check["reason"] if check["accessible"] else f"접근 실패: {check['reason']}"
+            print(f"           -> FAIL: {reason} -> 제외", flush=True)
+            job["_fail_reason"] = reason
+            failed.append(job)
     return verified, failed
 
 
 # ══════════════════════════════════════════════
-# 14  동아리·학회 — Embedding 클러스터링 기반 추천
+# 14  동아리·학회 검증
 # ══════════════════════════════════════════════
-
-_CLUB_SIMILARITY_THRESHOLD = 0.50   # 코사인 유사도 하한
-_CLUB_CANDIDATE_POOL       = 15     # 1차 LLM 후보 요청 수
-_CLUB_TOP_K                = 8      # 유사도 필터 후 Google Search 넘길 최대 수
-_CLUB_MIN_VERIFIED         = 3      # 최소 검증 통과 목표
-
-
-def _build_profile_text(school: str, department: str, career_text: str) -> str:
-    """
-    임베딩용 프로필 텍스트 생성.
-
-    우선순위:
-      1순위 (80%): 관심사·경력·활동 — 동아리 연관성의 핵심 기준
-      2순위 (20%): 전공 — 보조 힌트
-      참고용 (미포함): 학교 — 유사도 계산에서 제외 (학교 필터는 별도 로직으로 처리)
-
-    학교를 여기에 넣지 않는 이유:
-      - "서울대학교"라는 단어가 임베딩에 포함되면 학교명이 들어간
-        동아리(예: "서울대 합창단")가 과도하게 높은 유사도를 얻어
-        관심사 기반 추천이 왜곡됨.
-      - 학교 가입 가능성은 _club_school_eligible()로 소프트 점수 부여.
-    """
-    parts = []
-    # 1순위: 관심사·경력·활동 — 반복하여 임베딩 공간에서 비중 강화
-    if career_text:
-        trimmed = career_text[:1200]
-        parts.append(trimmed)
-        parts.append(trimmed)   # 동일 텍스트 반복 → 코사인 유사도에서 비중 증가
-    # 2순위: 전공 (관심 분야 힌트, 학교명은 제외)
-    if department:
-        parts.append(f"관심 전공 및 분야: {department}")
-    return " ".join(parts)
+def _club_school_ok(club: dict, user_school: str) -> bool:
+    ctype = club.get("type", "").lower()
+    if "외부" in ctype:
+        return True
+    if not user_school:
+        return "연합" in ctype
+    affil = normalize_school_name(club.get("school_affiliation", ""))
+    return affil == normalize_school_name(user_school)
 
 
-def _build_interest_text(career_text: str) -> str:
-    """
-    동아리 관심사 매칭 전용 임베딩 텍스트.
-    학교·전공을 완전히 제외하고 순수 관심사·활동·역량만 추출.
-    """
-    return career_text[:1000] if career_text else ""
-
-
-def _generate_club_candidates(
-    school: str,
-    department: str,
-    exclude_names: list,
-    career_text: str = "",
-    pool_size: int = _CLUB_CANDIDATE_POOL,
-) -> list[dict]:
-    """
-    LLM + Google Search로 동아리·학회 후보 목록 생성.
-
-    추천 기준 우선순위:
-      1순위 — 해당 학교 학생이 가입 가능하고 유저의 관심사·활동과 연관된 곳
-      2순위 — 학과·전공 관련성
-    이름·타입·학교 소속·추천이유만 요청. 상세 설명은 검증 단계에서 채움.
-    """
-    exclude_str   = ", ".join(exclude_names) if exclude_names else "없음"
-    interest_hint = f"\n[유저 관심사/경력 요약]\n{career_text[:400]}" if career_text else ""
-    dept_hint     = f"전공: {department}" if department else ""
-
-    # 가입 가능성 기준: 교내 + 연합(지부) + 외부 전국
-    school_eligibility = (
-        f"- '{school}' 재학생이 가입 가능한 교내동아리·교내학회\n"
-        f"- '{school}' 지부가 확인되는 연합동아리·연합학회\n"
-        f"- 누구나 가입 가능한 전국 단위 외부학회·협회\n"
-        if school else
-        "- 누구나 가입 가능한 연합동아리·연합학회·외부학회·협회\n"
-    )
-
+def _request_broader_clubs(school: str, department: str, exclude_names: list) -> list:
+    exclude_str = ", ".join(exclude_names) if exclude_names else "없음"
+    dept_hint = f" (전공: {department})" if department else ""
     prompt = (
-        f"[사용자 정보]\n"
-        f"학교: {school or '미상'}  /  {dept_hint or '학과 미상'}"
-        f"{interest_hint}\n\n"
-        f"[이미 제외된 항목]: {exclude_str}\n\n"
-        f"아래 조건으로 동아리·학회 후보를 {pool_size}개 추천하세요.\n\n"
-        "=== 추천 우선순위 ===\n"
-        "1순위(필수): 해당 학교 학생이 실제로 가입할 수 있는가?\n"
-        f"{school_eligibility}"
-        "1순위(필수): 유저의 관심사·경력·활동과 얼마나 연관되는가?\n"
-        "  → 위 [유저 관심사/경력 요약]을 참고하여 실질적 연관성이 높은 순으로 추천\n"
-        "2순위(참고): 학과·전공과의 연관성\n\n"
-        "=== 기타 조건 ===\n"
-        "- 교내·연합·외부 타입 고루 포함\n"
-        "- 정식 명칭이 확실하지 않은 동아리는 절대 포함 금지\n"
-        "- reason 필드에는 유저의 관심사와 이 동아리가 어떻게 연결되는지 구체적으로 기술\n"
-        "- 설명·URL은 빈 문자열·null로 두고, 이름·타입·추천이유만 정확히 기입\n\n"
-        "순수 JSON 배열만 출력 (다른 텍스트 금지):\n"
+        f"학교: {school}{dept_hint}\n"
+        f"이미 시도했지만 검증 실패한 항목: {exclude_str}\n\n"
+        f"'{school}' 학생에게 추천할 수 있는 동아리·학회를 다시 찾아주세요.\n"
+        "조건:\n"
+        f"- '{school}'에 실재하거나 '{school}' 지부가 확인된 연합동아리\n"
+        "- 또는 전국 단위 외부학회/협회\n"
+        "- 교내·연합·외부 타입 균형 있게 최소 3개\n"
+        "- 실재가 확실하지 않으면 포함 금지\n\n"
+        "순수 JSON 배열만 출력:\n"
         '[\n  {\n'
-        '    "name": "동아리/학회 정식 명칭",\n'
-        '    "type": "교내동아리|교내학회|연합동아리|연합학회|외부학회",\n'
-        f'    "school_affiliation": "{school or ""}",\n'
+        '    "name": "동아리명",\n'
+        '    "type": "교내동아리/교내학회/연합동아리/연합학회/외부학회",\n'
+        f'    "school_affiliation": "{school}",\n'
         '    "description": "",\n'
-        '    "reason": "유저 관심사와의 구체적 연결고리",\n'
-        '    "expected_effect": "가입 시 기대 효과",\n'
+        '    "reason": "추천 이유",\n'
+        '    "expected_effect": "기대 효과",\n'
         '    "url": null,\n'
-        '    "search_query": "Google 검색어",\n'
+        '    "search_query": "검증용 검색어",\n'
         '    "search_verified": false\n'
         '  }\n]'
     )
     system = (
-        "당신은 한국 대학교 동아리·학회 추천 전문가입니다.\n"
-        "Google Search로 실재하는 동아리·학회만 후보로 제시하십시오.\n"
-        "추천 시 유저의 관심사·경력과의 연관성을 최우선으로 고려하고,\n"
-        "학교·학과 일치 여부는 가입 가능성 확인용으로만 사용하십시오.\n"
-        "존재 여부가 불확실한 항목은 절대 포함하지 마십시오."
+        "당신은 한국 대학교 동아리 및 학회 정보 전문가입니다.\n"
+        "Google Search를 활용해 실재하는 동아리·학회만 추천하십시오."
     )
     raw = _call_model_raw(prompt, system_prompt=system, use_google_search=True)
     try:
-        parsed = json.loads(clean_json_response(raw))
-        return [r for r in parsed if isinstance(r, dict) and r.get("name", "").strip()]
-    except Exception as e:
-        print(f"    WARNING: 동아리 후보 파싱 실패 ({e})", flush=True)
+        return [r for r in json.loads(clean_json_response(raw)) if isinstance(r, dict)]
+    except Exception:
         return []
 
 
-def _club_school_eligible(club: dict, user_school: str) -> tuple[bool, float]:
-    """
-    해당 학교 학생이 가입 가능한지 판단 + 학교 매칭 보너스 점수 반환.
-
-    반환: (eligible: bool, school_bonus: float)
-      eligible   = True  → 가입 가능 (검증 진행)
-      eligible   = False → 가입 불가능한 타교 전용 동아리 (제외)
-      school_bonus       → 유사도에 더할 가산점
-        1.0: 교내 소속 정확히 일치
-        0.5: 연합동아리 (지부 존재 가능)
-        0.3: 외부학회 (누구나 가입 가능)
-        0.0: 타교 전용 → eligible=False
-    """
-    ctype = club.get("type", "").lower()
-
-    # 외부학회·협회: 누구나 가입 가능 → 항상 eligible
-    if "외부" in ctype:
-        return True, 0.3
-
-    # 연합동아리·학회: 대부분 여러 학교 지부 → eligible, 중간 보너스
-    if "연합" in ctype:
-        return True, 0.5
-
-    # 교내동아리·학회: 학교 일치 여부로 판단
-    if not user_school:
-        # 학교 정보 없으면 교내는 제외 (다른 학교 것일 수 있음)
-        return False, 0.0
-
-    affil = normalize_school_name(club.get("school_affiliation", ""))
-    if affil == normalize_school_name(user_school):
-        return True, 1.0   # 교내 소속 정확히 일치 → 최대 보너스
-
-    # 소속 학교가 명시됐는데 다른 학교 → 가입 불가
-    if affil:
-        return False, 0.0
-
-    # school_affiliation이 비어있으면 일단 통과 (검증 단계에서 확인)
-    return True, 0.2
-
-
-def _verify_clubs_google(school: str, clubs: list) -> list[dict]:
-    """
-    Google Search로 동아리 실재 여부 검증.
-    검증 실패 항목은 제외, 성공 항목에 url·description 채움.
-    """
+def verify_clubs_with_search(clubs: list, school: str, department: str = "") -> list:
     if not clubs:
-        return []
+        if school:
+            print(f"\n  [동아리] 초기 추천 없음 → 재추천 요청", flush=True)
+            clubs = _request_broader_clubs(school, department, [])
+        if not clubs:
+            return []
 
-    club_list = "\n".join(
-        f"  {i+1}. {c.get('name','?')} (type={c.get('type','?')})"
-        for i, c in enumerate(clubs)
-    )
-    prompt = (
-        f"사용자 학교: '{school}'\n\n"
-        f"[검증 대상]\n{club_list}\n\n"
-        "Google Search로 각 항목을 검색하여 다음을 확인하세요:\n"
-        "1. 실제 존재하는지 (verified: true/false)\n"
-        "2. 다른 학교에만 있는지 (wrong_school: true/false)\n"
-        "3. 공식 URL — Google Search 결과에서 실제로 접속한 페이지 URL만 기입. 기억·추측·조합은 null\n"
-        "4. description — 확인된 실제 활동 내용, 불확실하면 빈 문자열\n"
-        "5. actual_school — 검색으로 확인된 실제 소속 학교\n\n"
-        "순수 JSON 배열만 출력:\n"
-        '[\n  {"name":"동아리명","verified":true,"wrong_school":false,'
-        '"actual_school":"","official_url":null,"description":"","evidence":"근거"}\n]'
-    )
+    print(f"\n  [동아리 검증 1단계: 학교 매칭 - {len(clubs)}건]", flush=True)
+    stage1 = [c for c in clubs if _club_school_ok(c, school)]
+    for c in clubs:
+        print(f"    [{c.get('name','?')}] {'OK' if c in stage1 else '학교 불일치 -> 제외'}", flush=True)
+
+    if not stage1:
+        if school:
+            print(f"  [동아리] 1단계 전원 탈락 → 재추천 요청", flush=True)
+            tried = [c.get("name", "") for c in clubs]
+            stage1 = _request_broader_clubs(school, department, tried)
+            stage1 = [c for c in stage1 if _club_school_ok(c, school)]
+        if not stage1:
+            return []
+
+    print(f"\n  [동아리 검증 2단계: Google Search - {len(stage1)}건]", flush=True)
     system = (
-        "당신은 한국 대학교 동아리·학회 정보 전문가입니다.\n"
-        "Google Search 결과에 실제로 존재가 확인된 항목만 verified: true로 표시하십시오.\n"
-        "확인되지 않으면 반드시 verified: false입니다.\n"
-        "official_url 규칙: Google Search에서 실제로 열어본 페이지의 URL만 기입. "
-        "기억에서 떠올린 URL, 추측한 URL, 조합한 URL은 모두 null. "
-        "조금이라도 불확실하면 null. null이 오답보다 낫다."
+        "당신은 한국 대학교 동아리 및 학회 정보 전문가입니다.\n"
+        "Google Search를 활용해 동아리/학회를 검색·검증하십시오."
     )
-    raw = _call_model_raw(prompt, system_prompt=system, use_google_search=True)
+    raw = _call_model_raw(
+        build_prompt_verify_clubs(school, stage1),
+        system_prompt=system,
+        use_google_search=True,
+    )
+
+    result = []
+    tried_names = [c.get("name", "") for c in stage1]
     try:
-        parsed = json.loads(clean_json_response(raw))
-        return [r for r in parsed if isinstance(r, dict)]
-    except Exception as e:
-        print(f"    WARNING: 동아리 검증 응답 파싱 실패 ({e})", flush=True)
-        return []
-
-
-def verify_clubs_with_search(
-    clubs: list,
-    school: str,
-    department: str = "",
-    profile_vec: list | None = None,
-    career_text: str = "",
-) -> list[dict]:
-    """
-    동아리·학회 추천 파이프라인 (3단계):
-
-      STEP 1. 후보 생성  — LLM + Google Search
-                           관심사 1순위, 학교/전공 2순위로 후보 생성
-      STEP 2. 복합 점수 필터  — 관심사 유사도(70%) + 학교 가입가능 보너스(30%)
-                                 하드 필터 없음: 가입 불가능한 것만 제외
-      STEP 3. Google Search 검증  — 실재·가입 가능성 최종 확인
-
-    우선순위:
-      1순위 — 유저 관심사·활동과 연관성이 높고 해당 학교 학생이 가입 가능한 곳
-      2순위 — 학과·전공 관련성 (임베딩에 반영되나 비중 낮음)
-    """
-    print(f"\n  [동아리 추천] 시작 (학교: {school or '미상'}, 학과: {department or '미상'})", flush=True)
-
-    # ── 관심사 전용 벡터 (학교·전공 제외) ────────
-    interest_vec: list | None = None
-    if career_text:
-        interest_text = _build_interest_text(career_text)
-        interest_vec  = _embed_query(interest_text)
-        if interest_vec:
-            print(f"    관심사 벡터 생성 완료 (dim={len(interest_vec)})", flush=True)
-
-    # 관심사 벡터 실패 시 전체 프로필 벡터로 폴백
-    if interest_vec is None and profile_vec is not None:
-        interest_vec = profile_vec
-        print(f"    관심사 벡터 없음 → 프로필 벡터로 폴백", flush=True)
-    elif interest_vec is None:
-        print(f"    WARNING: 유사도 벡터 없음 → 유사도 필터 스킵", flush=True)
-
-    all_excluded: list[str] = []
-    verified_result: list[dict] = []
-    attempt = 0
-    max_attempts = 3
-
-    while len(verified_result) < _CLUB_MIN_VERIFIED and attempt < max_attempts:
-        attempt += 1
-        print(f"\n  [동아리 추천 시도 {attempt}/{max_attempts}]", flush=True)
-
-        # ── STEP 1: 후보 생성 ──────────────────────
-        raw_candidates = clubs if attempt == 1 and clubs else []
-        if not raw_candidates:
-            raw_candidates = _generate_club_candidates(
-                school, department, all_excluded, career_text
-            )
-
-        if not raw_candidates:
-            print(f"    후보 생성 실패 → 중단", flush=True)
-            break
-
-        print(f"    후보 {len(raw_candidates)}건 생성됨", flush=True)
-
-        # ── STEP 2: 복합 점수 필터 ─────────────────
-        # 2-a. 가입 가능성 체크 (완전 불가능한 것만 제외)
-        eligible = []
-        for c in raw_candidates:
-            ok, bonus = _club_school_eligible(c, school)
-            if ok:
-                c["_school_bonus"] = bonus
-                eligible.append(c)
-            else:
-                print(f"    [{c.get('name','?')}] 가입 불가 → 제외", flush=True)
-                all_excluded.append(c.get("name", ""))
-
-        print(
-            f"    가입 가능 필터 후: {len(eligible)}건 "
-            f"(제외: {len(raw_candidates)-len(eligible)}건)",
-            flush=True,
-        )
-
-        if not eligible:
-            clubs = []
-            continue
-
-        # 2-b. 관심사 유사도 계산 (이름 + 추천이유 조합으로 임베딩)
-        if interest_vec:
-            scored_list = _filter_by_similarity(
-                eligible,
-                interest_vec,
-                name_key="name",
-                extra_keys=["reason"],        # 추천이유까지 포함 → 맥락 강화
-                threshold=_CLUB_SIMILARITY_THRESHOLD,
-                top_k=_CLUB_TOP_K * 2,       # 보너스 재정렬 여유분 확보
-            )
-        else:
-            for c in eligible:
-                c.setdefault("_similarity", 0.5)
-            scored_list = eligible[:_CLUB_TOP_K * 2]
-
-        # 2-c. 복합 점수 = 관심사 유사도(70%) + 학교 보너스(30%) → 재정렬
-        for c in scored_list:
-            sim   = c.get("_similarity", 0.0)
-            bonus = c.get("_school_bonus", 0.3)
-            c["_combined_score"] = round(sim * 0.7 + bonus * 0.3, 4)
-
-        scored_list.sort(key=lambda c: -c["_combined_score"])
-        filtered = scored_list[:_CLUB_TOP_K]
-
-        print(f"    복합 점수 정렬 후 상위 {len(filtered)}건 선정", flush=True)
-        for c in filtered:
-            print(
-                f"      {c.get('name','?')}: "
-                f"관심사={c.get('_similarity','?')} "
-                f"학교보너스={c.get('_school_bonus','?')} "
-                f"복합={c.get('_combined_score','?')}",
-                flush=True,
-            )
-
-        # 이미 시도한 항목 제외
-        already_names = {c.get("name", "") for c in verified_result}
-        to_verify = [
-            c for c in filtered
-            if c.get("name", "") not in already_names
-            and c.get("name", "") not in all_excluded
-        ]
-
-        if not to_verify:
-            print(f"    검증할 신규 후보 없음 → 중단", flush=True)
-            break
-
-        # ── STEP 3: Google Search 실재 검증 ────────
-        print(f"\n    [Google Search 검증] {len(to_verify)}건", flush=True)
-        verify_results = _verify_clubs_google(school, to_verify)
-        vmap = {r.get("name", ""): r for r in verify_results}
-
-        newly_verified = []
-        for club in to_verify:
+        vmap = {r.get("name", ""): r for r in json.loads(clean_json_response(raw)) if isinstance(r, dict)}
+        for club in stage1:
             name = club.get("name", "")
-            vr   = vmap.get(name, {})
-
-            all_excluded.append(name)
-
+            vr = vmap.get(name, {})
             if vr.get("wrong_school"):
-                print(f"      [{name}] -> FAIL: 다른 학교 전용", flush=True)
+                print(f"    [{name}] -> FAIL: 다른 학교 소속 -> 제외", flush=True)
                 continue
             if not vr.get("verified"):
-                print(f"      [{name}] -> FAIL: 검색 미확인", flush=True)
+                print(f"    [{name}] -> FAIL: 검색 미확인 -> 제외", flush=True)
                 continue
-
-            # 교내 전용이고 소속 학교가 다른 경우만 탈락
-            # (연합·외부는 소속 불일치여도 통과)
             actual = normalize_school_name(vr.get("actual_school", ""))
-            ctype  = club.get("type", "").lower()
-            is_exclusive_mismatch = (
-                actual
-                and school
-                and "외부" not in ctype
-                and "연합" not in ctype
-                and actual != normalize_school_name(school)
-            )
-            if is_exclusive_mismatch:
-                print(f"      [{name}] -> FAIL: 교내 소속 불일치 ({actual})", flush=True)
+            ctype = club.get("type", "").lower()
+            if actual and school and "외부" not in ctype and actual != normalize_school_name(school):
+                print(f"    [{name}] -> FAIL: 교차 확인 실패 -> 제외", flush=True)
                 continue
 
-            score_str = (
-                f"관심사={club.get('_similarity','?')}, "
-                f"복합={club.get('_combined_score','?')}"
-            )
-            print(f"      [{name}] -> OK ({score_str})", flush=True)
+            print(f"    [{name}] -> OK", flush=True)
             club["search_verified"] = True
-            # URL은 부가 정보 — 검증 실패해도 항목 자체는 유지, url만 None
-            raw_url = vr.get("official_url")
-            club["url"]         = _validate_url(raw_url) if raw_url else None
+            official_url = vr.get("official_url")
+            club["url"] = official_url if official_url and official_url != "null" else None
             club["description"] = vr.get("description", "").strip()
             if vr.get("evidence"):
                 club["verification_evidence"] = vr["evidence"]
-            newly_verified.append(club)
-
-        verified_result.extend(newly_verified)
-        print(
-            f"    이번 시도 통과: {len(newly_verified)}건 / 누적: {len(verified_result)}건",
-            flush=True,
-        )
-        clubs = []  # 다음 시도는 새로 생성
-
-    # 최종 결과를 복합 점수 내림차순으로 정렬
-    verified_result.sort(key=lambda c: -c.get("_combined_score", 0.0))
-    print(
-        f"\n  [동아리 추천 완료] 최종 {len(verified_result)}건 "
-        f"(목표 {_CLUB_MIN_VERIFIED}건)",
-        flush=True,
-    )
-    return verified_result
-
-
-# ══════════════════════════════════════════════
-# 15  공모전 — Embedding 클러스터링 기반 추천
-# ══════════════════════════════════════════════
-
-_CONTEST_SIMILARITY_THRESHOLD = 0.50
-_CONTEST_CANDIDATE_POOL       = 12
-_CONTEST_TOP_K                = 6
-
-
-def _generate_contest_candidates(
-    department: str,
-    career_summary: str,
-    ref_date: date,
-    exclude_names: list,
-    pool_size: int = _CONTEST_CANDIDATE_POOL,
-) -> list[dict]:
-    """LLM + Google Search로 공모전 후보 생성."""
-    rd          = ref_date.strftime("%Y-%m-%d")
-    exclude_str = ", ".join(exclude_names) if exclude_names else "없음"
-    dept_hint   = f"전공: {department} / " if department else ""
-
-    prompt = (
-        f"오늘 날짜: {rd}\n"
-        f"사용자 프로필: {dept_hint}경력 요약: {career_summary[:300]}\n"
-        f"제외 목록: {exclude_str}\n\n"
-        f"위 사용자에게 적합한 공모전·대회 후보를 {pool_size}개 생성하세요.\n"
-        "조건:\n"
-        f"- {rd} 기준 현재 접수 중이거나 {rd} 이후 개최 예정인 공모전만\n"
-        "- 주관기관이 실재하고 확인 가능한 공모전만\n"
-        "- 정기적으로 개최되는 공모전 우선\n"
-        "- 이름·주관기관이 불확실하면 포함 금지\n\n"
-        "순수 JSON 배열만 출력:\n"
-        '[\n  {\n'
-        '    "name": "공모전 정식 명칭",\n'
-        '    "organizer": "주관기관명",\n'
-        '    "reason": "추천 이유",\n'
-        '    "expected_effect": "기대 효과",\n'
-        '    "url": null,\n'
-        '    "deadline": null,\n'
-        '    "is_regular": true\n'
-        '  }\n]'
-    )
-    system = (
-        "당신은 한국 공모전·대회 정보 전문가입니다.\n"
-        "Google Search로 실제 존재하고 현재 운영 중인 공모전만 후보로 제시하십시오.\n"
-        "종료된 공모전, 주관기관 불명 공모전은 절대 포함하지 마십시오."
-    )
-    raw = _call_model_raw(prompt, system_prompt=system, use_google_search=True)
-    try:
-        parsed = json.loads(clean_json_response(raw))
-        return [r for r in parsed if isinstance(r, dict) and r.get("name", "").strip()]
+            result.append(club)
     except Exception as e:
-        print(f"    WARNING: 공모전 후보 파싱 실패 ({e})", flush=True)
-        return []
+        print(f"  WARNING: 동아리 검증 파싱 실패 ({e}) -> 전체 제외", flush=True)
+
+    min_clubs = 3 if school else 2
+    if len(result) < min_clubs and school:
+        shortage = min_clubs - len(result)
+        print(f"\n  [동아리] 검증 통과 {len(result)}건 (목표 {min_clubs}건) → {shortage}건 보충 재요청", flush=True)
+        existing_names = tried_names + [c.get("name", "") for c in result]
+        extra_raw = _request_broader_clubs(school, department, existing_names)
+        extra_stage = [c for c in extra_raw if _club_school_ok(c, school)]
+
+        if extra_stage:
+            raw2 = _call_model_raw(
+                build_prompt_verify_clubs(school, extra_stage),
+                system_prompt=system,
+                use_google_search=True,
+            )
+            try:
+                vmap2 = {r.get("name", ""): r for r in json.loads(clean_json_response(raw2)) if isinstance(r, dict)}
+                for club in extra_stage:
+                    if len(result) >= min_clubs:
+                        break
+                    name = club.get("name", "")
+                    vr = vmap2.get(name, {})
+                    if vr.get("wrong_school") or not vr.get("verified"):
+                        print(f"    [{name}] -> FAIL (보충)", flush=True)
+                        continue
+                    print(f"    [{name}] -> OK (보충)", flush=True)
+                    club["search_verified"] = True
+                    official_url = vr.get("official_url")
+                    club["url"] = official_url if official_url and official_url != "null" else None
+                    club["description"] = vr.get("description", "").strip()
+                    result.append(club)
+            except Exception as e:
+                print(f"  WARNING: 보충 검증 파싱 실패 ({e})", flush=True)
+
+    return result
 
 
-def _verify_contests_google(contests: list, ref_date: date) -> list[dict]:
-    """Google Search로 공모전 실재·현황 검증."""
+# ══════════════════════════════════════════════
+# 15  공모전·프로젝트 검증
+# ══════════════════════════════════════════════
+def verify_contests_with_search(contests: list, ref_date: date) -> list:
     if not contests:
         return []
 
-    rd     = ref_date.strftime("%Y-%m-%d")
-    c_list = "\n".join(
-        f"  {i+1}. [{c.get('organizer','?')}] {c.get('name','?')}"
-        for i, c in enumerate(contests)
-    )
-    prompt = (
-        f"오늘 날짜(기준일): {rd}\n\n"
-        f"[검증 대상]\n{c_list}\n\n"
-        f"Google Search로 각 공모전을 '{rd}' 기준으로 검색하여:\n"
-        "1. 실제 존재하고 정기 개최되는지 (verified: true/false)\n"
-        "2. 주관기관이 실제 해당 기관인지 (organizer_confirmed: true/false)\n"
-        f"3. {rd} 기준 현재 접수 중이거나 이후 개최 예정인지 (upcoming: true/false)\n"
-        f"4. 마감일이 {rd} 이후이거나 상시인지 (deadline_ok: true/false)\n"
-        "5. 공식 URL — Google Search에서 실제 접속 확인된 URL만. 기억·추측·조합은 null\n"
-        "6. 마감일 — 확인된 경우 YYYY-MM-DD, 모르면 null\n\n"
-        "순수 JSON 배열만 출력:\n"
-        '[\n  {"name":"공모전명","verified":true,"organizer_confirmed":true,'
-        '"upcoming":true,"deadline_ok":true,"official_url":null,'
-        '"deadline":null,"evidence":"근거"}\n]'
-    )
+    print(f"\n  [공모전 검증: Google Search - {len(contests)}건]", flush=True)
     system = (
         "당신은 한국 공모전·대회 정보 전문가입니다.\n"
-        "Google Search 결과에 실제로 확인된 내용만 기입하십시오.\n"
-        "official_url 규칙: Google Search에서 실제로 열어본 페이지의 URL만. 기억·추측·조합은 null. 불확실하면 null."
+        "Google Search로 각 공모전을 실제 검색하여 존재 여부와 현황을 검증하십시오.\n"
+        "확인되지 않는 공모전은 verified: false로 표시하십시오."
     )
-    raw = _call_model_raw(prompt, system_prompt=system, use_google_search=True)
+    raw = _call_model_raw(
+        build_prompt_verify_contests(contests, ref_date),
+        system_prompt=system,
+        use_google_search=True,
+    )
+
+    verified_list = []
     try:
         parsed = json.loads(clean_json_response(raw))
-        return [r for r in parsed if isinstance(r, dict)]
-    except Exception as e:
-        print(f"    WARNING: 공모전 검증 파싱 실패 ({e})", flush=True)
-        return []
+        vmap = {r.get("name", ""): r for r in parsed if isinstance(r, dict)}
 
-
-def verify_contests_with_search(
-    contests: list,
-    ref_date: date,
-    department: str = "",
-    profile_vec: list | None = None,
-    career_text: str = "",
-) -> list[dict]:
-    """
-    공모전 추천 파이프라인 (3단계):
-      1. 후보 생성 (LLM + Google Search)
-      2. Embedding 유사도 필터
-      3. Google Search 실재·현황 검증
-    """
-    print(f"\n  [공모전 추천] 시작", flush=True)
-
-    # 프로필 벡터
-    if profile_vec is None:
-        profile_text = _build_profile_text("", department, career_text)
-        profile_vec  = _embed_query(profile_text) if profile_text.strip() else None
-
-    all_excluded: list[str] = []
-    verified_result: list[dict] = []
-    attempt = 0
-    max_attempts = 2
-
-    while attempt < max_attempts:
-        attempt += 1
-        print(f"\n  [공모전 시도 {attempt}/{max_attempts}]", flush=True)
-
-        raw_candidates = contests if attempt == 1 and contests else []
-        if not raw_candidates:
-            raw_candidates = _generate_contest_candidates(
-                department, career_text, ref_date, all_excluded
-            )
-
-        if not raw_candidates:
-            print(f"    후보 생성 실패 → 중단", flush=True)
-            break
-
-        print(f"    후보 {len(raw_candidates)}건 생성됨", flush=True)
-
-        # Embedding 유사도 필터
-        if profile_vec:
-            # 공모전은 name + organizer 조합으로 쿼리
-            for c in raw_candidates:
-                c.setdefault("_query_text", f"{c.get('name','')} {c.get('organizer','')}")
-            filtered = _filter_by_similarity(
-                raw_candidates,
-                profile_vec,
-                name_key="_query_text",
-                threshold=_CONTEST_SIMILARITY_THRESHOLD,
-                top_k=_CONTEST_TOP_K,
-            )
-        else:
-            filtered = raw_candidates[:_CONTEST_TOP_K]
-
-        already_names = {c.get("name", "") for c in verified_result}
-        to_verify = [
-            c for c in filtered
-            if c.get("name", "") not in already_names
-            and c.get("name", "") not in all_excluded
-        ]
-
-        if not to_verify:
-            break
-
-        print(f"\n    [Google Search 검증] {len(to_verify)}건", flush=True)
-        verify_results = _verify_contests_google(to_verify, ref_date)
-        vmap = {r.get("name", ""): r for r in verify_results}
-
-        for contest in to_verify:
-            name  = contest.get("name", "")
-            vr    = vmap.get(name, {})
+        for contest in contests:
+            name = contest.get("name", "")
+            vr = vmap.get(name, {})
             label = f"{contest.get('organizer','?')} | {name}"
 
-            all_excluded.append(name)
-
             if not vr.get("verified"):
-                print(f"      [{label}] -> FAIL: 실재 미확인", flush=True)
+                print(f"    [{label}] -> FAIL: 실재 미확인 -> 제외", flush=True)
                 continue
             if not vr.get("organizer_confirmed"):
-                print(f"      [{label}] -> FAIL: 주관기관 불일치", flush=True)
+                print(f"    [{label}] -> FAIL: 주관기관 불일치 -> 제외", flush=True)
                 continue
             if not vr.get("deadline_ok", True):
-                print(f"      [{label}] -> FAIL: 마감 지남", flush=True)
+                print(f"    [{label}] -> FAIL: 마감 지남 -> 제외", flush=True)
                 continue
 
-            print(f"      [{label}] -> OK", flush=True)
-            # URL은 부가 정보 — 검증 실패해도 항목 자체는 유지, url만 None
-            raw_url = vr.get("official_url")
-            contest["url"]             = _validate_url(raw_url) if raw_url else None
-            deadline                   = vr.get("deadline")
-            contest["deadline"]        = deadline if deadline and deadline != "null" else None
+            print(f"    [{label}] -> OK", flush=True)
+            official_url = vr.get("official_url")
+            contest["url"] = official_url if official_url and official_url != "null" else None
+            deadline = vr.get("deadline")
+            contest["deadline"] = deadline if deadline and deadline != "null" else None
             contest["search_verified"] = True
-            verified_result.append(contest)
+            verified_list.append(contest)
 
-        contests = []
-
-    print(f"\n  [공모전 추천 완료] 최종 {len(verified_result)}건", flush=True)
-    return verified_result
-
-
-# ══════════════════════════════════════════════
-# 16  자격증 — Embedding 클러스터링 기반 추천
-# ══════════════════════════════════════════════
-
-_CERT_SIMILARITY_THRESHOLD = 0.50
-_CERT_CANDIDATE_POOL       = 12
-_CERT_TOP_K                = 6
-
-
-def _generate_cert_candidates(
-    department: str,
-    career_summary: str,
-    exclude_names: list,
-    pool_size: int = _CERT_CANDIDATE_POOL,
-) -> list[dict]:
-    """LLM + Google Search로 자격증 후보 생성."""
-    exclude_str = ", ".join(exclude_names) if exclude_names else "없음"
-    dept_hint   = f"전공: {department} / " if department else ""
-
-    prompt = (
-        f"사용자 프로필: {dept_hint}경력 요약: {career_summary[:300]}\n"
-        f"제외 목록: {exclude_str}\n\n"
-        f"위 사용자에게 적합한 자격증 후보를 {pool_size}개 생성하세요.\n"
-        "조건:\n"
-        "- 현재 실제 시행 중인 국가공인 또는 공신력 있는 민간자격증만\n"
-        "- 이름·주관기관이 확실하지 않으면 포함 금지\n"
-        "- 폐지·중단된 자격증 포함 금지\n\n"
-        "순수 JSON 배열만 출력:\n"
-        '[\n  {\n'
-        '    "name": "자격증 정식 명칭",\n'
-        '    "reason": "추천 이유",\n'
-        '    "expected_effect": "기대 효과",\n'
-        '    "estimated_duration": "취득 소요 기간"\n'
-        '  }\n]'
-    )
-    system = (
-        "당신은 한국 자격증 정보 전문가입니다.\n"
-        "Google Search로 현재 실제 시행 중인 자격증만 후보로 제시하십시오.\n"
-        "폐지·중단·불확실한 자격증은 절대 포함하지 마십시오."
-    )
-    raw = _call_model_raw(prompt, system_prompt=system, use_google_search=True)
-    try:
-        parsed = json.loads(clean_json_response(raw))
-        return [r for r in parsed if isinstance(r, dict) and r.get("name", "").strip()]
     except Exception as e:
-        print(f"    WARNING: 자격증 후보 파싱 실패 ({e})", flush=True)
-        return []
+        print(f"  WARNING: 공모전 검증 파싱 실패 ({e}) -> 전체 제외", flush=True)
+
+    return verified_list
 
 
-def _verify_certs_google(certs: list) -> list[dict]:
-    """Google Search로 자격증 실재 여부 검증."""
+# ══════════════════════════════════════════════
+# 16  자격증 검증
+# ══════════════════════════════════════════════
+def verify_certifications_with_search(certs: list) -> list:
     if not certs:
         return []
 
-    c_list = "\n".join(f"  {i+1}. {c.get('name','?')}" for i, c in enumerate(certs))
-    prompt = (
-        f"[검증 대상 자격증]\n{c_list}\n\n"
-        "Google Search로 각 자격증을 검색하여:\n"
-        "1. 현재 실제 시행 중인 국가공인 또는 민간자격증인지 (verified: true/false)\n"
-        "2. 주관기관 (issuer)\n"
-        "3. 공식 URL — Google Search에서 실제 접속 확인된 URL만. 기억·추측·조합은 null\n\n"
-        "순수 JSON 배열만 출력:\n"
-        '[\n  {"name":"자격증명","verified":true,"issuer":"주관기관","official_url":null}\n]'
-    )
+    print(f"\n  [자격증 검증: Google Search - {len(certs)}건]", flush=True)
     system = (
         "당신은 한국 자격증 정보 전문가입니다.\n"
-        "Google Search 결과에 실제로 확인된 자격증만 verified: true로 표시하십시오.\n"
-        "official_url 규칙: Google Search에서 실제로 열어본 페이지의 URL만. 기억·추측·조합은 null. 불확실하면 null."
+        "Google Search로 각 자격증의 실제 시행 여부를 검증하십시오."
     )
-    raw = _call_model_raw(prompt, system_prompt=system, use_google_search=True)
+    raw = _call_model_raw(
+        build_prompt_verify_certifications(certs),
+        system_prompt=system,
+        use_google_search=True,
+    )
+
+    verified_list = []
     try:
         parsed = json.loads(clean_json_response(raw))
-        return [r for r in parsed if isinstance(r, dict)]
-    except Exception as e:
-        print(f"    WARNING: 자격증 검증 파싱 실패 ({e})", flush=True)
-        return []
+        vmap = {r.get("name", ""): r for r in parsed if isinstance(r, dict)}
 
-
-def verify_certifications_with_search(
-    certs: list,
-    department: str = "",
-    profile_vec: list | None = None,
-    career_text: str = "",
-) -> list[dict]:
-    """
-    자격증 추천 파이프라인 (3단계):
-      1. 후보 생성 (LLM + Google Search)
-      2. Embedding 유사도 필터
-      3. Google Search 실재 검증
-    """
-    print(f"\n  [자격증 추천] 시작", flush=True)
-
-    if profile_vec is None:
-        profile_text = _build_profile_text("", department, career_text)
-        profile_vec  = _embed_query(profile_text) if profile_text.strip() else None
-
-    all_excluded: list[str] = []
-    verified_result: list[dict] = []
-    attempt = 0
-    max_attempts = 2
-
-    while attempt < max_attempts:
-        attempt += 1
-        print(f"\n  [자격증 시도 {attempt}/{max_attempts}]", flush=True)
-
-        raw_candidates = certs if attempt == 1 and certs else []
-        if not raw_candidates:
-            raw_candidates = _generate_cert_candidates(
-                department, career_text, all_excluded
-            )
-
-        if not raw_candidates:
-            print(f"    후보 생성 실패 → 중단", flush=True)
-            break
-
-        print(f"    후보 {len(raw_candidates)}건 생성됨", flush=True)
-
-        if profile_vec:
-            filtered = _filter_by_similarity(
-                raw_candidates,
-                profile_vec,
-                name_key="name",
-                threshold=_CERT_SIMILARITY_THRESHOLD,
-                top_k=_CERT_TOP_K,
-            )
-        else:
-            filtered = raw_candidates[:_CERT_TOP_K]
-
-        already_names = {c.get("name", "") for c in verified_result}
-        to_verify = [
-            c for c in filtered
-            if c.get("name", "") not in already_names
-            and c.get("name", "") not in all_excluded
-        ]
-
-        if not to_verify:
-            break
-
-        print(f"\n    [Google Search 검증] {len(to_verify)}건", flush=True)
-        verify_results = _verify_certs_google(to_verify)
-        vmap = {r.get("name", ""): r for r in verify_results}
-
-        for cert in to_verify:
+        for cert in certs:
             name = cert.get("name", "")
-            vr   = vmap.get(name, {})
-            all_excluded.append(name)
+            vr = vmap.get(name, {})
 
             if not vr.get("verified"):
-                print(f"      [{name}] -> FAIL: 실재 미확인", flush=True)
+                print(f"    [{name}] -> FAIL: 실재 미확인 -> 제외", flush=True)
                 continue
 
-            print(f"      [{name}] -> OK ({vr.get('issuer','주관기관 미확인')})", flush=True)
-            # URL은 부가 정보 — 검증 실패해도 항목 자체는 유지, url만 None
-            raw_url = vr.get("official_url")
-            cert["url"]    = _validate_url(raw_url) if raw_url else None
+            print(f"    [{name}] -> OK ({vr.get('issuer', '주관기관 미확인')})", flush=True)
+            official_url = vr.get("official_url")
+            cert["url"] = official_url if official_url and official_url != "null" else None
             cert["issuer"] = vr.get("issuer", "")
-            verified_result.append(cert)
+            verified_list.append(cert)
 
-        certs = []
+    except Exception as e:
+        print(f"  WARNING: 자격증 검증 파싱 실패 ({e}) -> 전체 제외", flush=True)
 
-    print(f"\n  [자격증 추천 완료] 최종 {len(verified_result)}건", flush=True)
-    return verified_result
+    return verified_list
 
 
 # ══════════════════════════════════════════════
 # 17  채용공고 AI 검증
 # ══════════════════════════════════════════════
-
 def verify_jobs_with_search(jobs: list, ref_date: date) -> list:
     if not jobs:
         return []
@@ -2004,29 +1377,16 @@ def verify_jobs_with_search(jobs: list, ref_date: date) -> list:
     if not jobs_with_url:
         return []
 
-    rd = ref_date.strftime("%Y-%m-%d")
     print(f"\n  [채용공고 Google Search 검증 - {len(jobs_with_url)}건]", flush=True)
-    job_list = "\n".join(
-        f"  {i+1}. {j.get('company','?')} | {j.get('role','?')} | "
-        f"마감: {j.get('deadline','?')} | URL: {j.get('url','?')}"
-        for i, j in enumerate(jobs_with_url)
-    )
-    prompt = (
-        f"기준일: {rd}\n\n"
-        f"[검증 대상]\n{job_list}\n\n"
-        "Google Search로 각 채용공고를 실제 검색하여:\n"
-        "1. 실제 존재하는지 (verified)\n"
-        f"2. 마감일이 {rd} 이후인지 (deadline_confirmed)\n"
-        "3. 실제 채용공고 URL — Google Search에서 직접 접속 확인한 URL만. 기억·추측·조합은 null\n\n"
-        "순수 JSON 배열만 출력:\n"
-        '[\n  {"company":"회사명","role":"직무","verified":true,'
-        '"deadline_confirmed":true,"correct_url":null,"evidence":"근거"}\n]'
-    )
     system = (
         "당신은 한국 채용 시장 전문가입니다.\n"
         "Google Search로 각 채용공고를 실제 검색·검증하십시오."
     )
-    raw = _call_model_raw(prompt, system_prompt=system, use_google_search=True)
+    raw = _call_model_raw(
+        build_prompt_verify_jobs(jobs_with_url, ref_date),
+        system_prompt=system,
+        use_google_search=True,
+    )
 
     try:
         vmap = {}
@@ -2036,8 +1396,8 @@ def verify_jobs_with_search(jobs: list, ref_date: date) -> list:
 
         verified = []
         for job in jobs_with_url:
-            key   = f"{job.get('company','')}|{job.get('role','')}"
-            vr    = vmap.get(key, {})
+            key = f"{job.get('company','')}|{job.get('role','')}"
+            vr = vmap.get(key, {})
             label = f"{job.get('company','?')} | {job.get('role','?')}"
             if not vr.get("verified"):
                 print(f"    [{label}] -> FAIL: 공고 미확인", flush=True)
@@ -2045,18 +1405,10 @@ def verify_jobs_with_search(jobs: list, ref_date: date) -> list:
             if not vr.get("deadline_confirmed"):
                 print(f"    [{label}] -> FAIL: 마감일 미확인", flush=True)
                 continue
-            # correct_url을 검증하여 유효한 경우만 교정
-            raw_correct = vr.get("correct_url")
-            if raw_correct and raw_correct != "null":
-                validated_correct = _validate_url(raw_correct)
-                if validated_correct and validated_correct != job.get("url"):
-                    job["url"] = validated_correct
-                    print(f"    [{label}] -> OK (URL 교정 검증됨)", flush=True)
-                elif not validated_correct:
-                    # 교정 URL이 검증 실패 → 기존 URL 유지 (기존 URL은 이미 verify_job_urls에서 검증됨)
-                    print(f"    [{label}] -> OK (교정 URL 검증 실패, 기존 URL 유지)", flush=True)
-                else:
-                    print(f"    [{label}] -> OK", flush=True)
+            correct_url = vr.get("correct_url")
+            if correct_url and correct_url != "null" and correct_url != job.get("url"):
+                job["url"] = correct_url
+                print(f"    [{label}] -> OK (URL 교정)", flush=True)
             else:
                 print(f"    [{label}] -> OK", flush=True)
             verified.append(job)
@@ -2064,7 +1416,6 @@ def verify_jobs_with_search(jobs: list, ref_date: date) -> list:
     except Exception as e:
         print(f"  WARNING: 채용공고 검증 실패 ({e})", flush=True)
         return []
-
 
 
 # ══════════════════════════════════════════════
@@ -2087,7 +1438,7 @@ def filter_valid_jobs(jobs: list, ref_date: date) -> tuple[list, list]:
 
 
 # ══════════════════════════════════════════════
-# 19  핵심 분석 함수
+# 19  핵심 분석 함수 (v2.0 — strength_diagnosis 지시 포함)
 # ══════════════════════════════════════════════
 def analyze_career_comprehensive(user_text: str, ref_date: date,
                                   school: str, department: str = "") -> dict:
@@ -2126,6 +1477,12 @@ def analyze_career_comprehensive(user_text: str, ref_date: date,
         f"동아리·학회: 최소 3개 이상 추천. 교내·연합·외부 균형 있게.\n"
         f"critical_diagnosis: 입력 데이터에서 실제 확인된 사실에만 근거하여 냉정하게 작성."
         f" 존재하지 않는 약점을 만들어내지 말고, 반대로 명백한 약점을 완화하거나 숨기지도 말 것.\n"
+        # ── [v2.0 추가] strength_diagnosis 전용 지시 ──────────────
+        f"strength_diagnosis: 입력 데이터에서 실제 확인된 강점만 기재할 것."
+        f" 없는 강점을 만들어내거나 과장하는 것은 절대 금지."
+        f" 강점이 없으면 strengths 배열을 [] 로 반환하고,"
+        f" no_strength_diagnosis 에 이유(reason)와 개선 방향(improvement_direction)을"
+        f" 솔직하고 구체적으로 기재할 것.\n"
         f"{source_hint}"
         f"{profile_ctx}\n"
         f"[사용자 데이터]\n{user_text}"
@@ -2134,16 +1491,57 @@ def analyze_career_comprehensive(user_text: str, ref_date: date,
 
 
 # ══════════════════════════════════════════════
-# 20  Main
+# 20  강점 진단 stderr 로그 헬퍼 (v2.0 신규)
+# ══════════════════════════════════════════════
+def _log_strength_summary(result: dict) -> None:
+    """
+    strength_diagnosis 요약을 stderr 에 출력합니다.
+    JSON stdout 과 혼합되지 않도록 stderr 사용.
+    critical_diagnosis 로그와 동일한 포맷 적용.
+    """
+    import sys
+    sd = result.get("strength_diagnosis", {})
+    if not sd:
+        print("  [강점 진단] strength_diagnosis 키 없음", file=sys.stderr)
+        return
+
+    verdict = sd.get("one_line_verdict", "")
+    if verdict:
+        print(f"  [강점 진단] {verdict}", file=sys.stderr)
+
+    strengths = sd.get("strengths", [])
+    if strengths:
+        outstanding = sum(1 for s in strengths if s.get("level") == "outstanding")
+        strong      = sum(1 for s in strengths if s.get("level") == "strong")
+        notable     = sum(1 for s in strengths if s.get("level") == "notable")
+        print(
+            f"  [강점 진단] 강점 — outstanding:{outstanding}  strong:{strong}  notable:{notable}",
+            file=sys.stderr,
+        )
+    else:
+        no_str    = sd.get("no_strength_diagnosis", {})
+        reason    = no_str.get("reason", "")
+        direction = no_str.get("improvement_direction", "")
+        print("  [강점 진단] 식별 가능한 강점 없음", file=sys.stderr)
+        if reason:
+            print(f"             이유: {reason}", file=sys.stderr)
+        if direction:
+            print(f"             개선 방향: {direction}", file=sys.stderr)
+
+
+# ══════════════════════════════════════════════
+# 21  Main (v2.0 — 강점 로그 먼저, 냉정 진단 뒤)
 # ══════════════════════════════════════════════
 def main(user_input: list[str], school: str, department: str):
+    import sys
     ref_date = date.today()
     rd = ref_date.strftime("%Y-%m-%d")
 
     print("=" * 65)
-    print("  Career Analysis AI - COMPREHENSIVE Edition v1.0")
+    print("  Career Analysis AI - COMPREHENSIVE Edition v2.0")
     print(f"  모델: {_ANALYSIS_MODEL}  |  임베딩: {_EMBEDDING_MODEL}")
     print(f"  기준일: {rd} (자동)  |  Google Search 검증 활성화")
+    print("  strength_diagnosis: 활성화 (강점 → 약점 순서 출력)")
     print("=" * 65)
 
     school, department = get_user_profile(school, department)
@@ -2157,21 +1555,15 @@ def main(user_input: list[str], school: str, department: str):
         print(json.dumps(error_result, ensure_ascii=False, indent=2))
         return
 
-    # ── [1] + [2] 동시 실행: 임베딩과 메인 분석은 서로 독립적 ──
-    print("\n[1+2] 임베딩 생성 & 종합 분석 병렬 실행 중 (Gemini 2.5 Pro)...", flush=True)
-
-    with ThreadPoolExecutor(max_workers=2) as ex:
-        fut_embed  = ex.submit(get_embedding, raw_content)
-        fut_result = ex.submit(
-            analyze_career_comprehensive, raw_content, ref_date, school, department
-        )
-        vector = fut_embed.result()
-        result = fut_result.result()
-
+    print("\n[1] 임베딩 벡터 생성 중...", flush=True)
+    vector = get_embedding(raw_content)
     if vector:
-        print(f"  임베딩 OK (dim: {len(vector)})", flush=True)
+        print(f"  OK (dim: {len(vector)})", flush=True)
     else:
         print("  WARNING: embedding skipped (분석은 계속 진행)", flush=True)
+
+    print("\n[2] 종합 커리어 분석 + 강점 진단 + 냉정 보완점 진단 중 (Gemini 2.5 Pro)...", flush=True)
+    result = analyze_career_comprehensive(raw_content, ref_date, school, department)
 
     verified_clubs: list    = []
     verified_contests: list = []
@@ -2180,36 +1572,21 @@ def main(user_input: list[str], school: str, department: str):
     if result.get("status") not in ("error", "insufficient_data"):
         additional = result.get("additional_recommendations", {})
 
-        # ── 자격증 / 동아리 / 공모전 검증 3개를 병렬 실행 ──
-        raw_certs    = additional.get("certifications", [])
-        raw_clubs    = additional.get("clubs_and_societies", [])
+        # 자격증 검증
+        raw_certs = additional.get("certifications", [])
+        verified_certs = verify_certifications_with_search(raw_certs)
+
+        # 동아리 검증
+        raw_clubs = additional.get("clubs_and_societies", [])
+        verified_clubs = verify_clubs_with_search(raw_clubs, school, department)
+
+        # 공모전 검증
         raw_contests = additional.get("projects_and_contests", [])
-
-        # career_text: 임베딩 유사도 필터에 사용할 사용자 이력 요약 (앞 2000자)
-        career_text = raw_content[:2000]
-
-        print("\n  [3-way 병렬 검증] 자격증 | 동아리 | 공모전 동시 시작...", flush=True)
-        with ThreadPoolExecutor(max_workers=3) as ex:
-            fut_certs = ex.submit(
-                verify_certifications_with_search,
-                raw_certs, department, vector, career_text,
-            )
-            fut_clubs = ex.submit(
-                verify_clubs_with_search,
-                raw_clubs, school, department, vector, career_text,
-            )
-            fut_contests = ex.submit(
-                verify_contests_with_search,
-                raw_contests, date.today(), department, vector, career_text,
-            )
-            verified_certs    = fut_certs.result()
-            verified_clubs    = fut_clubs.result()
-            verified_contests = fut_contests.result()
-        print("  [3-way 병렬 검증] 완료", flush=True)
+        verified_contests = verify_contests_with_search(raw_contests, date.today())
 
         # 검증 결과를 result에 반영
         if "additional_recommendations" in result:
-            result["additional_recommendations"]["certifications"]      = verified_certs
+            result["additional_recommendations"]["certifications"]       = verified_certs
             result["additional_recommendations"]["clubs_and_societies"]  = verified_clubs
             result["additional_recommendations"]["projects_and_contests"] = verified_contests
 
@@ -2228,18 +1605,19 @@ def main(user_input: list[str], school: str, department: str):
         valid_jobs, expired_jobs = filter_valid_jobs(url_ok, ref_date)
         result["verified_jobs"] = valid_jobs
         result["expired_jobs"]  = expired_jobs
-        # 원본 키 정리 (내부 메타데이터 제거)
         result.pop("valid_job_recommendations", None)
     else:
         result["verified_jobs"] = []
         result["expired_jobs"]  = []
 
-    # embedding 벡터는 JSON 출력에서 제외 (너무 길어 가독성 저하)
     result["embedding_dim"] = len(vector) if vector else None
 
     print("\n[3] 분석 완료!\n", flush=True)
 
-    # ── 냉정 진단 요약 로그 (stderr로 출력해 JSON stdout과 분리) ──
+    # ── stderr: 강점 진단 요약 먼저 ──────────────────────────────────
+    _log_strength_summary(result)
+
+    # ── stderr: 냉정 진단 요약 뒤 ─────────────────────────────────────
     diag = result.get("critical_diagnosis", {})
     if diag:
         verdict = diag.get("one_line_verdict", "")
@@ -2254,8 +1632,12 @@ def main(user_input: list[str], school: str, department: str):
             file=sys.stderr,
         )
 
-    # ── 최종 JSON 출력 ──
+    # ── stdout: 최종 JSON 출력 ────────────────────────────────────────
     return json.dumps({
         "vector": vector,
         "result": result
     }, ensure_ascii=False, indent=2)
+
+
+if __name__ == "__main__":
+    main()
