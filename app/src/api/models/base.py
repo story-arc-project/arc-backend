@@ -122,6 +122,7 @@ class IndividualAnalysisListData(BaseModel):
     id: UUID
     status: AnalysisStatus
     experience_id: UUID
+    title: str
     created_at: datetime
     updated_at: datetime
 

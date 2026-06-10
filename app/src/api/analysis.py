@@ -21,7 +21,7 @@ analysis_router = APIRouter()
 @analysis_router.get("/individual")
 async def get_individual_analyses(session: SessionDep, response: Response, payload: Annotated[AccessTokenPayload, Depends(check_auth)]):
     statement = (
-        select(IndividualAnalysis)
+        select(IndividualAnalysis, Experience)
         .join(Experience)
         .where(Experience.user_id == payload.sub)
     )
@@ -35,9 +35,10 @@ async def get_individual_analyses(session: SessionDep, response: Response, paylo
                 id = analysis.id,
                 status = analysis.status,
                 experience_id = analysis.experience_id,
+                title = experience.content.get("title", ""),
                 created_at = analysis.created_at,
                 updated_at = analysis.updated_at
-            ) for analysis in result]
+            ) for analysis, experience in result]
         )
     )
 
