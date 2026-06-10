@@ -184,7 +184,6 @@ async def signup(request: Request, body: SignupRequest, session: SessionDep, res
             code = ErrorResponseCode.EMAIL_ALREADY_EXISTS,
             message = "This email is already registered."
         )
-    # TODO: Add weak password detection
     password_hash = hash_password(body.password)
     user = User(
         email = body.email,

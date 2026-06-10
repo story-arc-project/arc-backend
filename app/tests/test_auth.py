@@ -18,7 +18,7 @@ from src.db.red import is_locked, increment_attempt, set_lockout, clear, get_att
 
 # Test data
 email = "test@gmail.com"
-password = "testpassword"
+password = "testpassword123"
 
 
 def get_sent_mail(mock_mail: MagicMock):
@@ -54,6 +54,16 @@ def test_send_mail(mock_mail: MagicMock):
 
 
 def test_signup(client: TestClient, mock_mail: MagicMock):
+    response = client.post(
+        "/auth/signup",
+        json={
+            "email": email,
+            "password": "weak"
+        }
+    )
+    assert response.status_code == 400
+    assert response.json()["code"] == "WEAK_PASSWORD"
+    
     response = client.post(
         "/auth/signup",
         json={

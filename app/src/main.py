@@ -45,6 +45,16 @@ async def app_exception_handler(request: Request, exc: AppException):
 
 @app.exception_handler(RequestValidationError)
 async def validation_exception_handler(request: Request, exc: ValidationException):
+    errors = exc.errors()
+    if any(err["msg"] == "Value error, WEAK_PASSWORD" for err in errors):
+        return JSONResponse(
+            status_code=400,
+            content={
+                "status": "error",
+                "code": "WEAK_PASSWORD",
+                "message": "Password must be at least 8 characters and include both letters and numbers.",
+            }
+        )
     return JSONResponse(
         status_code = 400,
         content = {
@@ -52,7 +62,7 @@ async def validation_exception_handler(request: Request, exc: ValidationExceptio
             "code": "INVALID_INPUT",
             "message": "Please provide a valid input.",
             "data": {
-                "invalid_fields": [err["loc"][-1] for err in exc.errors()]
+                "invalid_fields": [err["loc"][-1] for err in errors]
             }
         }
     )
