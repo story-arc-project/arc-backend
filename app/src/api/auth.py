@@ -13,7 +13,7 @@ from src.utils.req import get_ip
 from src.const import ACCESS_TOKEN_KEY, LOGIN_REDIRECT_ENDPOINT_PREFIX, REFRESH_TOKEN_KEY, SHOW_REMAINING_VERIFICATION_ATTEMPTS, LOGIN_MAX_RETRY_COUNT, LOGIN_RETRY_COOLDOWN, VERIFY_EMAIL_MAX_RETRY_COUNT, VERIFY_EMAIL_RETRY_COOLDOWN
 from src.utils.verify import send_code, verify_code
 from src.api.models.base import AccountData, AuthMeData, EmailVerificationErrorResponse, ErrorResponse, LoginData, OnboardResponseData, ProfileData, RefreshData, SuccessResponse, UserInfo
-from src.api.models.request import LoginRequest, OnboardRequest, SignupRequest, SocialLoginRequest, UserDeleteByPasswordRequest, UserDeleteByTokenRequest, VerificationRequest, VerifyCodeRequest
+from src.api.models.request import LoginRequest, OnboardRequest, ProfilePatchRequest, SignupRequest, SocialLoginRequest, UserDeleteByPasswordRequest, UserDeleteByTokenRequest, VerificationRequest, VerifyCodeRequest
 from src.api.models.response import AuthMeResponse, LoginResponse, LogoutResponse, OnboardResponse, RefreshResponse, SignupResponse, VerificationSentResponse
 from src.db.db import SessionDep
 from src.db.models import DeletedUser, OauthAccount, Token, User, UserProfile
@@ -468,6 +468,46 @@ async def onboard(body: OnboardRequest, session: SessionDep, response: Response,
         data = OnboardResponseData(
             onboarded = True
         )
+    )
+
+@auth_router.patch("/profile")
+async def patch_profile(body: ProfilePatchRequest, session: SessionDep, response: Response, payload: Annotated[AccessTokenPayload, Depends(check_auth)]):
+    user_id = payload.sub
+    statement = select(UserProfile).where(UserProfile.user_id == user_id)
+    user_profile = session.exec(statement).one_or_none()
+    if user_profile is None:
+        response.status_code = 404
+        return ErrorResponse(
+            code = ErrorResponseCode.NOT_FOUND,
+            message = "Profile not found."
+        )
+    if body.name is not None:
+        user_profile.name = body.name
+    if body.birth is not None:
+        user_profile.birth = body.birth
+    if body.affiliation is not None:
+        user_profile.affiliation = body.affiliation
+    if body.school is not None:
+        user_profile.school = body.school
+    if body.department is not None:
+        user_profile.department = body.department
+    if body.company is not None:
+        user_profile.company = body.company
+    if body.desiredRole is not None:
+        user_profile.desiredRole = body.desiredRole
+    if body.affiliationDetail is not None:
+        user_profile.affiliationDetail = body.affiliationDetail
+    if body.phone is not None:
+        user_profile.phone = body.phone
+    if body.worry is not None:
+        user_profile.worry = body.worry
+    if body.interest is not None:
+        user_profile.interest = body.interest
+    session.add(user_profile)
+    session.commit()
+    response.status_code = 200
+    return SuccessResponse(
+        message = "Profile updated successfully."
     )
 
 @auth_router.post("/logout")
