@@ -34,7 +34,9 @@ async def get_individual_analyses(session: SessionDep, response: Response, paylo
             contents = [IndividualAnalysisListData(
                 id = analysis.id,
                 status = analysis.status,
-                experience_id = analysis.experience_id
+                experience_id = analysis.experience_id,
+                created_at = analysis.created_at,
+                updated_at = analysis.updated_at
             ) for analysis in result]
         )
     )
@@ -141,7 +143,9 @@ async def get_comprehensive_analyses(session: SessionDep, response: Response, pa
             contents = [ComprehensiveAnalysisListData(
                 id = analysis.id,
                 status = analysis.status,
-                experience_ids = analysis.experience_ids
+                experience_ids = analysis.experience_ids,
+                created_at = analysis.created_at,
+                updated_at = analysis.updated_at
             ) for analysis in result]
         )
     )
@@ -176,7 +180,9 @@ async def get_comprehensive_analysis(analysis_id: UUID, session: SessionDep, res
             id = result.id,
             status = result.status,
             experience_ids = result.experience_ids,
-            result = result.result
+            result = result.result,
+            created_at = result.created_at,
+            updated_at = result.updated_at
         )
     )
 
@@ -271,7 +277,9 @@ async def get_keyword_analyses(session: SessionDep, response: Response, payload:
             contents = [KeywordAnalysisListData(
                 id = analysis.id,
                 status = analysis.status,
-                keywords = analysis.keywords
+                keywords = analysis.keywords,
+                created_at = analysis.created_at,
+                updated_at = analysis.updated_at
             ) for analysis in result]
         )
     )
@@ -306,7 +314,9 @@ async def get_keyword_analysis(analysis_id: UUID, session: SessionDep, response:
             id = result.id,
             status = result.status,
             keywords = result.keywords,
-            result = result.result
+            result = result.result,
+            created_at = result.created_at,
+            updated_at = result.updated_at
         )
     )
 

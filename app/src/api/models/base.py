@@ -114,12 +114,16 @@ class IndividualAnalysisData(BaseModel):
     id: UUID
     status: AnalysisStatus
     experience_id: UUID
+    created_at: datetime
+    updated_at: datetime
     result: dict[str, Any] | None
 
 class IndividualAnalysisListData(BaseModel):
     id: UUID
     status: AnalysisStatus
     experience_id: UUID
+    created_at: datetime
+    updated_at: datetime
 
 class IndividualAnalysisList(BaseModel):
     count: int
@@ -129,12 +133,16 @@ class ComprehensiveAnalysisData(BaseModel):
     id: UUID
     status: AnalysisStatus
     experience_ids: list[UUID]
+    created_at: datetime
+    updated_at: datetime
     result: dict[str, Any] | None
 
 class ComprehensiveAnalysisListData(BaseModel):
     id: UUID
     status: AnalysisStatus
     experience_ids: list[UUID]
+    created_at: datetime
+    updated_at: datetime
 
 class ComprehensiveAnalysisList(BaseModel):
     count: int
@@ -144,12 +152,16 @@ class KeywordAnalysisData(BaseModel):
     id: UUID
     status: AnalysisStatus
     keywords: list[str]
+    created_at: datetime
+    updated_at: datetime
     result: dict[str, Any] | None
 
 class KeywordAnalysisListData(BaseModel):
     id: UUID
     status: AnalysisStatus
     keywords: list[str]
+    created_at: datetime
+    updated_at: datetime
 
 class KeywordAnalysisList(BaseModel):
     count: int
@@ -157,6 +169,8 @@ class KeywordAnalysisList(BaseModel):
 
 class ResumeListData(BaseModel):
     id: UUID
+    created_at: datetime
+    updated_at: datetime
 
 class ResumeList(BaseModel):
     count: int
@@ -164,4 +178,6 @@ class ResumeList(BaseModel):
 
 class ResumeData(BaseModel):
     id: UUID
+    created_at: datetime
+    updated_at: datetime
     result: dict[str, Any] | None
