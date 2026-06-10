@@ -13,6 +13,46 @@ from src.utils.internal import check_internal
 
 internal_router = APIRouter()
 
+@internal_router.post("/{analysis_type}/failure")
+async def fail_individual(analysis_type: str, body: Annotated[dict[str, Any], Depends(check_internal)], session: SessionDep, response: Response):
+    analysis_id: str | None = body.get("analysis_id")
+    if analysis_id is None:
+        raise AppException(
+            status_code = 400,
+            error = ErrorResponse(
+                code = ErrorResponseCode.BAD_REQUEST,
+                message = ""
+            )
+        )
+    if analysis_type == "individual":
+        statement = select(IndividualAnalysis).where(IndividualAnalysis.id == UUID(analysis_id))
+    elif analysis_type == "comprehensive":
+        statement = select(ComprehensiveAnalysis).where(ComprehensiveAnalysis.id == UUID(analysis_id))
+    elif analysis_type == "keyword":
+        statement = select(KeywordAnalysis).where(KeywordAnalysis.id == UUID(analysis_id))
+    else:
+        raise AppException(
+            status_code = 400,
+            error = ErrorResponse(
+                code = ErrorResponseCode.BAD_REQUEST,
+                message = "Wrong analysis type."
+            )
+        )
+    analysis = session.exec(statement).one_or_none()
+    if analysis is None:
+        raise AppException(
+            status_code = 404,
+            error = ErrorResponse(
+                code = ErrorResponseCode.NOT_FOUND,
+                message = ""
+            )
+        )
+    analysis.status = AnalysisStatus.FAILED
+    session.add(analysis)
+    session.commit()
+    response.status_code = 200
+    return {}
+
 @internal_router.post("/individual/success")
 async def success_individual(body: Annotated[dict[str, Any], Depends(check_internal)], session: SessionDep, response: Response):
     analysis_id: str | None = body.get("analysis_id")
