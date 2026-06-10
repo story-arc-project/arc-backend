@@ -253,6 +253,23 @@ class IndividualAnalysis(SQLModel, table=True):
         default=None,
         sa_column=Column(JSONB, nullable=True, default=None)
     )
+    created_at: datetime = Field(
+        default_factory=now,
+        sa_column=Column(
+            DateTime(timezone=True),
+            server_default=func.now(),
+            nullable=False
+        )
+    )
+    updated_at: datetime = Field(
+        default_factory=now,
+        sa_column=Column(
+            DateTime(timezone=True),
+            server_default=func.now(),
+            onupdate=func.now(),
+            nullable=False
+        )
+    )
 
 class ComprehensiveAnalysis(SQLModel, table=True):
     __tablename__: str = "comprehensive_analyses"  # pyright: ignore[reportIncompatibleVariableOverride]
@@ -275,6 +292,23 @@ class ComprehensiveAnalysis(SQLModel, table=True):
         default=None,
         sa_column=Column(JSONB, nullable=True, default=None)
     )
+    created_at: datetime = Field(
+        default_factory=now,
+        sa_column=Column(
+            DateTime(timezone=True),
+            server_default=func.now(),
+            nullable=False
+        )
+    )
+    updated_at: datetime = Field(
+        default_factory=now,
+        sa_column=Column(
+            DateTime(timezone=True),
+            server_default=func.now(),
+            onupdate=func.now(),
+            nullable=False
+        )
+    )
 
 class Resume(SQLModel, table=True):
     __tablename__: str = "resume"  # pyright: ignore[reportIncompatibleVariableOverride]
@@ -287,6 +321,23 @@ class Resume(SQLModel, table=True):
     result: dict[str, Any] | None = Field(
         default=None,
         sa_column=Column(JSONB, nullable=True, default=None)
+    )
+    created_at: datetime = Field(
+        default_factory=now,
+        sa_column=Column(
+            DateTime(timezone=True),
+            server_default=func.now(),
+            nullable=False
+        )
+    )
+    updated_at: datetime = Field(
+        default_factory=now,
+        sa_column=Column(
+            DateTime(timezone=True),
+            server_default=func.now(),
+            onupdate=func.now(),
+            nullable=False
+        )
     )
 
 class KeywordAnalysis(SQLModel, table=True):
@@ -303,6 +354,23 @@ class KeywordAnalysis(SQLModel, table=True):
     result: dict[str, Any] | None = Field(
         default=None,
         sa_column=Column(JSONB, nullable=True, default=None)
+    )
+    created_at: datetime = Field(
+        default_factory=now,
+        sa_column=Column(
+            DateTime(timezone=True),
+            server_default=func.now(),
+            nullable=False
+        )
+    )
+    updated_at: datetime = Field(
+        default_factory=now,
+        sa_column=Column(
+            DateTime(timezone=True),
+            server_default=func.now(),
+            onupdate=func.now(),
+            nullable=False
+        )
     )
 
 class DeletedUser(SQLModel, table=True):
