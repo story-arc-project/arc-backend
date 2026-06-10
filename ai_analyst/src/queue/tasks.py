@@ -63,6 +63,11 @@ def process_comprehensive(analysis_id: str, user_input: list[str], school: str, 
 def process_keyword(analysis_id: str, user_input: str, keywords: list[str]):
     main = _load_main("keyword_analysis")
     result = main(keywords, user_input)
+    if not isinstance(result, dict) or result.get("status") != "success":
+        return call_frontend(
+            f"/{getenv("INTERNAL_ROUTE", "internal")}/keyword/failure",
+            {"analysis_id": analysis_id}
+        )
     return call_frontend(
         f"/{getenv("INTERNAL_ROUTE", "internal")}/keyword/success",
         {"analysis_id": analysis_id, "result": result}
