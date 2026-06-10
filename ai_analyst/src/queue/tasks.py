@@ -35,6 +35,11 @@ def call_frontend(endpoint: str, body: dict[str, Any]):
 def process_individual(analysis_id: str, user_input: list[str]):
     main = _load_main("individual")
     result = main(user_input)
+    if not isinstance(result, dict) or result.get("status") != "success":
+        return call_frontend(
+            f"/{getenv("INTERNAL_ROUTE", "internal")}/individual/failure",
+            {"analysis_id": analysis_id}
+        )
     return call_frontend(
         f"/{getenv("INTERNAL_ROUTE", "internal")}/individual/success",
         {"analysis_id": analysis_id, "result": result}
