@@ -215,3 +215,6 @@ class UserDeleteByPasswordRequest(BaseModel):
 
 class UserDeleteByTokenRequest(BaseModel):
     token: str
+
+class ForgotPasswordRequest(BaseModel):
+    email: EmailStr

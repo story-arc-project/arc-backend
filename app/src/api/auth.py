@@ -13,7 +13,7 @@ from src.utils.req import get_ip
 from src.const import ACCESS_TOKEN_KEY, LOGIN_REDIRECT_ENDPOINT_PREFIX, REFRESH_TOKEN_KEY, SHOW_REMAINING_VERIFICATION_ATTEMPTS, LOGIN_MAX_RETRY_COUNT, LOGIN_RETRY_COOLDOWN, VERIFY_EMAIL_MAX_RETRY_COUNT, VERIFY_EMAIL_RETRY_COOLDOWN
 from src.utils.verify import send_code, verify_code
 from src.api.models.base import AccountData, AuthMeData, EmailVerificationErrorResponse, ErrorResponse, LoginData, OnboardResponseData, ProfileData, RefreshData, SuccessResponse, UserInfo
-from src.api.models.request import LoginRequest, OnboardRequest, ProfilePatchRequest, SignupRequest, SocialLoginRequest, UserDeleteByPasswordRequest, UserDeleteByTokenRequest, VerificationRequest, VerifyCodeRequest
+from src.api.models.request import ForgotPasswordRequest, LoginRequest, OnboardRequest, ProfilePatchRequest, SignupRequest, SocialLoginRequest, UserDeleteByPasswordRequest, UserDeleteByTokenRequest, VerificationRequest, VerifyCodeRequest
 from src.api.models.response import AuthMeResponse, LoginResponse, LogoutResponse, OnboardResponse, RefreshResponse, SignupResponse, VerificationSentResponse
 from src.db.db import SessionDep
 from src.db.models import DeletedUser, OauthAccount, Token, User, UserProfile
@@ -667,3 +667,21 @@ async def delete_account_by_token(request: Request, session: SessionDep, body: U
     response.status_code = 200
     remove_tokens(response)
     return SuccessResponse(message="Delete successful")
+
+@auth_router.post("/forgot-password")
+async def forgot_password(request: Request, body: ForgotPasswordRequest, session: SessionDep, response: Response):
+    check_email_verification_ratelimit(get_ip(request), body.email)
+    statement = select(User).where(User.email == body.email)
+    result = session.exec(statement).one_or_none()
+    if result is None:
+        response.status_code = 200
+        return SuccessResponse(message="If an account with that email exists, a password reset code has been sent.")
+    errors = send_code(body.email, purpose="reset")
+    if errors:
+        response.status_code = 500
+        return ErrorResponse(
+            code = ErrorResponseCode.SERVER_ERROR,
+            message = "Server side error. Please check logs."
+        )
+    response.status_code = 200
+    return SuccessResponse(message="If an account with that email exists, a password reset code has been sent.")
