@@ -270,8 +270,6 @@ async def send_verification(request: Request, body: VerificationRequest, session
 
 @auth_router.post("/verify-email")
 async def verify(body: VerifyCodeRequest, session: SessionDep, response: Response):
-    statement = select(User).where(User.email == body.email)
-    result = session.exec(statement).one_or_none()
     verification_result = verify_code(body.email, body.code)
     if verification_result.is_verified == False:
         response.status_code = 400
@@ -297,6 +295,8 @@ async def verify(body: VerifyCodeRequest, session: SessionDep, response: Respons
                 code = code,
                 message = msg
             )
+    statement = select(User).where(User.email == body.email)
+    result = session.exec(statement).one_or_none()
     if result is None:
         response.status_code = 400
         return ErrorResponse(
@@ -697,11 +697,8 @@ async def forgot_password(request: Request, body: ForgotPasswordRequest, session
     response.status_code = 200
     return SuccessResponse(message="If an account with that email exists, a password reset code has been sent.")
 
-@auth_router.post("/reset-password/verify")
-async def verify_reset_password_code(body: VerifyCodeRequest, session: SessionDep, response: Response):
-    statement = select(User).where(User.email == body.email)
-    result = session.exec(statement).one_or_none()
-    verification_result = verify_code(body.email, body.code, purpose="reset")
+def reset_password_common(body: VerifyCodeRequest, response: Response, delete: bool):
+    verification_result = verify_code(body.email, body.code, purpose="reset", delete=delete)
     if verification_result.is_verified == False:
         response.status_code = 400
         if verification_result.remaining_attempts <= 0:
@@ -726,6 +723,15 @@ async def verify_reset_password_code(body: VerifyCodeRequest, session: SessionDe
                 code = code,
                 message = msg
             )
+    return None
+
+@auth_router.post("/reset-password/verify")
+async def verify_reset_password_code(body: VerifyCodeRequest, session: SessionDep, response: Response):
+    res = reset_password_common(body, response, delete=False)
+    if res is not None:
+        return res
+    statement = select(User).where(User.email == body.email)
+    result = session.exec(statement).one_or_none()
     if result is None:
         response.status_code = 400
         return ErrorResponse(
