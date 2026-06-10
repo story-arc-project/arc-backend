@@ -13,7 +13,7 @@ from src.utils.req import get_ip
 from src.const import ACCESS_TOKEN_KEY, LOGIN_REDIRECT_ENDPOINT_PREFIX, REFRESH_TOKEN_KEY, SHOW_REMAINING_VERIFICATION_ATTEMPTS, LOGIN_MAX_RETRY_COUNT, LOGIN_RETRY_COOLDOWN, VERIFY_EMAIL_MAX_RETRY_COUNT, VERIFY_EMAIL_RETRY_COOLDOWN
 from src.utils.verify import send_code, verify_code
 from src.api.models.base import AccountData, AuthMeData, EmailVerificationErrorResponse, ErrorResponse, LoginData, OnboardResponseData, ProfileData, RefreshData, SuccessResponse, UserInfo
-from src.api.models.request import ForgotPasswordRequest, LoginRequest, OnboardRequest, ProfilePatchRequest, SignupRequest, SocialLoginRequest, UserDeleteByPasswordRequest, UserDeleteByTokenRequest, VerificationRequest, VerifyCodeRequest
+from src.api.models.request import ForgotPasswordRequest, LoginRequest, OnboardRequest, ProfilePatchRequest, ResetPasswordRequest, SignupRequest, SocialLoginRequest, UserDeleteByPasswordRequest, UserDeleteByTokenRequest, VerificationRequest, VerifyCodeRequest
 from src.api.models.response import AuthMeResponse, LoginResponse, LogoutResponse, OnboardResponse, RefreshResponse, SignupResponse, VerificationSentResponse
 from src.db.db import SessionDep
 from src.db.models import DeletedUser, OauthAccount, Token, User, UserProfile
@@ -740,3 +740,22 @@ async def verify_reset_password_code(body: VerifyCodeRequest, session: SessionDe
         )
     response.status_code = 200
     return SuccessResponse(message="Verification successful. You may now reset your password.")
+
+@auth_router.post("/reset-password")
+async def reset_password(body: ResetPasswordRequest, session: SessionDep, response: Response):
+    res = reset_password_common(body, response, delete=True)
+    if res is not None:
+        return res
+    statement = select(User).where(User.email == body.email)
+    result = session.exec(statement).one_or_none()
+    if result is None:
+        response.status_code = 400
+        return ErrorResponse(
+            code = ErrorResponseCode.INVALID_CODE,
+            message = "The verification code is incorrect."
+        )
+    result.password_hash = hash_password(body.newPassword)
+    session.add(result)
+    session.commit()
+    response.status_code = 200
+    return SuccessResponse(message="Password reset successful. You may now log in with your new password.")
