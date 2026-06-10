@@ -49,6 +49,11 @@ def process_individual(analysis_id: str, user_input: list[str]):
 def process_comprehensive(analysis_id: str, user_input: list[str], school: str, department: str):
     main = _load_main("comprehensive")
     result = main(user_input, school, department)
+    if not isinstance(result, dict) or result.get("status") != "success":
+        return call_frontend(
+            f"/{getenv("INTERNAL_ROUTE", "internal")}/comprehensive/failure",
+            {"analysis_id": analysis_id}
+        )
     return call_frontend(
         f"/{getenv("INTERNAL_ROUTE", "internal")}/comprehensive/success",
         {"analysis_id": analysis_id, "result": result}

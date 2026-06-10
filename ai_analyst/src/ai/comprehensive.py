@@ -1634,6 +1634,7 @@ def main(user_input: list[str], school: str, department: str):
 
     # ── stdout: 최종 JSON 출력 ────────────────────────────────────────
     return json.dumps({
+        "status": "success",
         "vector": vector,
         "result": result
     }, ensure_ascii=False, indent=2)
