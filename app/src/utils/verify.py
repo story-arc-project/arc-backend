@@ -9,6 +9,7 @@ from src.db.red import delete_code, get_code, store_code, decr_limit, PURPOSE_SC
 class UnverifiedState(BaseModel):
     is_verified: Literal[False] = False
     remaining_attempts: int
+    is_expired: bool
 
 class VerifiedState(BaseModel):
     is_verified: Literal[True] = True
@@ -31,7 +32,7 @@ def verify_code(email: str, user_code: str, purpose: PURPOSE_SCOPE = "verify", d
     stored_code = get_code(email, purpose)
 
     if not stored_code or stored_code != user_code:
-        return UnverifiedState(remaining_attempts=decr_limit(email, purpose))
+        return UnverifiedState(remaining_attempts=decr_limit(email, purpose), is_expired=(not stored_code))
     
     if delete:
         delete_code(email, purpose)

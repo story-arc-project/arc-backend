@@ -273,31 +273,36 @@ async def verify(body: VerifyCodeRequest, session: SessionDep, response: Respons
     statement = select(User).where(User.email == body.email)
     result = session.exec(statement).one_or_none()
     verification_result = verify_code(body.email, body.code)
-    if result is None:
-        response.status_code = 401
-        return ErrorResponse(
-            code = ErrorResponseCode.INVALID_CODE,
-            message = "The verification code is incorrect."
-        )
     if verification_result.is_verified == False:
-        response.status_code = 401
+        response.status_code = 400
         if verification_result.remaining_attempts <= 0:
             response.status_code = 429
             return ErrorResponse(
                 code = ErrorResponseCode.TOO_MANY_ATTEMPTS,
                 message = "Too many attempts. Please request a new code."
             )
+        code = ErrorResponseCode.INVALID_CODE
+        msg = "The verification code is incorrect."
+        if verification_result.is_expired:
+            code = ErrorResponseCode.CODE_EXPIRED
+            msg = "The verification code has expired. Please request a new code."
         if SHOW_REMAINING_VERIFICATION_ATTEMPTS:
             return EmailVerificationErrorResponse(
-                code = ErrorResponseCode.INVALID_CODE,
-                message = "The verification code is incorrect.",
+                code = code,
+                message = msg,
                 remaining_attempts = verification_result.remaining_attempts
             )
         else:
             return ErrorResponse(
-                code = ErrorResponseCode.INVALID_CODE,
-                message = "The verification code is incorrect."
+                code = code,
+                message = msg
             )
+    if result is None:
+        response.status_code = 400
+        return ErrorResponse(
+            code = ErrorResponseCode.INVALID_CODE,
+            message = "The verification code is incorrect."
+        )
     result.status = UserStatus.VERIFIED
     session.add(result)
     session.commit()
@@ -697,30 +702,35 @@ async def verify_reset_password_code(body: VerifyCodeRequest, session: SessionDe
     statement = select(User).where(User.email == body.email)
     result = session.exec(statement).one_or_none()
     verification_result = verify_code(body.email, body.code, purpose="reset")
-    if result is None:
-        response.status_code = 400
-        return ErrorResponse(
-            code = ErrorResponseCode.INVALID_CODE,
-            message = "The verification code is incorrect."
-        )
     if verification_result.is_verified == False:
-        response.status_code = 401
+        response.status_code = 400
         if verification_result.remaining_attempts <= 0:
             response.status_code = 429
             return ErrorResponse(
                 code = ErrorResponseCode.TOO_MANY_ATTEMPTS,
                 message = "Too many attempts. Please request a new code."
             )
+        code = ErrorResponseCode.INVALID_CODE
+        msg = "The verification code is incorrect."
+        if verification_result.is_expired:
+            code = ErrorResponseCode.CODE_EXPIRED
+            msg = "The verification code has expired. Please request a new code."
         if SHOW_REMAINING_VERIFICATION_ATTEMPTS:
             return EmailVerificationErrorResponse(
-                code = ErrorResponseCode.INVALID_CODE,
-                message = "The verification code is incorrect.",
+                code = code,
+                message = msg,
                 remaining_attempts = verification_result.remaining_attempts
             )
         else:
             return ErrorResponse(
-                code = ErrorResponseCode.INVALID_CODE,
-                message = "The verification code is incorrect."
+                code = code,
+                message = msg
             )
+    if result is None:
+        response.status_code = 400
+        return ErrorResponse(
+            code = ErrorResponseCode.INVALID_CODE,
+            message = "The verification code is incorrect."
+        )
     response.status_code = 200
     return SuccessResponse(message="Verification successful. You may now reset your password.")

@@ -35,6 +35,7 @@ class ErrorResponseCode(str, enum.Enum):
     ACCOUNT_LOCKED = "ACCOUNT_LOCKED"
     ACCOUNT_DELETED = "ACCOUNT_DELETED"
     TOO_MANY_ATTEMPTS = "TOO_MANY_ATTEMPTS"
+    CODE_EXPIRED = "CODE_EXPIRED"
 
 class AnalysisStatus(str, enum.Enum):
     PENDING = "pending"
