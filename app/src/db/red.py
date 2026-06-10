@@ -1,33 +1,35 @@
+from typing import Literal
 from pydantic import EmailStr
 import redis
 
 from src.const import VERIFICATION_CODE_EXPIRE, VERIFICATION_MAX_ATTEMPTS
 
 MIN_IN_SEC = 60
+PURPOSE_SCOPE = Literal["verify", "reset"]
 
 r = redis.Redis("redis", 6379, decode_responses=True)
 
-def _verify_keygen(email: EmailStr):
-    return f"verify:{email}"
+def _verify_keygen(email: EmailStr, purpose: PURPOSE_SCOPE):
+    return f"{purpose}:{email}"
 
 def _limit_keygen(email: EmailStr):
     return f"limit:{email}"
 
-def store_code(email: EmailStr, code: str):
-    _ = r.set(_verify_keygen(email), code, int(VERIFICATION_CODE_EXPIRE * MIN_IN_SEC))
+def store_code(email: EmailStr, code: str, purpose: PURPOSE_SCOPE):
+    _ = r.set(_verify_keygen(email, purpose), code, int(VERIFICATION_CODE_EXPIRE * MIN_IN_SEC))
     _ = r.set(_limit_keygen(email), VERIFICATION_MAX_ATTEMPTS, int(VERIFICATION_CODE_EXPIRE * MIN_IN_SEC))
 
-def get_code(email: EmailStr):
-    return r.get(_verify_keygen(email))
+def get_code(email: EmailStr, purpose: PURPOSE_SCOPE):
+    return r.get(_verify_keygen(email, purpose))
 
-def delete_code(email: EmailStr):
-    _ = r.delete(_verify_keygen(email))
+def delete_code(email: EmailStr, purpose: PURPOSE_SCOPE):
+    _ = r.delete(_verify_keygen(email, purpose))
     _ = r.delete(_limit_keygen(email))
 
-def decr_limit(email: EmailStr):
+def decr_limit(email: EmailStr, purpose: PURPOSE_SCOPE):
     decr_value = r.decr(_limit_keygen(email))
     if (not isinstance(decr_value, int)) or decr_value <= 0:
-        delete_code(email)
+        delete_code(email, purpose)
         return 0
     return decr_value
 
