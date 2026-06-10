@@ -1,10 +1,23 @@
 from datetime import date
-from typing import Any
+from typing import Annotated, Any
 from uuid import UUID
-from pydantic import BaseModel, EmailStr, field_validator, model_validator
+from pydantic import BaseModel, EmailStr, field_validator, model_validator, AfterValidator
+import re
 
 from src.enums import Affiliation
-from pydantic import BaseModel, EmailStr, field_validator
+
+def validate_password(v: str):
+    if len(v) < 8:
+        raise ValueError("WEAK_PASSWORD")
+    if len(v) > 128:
+        raise ValueError("WEAK_PASSWORD")
+    if not re.search(r"[A-Za-z]", v):
+        raise ValueError("WEAK_PASSWORD")
+    if not re.search(r"[0-9]", v):
+        raise ValueError("WEAK_PASSWORD")
+    return v
+
+ValidPassword = Annotated[str, AfterValidator(validate_password)]
 
 class LoginRequest(BaseModel):
     email: EmailStr
@@ -12,7 +25,7 @@ class LoginRequest(BaseModel):
 
 class SignupRequest(BaseModel):
     email: EmailStr
-    password: str
+    password: ValidPassword
 
 class VerificationRequest(BaseModel):
     email: EmailStr
@@ -220,4 +233,4 @@ class ForgotPasswordRequest(BaseModel):
     email: EmailStr
 
 class ResetPasswordRequest(VerifyCodeRequest):
-    newPassword: str
+    newPassword: ValidPassword
