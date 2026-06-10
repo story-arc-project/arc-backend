@@ -27,13 +27,14 @@ def _generate_code(email: EmailStr, purpose: PURPOSE_SCOPE):
     store_code(email, code, purpose)
     return code
 
-def verify_code(email: str, user_code: str, purpose: PURPOSE_SCOPE = "verify") -> VerificationState:
+def verify_code(email: str, user_code: str, purpose: PURPOSE_SCOPE = "verify", delete: bool = True) -> VerificationState:
     stored_code = get_code(email, purpose)
 
     if not stored_code or stored_code != user_code:
         return UnverifiedState(remaining_attempts=decr_limit(email, purpose))
     
-    delete_code(email, purpose)
+    if delete:
+        delete_code(email, purpose)
     return VerifiedState()
 
 def send_code(email: EmailStr, purpose: PURPOSE_SCOPE = "verify"):
