@@ -12,16 +12,10 @@ from src.api.internal import internal_router
 from src.api.libraries import libraries_router
 from src.api.models.exc import AppException
 from src.api.presets import presets_router
-from src.db.db import create_db_and_tables
 from src.api.auth import auth_router, remove_tokens
 from src.enums import ErrorResponseCode
 
-@asynccontextmanager
-async def lifespan(app: FastAPI):  # pyright: ignore[reportUnusedParameter]
-    create_db_and_tables()
-    yield
-
-app = FastAPI(lifespan=lifespan)
+app = FastAPI()
 
 origins = getenv("FRONTEND_HOSTS", "").split(",")
 
@@ -44,7 +38,7 @@ async def app_exception_handler(request: Request, exc: AppException):
     return response
 
 @app.exception_handler(RequestValidationError)
-async def validation_exception_handler(request: Request, exc: ValidationException):
+async def validation_exception_handler(request: Request, exc: RequestValidationError):
     errors = exc.errors()
     if any(err["msg"] == "Value error, WEAK_PASSWORD" for err in errors):
         return JSONResponse(
