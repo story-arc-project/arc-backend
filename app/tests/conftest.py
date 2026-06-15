@@ -88,7 +88,7 @@ def client(session: Session):
 def authenticated_client(client: TestClient, mock_mail: MagicMock):
     # Test data
     email = "test@gmail.com"
-    password = "testpassword"
+    password = "testpassword123"
     _ = client.post("/auth/signup", json={"email": email, "password": password})
     response = client.post("/auth/verify-email", json={
         "email": email,

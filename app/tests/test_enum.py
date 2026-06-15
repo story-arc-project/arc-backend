@@ -12,7 +12,7 @@ def test_enum(session: Session, client: TestClient):
         "/auth/signup",
         json={
             "email": email,
-            "password": "testpassword"
+            "password": "testpassword123"
         }
     )
     statement = select(User).where(User.email == email)

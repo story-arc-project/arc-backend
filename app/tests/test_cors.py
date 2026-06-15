@@ -14,7 +14,7 @@ def test_cors_preflight(client: TestClient):
 def test_cors_allowed_origin(client: TestClient):
     response = client.post("/auth/signup", json={
         "email": "test@gmail.com",
-        "password": "testpassword"
+        "password": "testpassword123"
     })
     assert response.status_code == 201
     assert response.headers["access-control-allow-origin"] == client.headers["Origin"]
@@ -22,7 +22,7 @@ def test_cors_allowed_origin(client: TestClient):
 def test_cors_disallowed_origin(client: TestClient):
     response = client.post("/auth/signup", json={
         "email": "test@gmail.com",
-        "password": "testpassword"
+        "password": "testpassword123"
     }, headers={
         "Origin": "https://badhost.test"
     })
