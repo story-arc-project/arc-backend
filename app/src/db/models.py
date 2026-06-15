@@ -392,4 +392,12 @@ class TermsConsent(SQLModel, table=True):
     version: str
     granted: bool
     ip: str | None = Field(nullable=True, default=None)
-    agreed_at: datetime
+    agreed_at: datetime = Field(
+        default_factory=now,
+        sa_column=Column(
+            DateTime(timezone=True),
+            server_default=func.now(),
+            onupdate=func.now(),
+            nullable=False
+        )
+    )
