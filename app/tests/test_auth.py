@@ -14,6 +14,7 @@ from src.db.models import Token
 from src.utils.mail import send_mail
 from src.enums import ErrorResponseCode, JWTTokenStatus
 from src.db.red import is_locked, increment_attempt, set_lockout, clear, get_attempt_count
+from src.api.models.consent import AGREEABLE_CONSENT_VERSIONS
 
 
 # Test data
@@ -630,6 +631,74 @@ def test_refresh(session: Session, client: TestClient, mock_mail: MagicMock):
     assert response.status_code == 200
     response = client.post("/auth/refresh")
     assert response.status_code == 200
+
+def _del(path: str):
+    """Return a mutator that deletes agreements[path]."""
+    def mutate(data: dict):
+        del data[path]
+    return mutate
+
+def _nested_set(path: str, key: str, value):
+    """Return a mutator that sets agreements[path][key] = value."""
+    def mutate(data: dict):
+        data[path][key] = value
+    return mutate
+
+class TestConsent:
+    WRONG_VERSION = "2000-01-01"
+
+    def _base_agreements(self):
+        return {
+            "termsOfService": {"version": AGREEABLE_CONSENT_VERSIONS["termsOfService"], "granted": True},
+            "privacyRequired": {"version": AGREEABLE_CONSENT_VERSIONS["privacyRequired"], "granted": True},
+            "age14": {"granted": True},
+            "personalizedService": {"version": AGREEABLE_CONSENT_VERSIONS["personalizedService"], "granted": True},
+            "marketing": {"version": AGREEABLE_CONSENT_VERSIONS["marketing"], "granted": True},
+        }
+
+    def test_consent_valid(self, authenticated_client: TestClient):
+        req = authenticated_client.post("/auth/consent", json={"agreements": self._base_agreements()})
+        assert req.status_code == 200
+
+    @pytest.mark.parametrize("mutate,body_override", [
+        # --- Required consents not granted ---
+        pytest.param(_nested_set("termsOfService", "granted", False), None, id="tos_not_granted"),
+        pytest.param(_nested_set("privacyRequired", "granted", False), None, id="privacy_not_granted"),
+        pytest.param(_nested_set("age14", "granted", False), None, id="age14_not_granted"),
+
+        # --- Wrong version ---
+        pytest.param(_nested_set("termsOfService", "version", WRONG_VERSION), None, id="tos_wrong_version"),
+        pytest.param(_nested_set("privacyRequired", "version", WRONG_VERSION), None, id="privacy_wrong_version"),
+        pytest.param(_nested_set("personalizedService", "version", WRONG_VERSION), None, id="personalized_wrong_version"),
+        pytest.param(_nested_set("marketing", "version", WRONG_VERSION), None, id="marketing_wrong_version"),
+
+        # --- Missing fields ---
+        pytest.param(_del("termsOfService"), None, id="missing_tos"),
+        pytest.param(_del("privacyRequired"), None, id="missing_privacy"),
+        pytest.param(_del("age14"), None, id="missing_age14"),
+        pytest.param(_del("personalizedService"), None, id="missing_personalized"),
+        pytest.param(_del("marketing"), None, id="missing_marketing"),
+
+        # --- Wrong types ---
+        pytest.param(_nested_set("age14", "granted", "yes"), None, id="granted_wrong_type"),
+        pytest.param(_nested_set("termsOfService", "granted", "yes"), None, id="granted_wrong_type"),
+        pytest.param(_nested_set("termsOfService", "version", 20260608), None, id="version_wrong_type"),
+
+        # --- Malformed body (mutate unused, body_override takes precedence) ---
+        pytest.param(None, {}, id="empty_body"),
+        pytest.param(None, {"foo": "bar"}, id="missing_agreements_key"),
+    ])
+
+    def test_invalid_consent(self, authenticated_client: TestClient, mutate, body_override):
+        if body_override is not None:
+            body = body_override
+        else:
+            agreements = self._base_agreements()
+            mutate(agreements)
+            body = {"agreements": agreements}
+
+        res = authenticated_client.post("/auth/consent", json=body)
+        assert res.status_code == 400
 
 valid_onboarding_data = {
     "name": "홍길동",
