@@ -13,10 +13,10 @@ from src.utils.req import get_ip
 from src.const import ACCESS_TOKEN_KEY, LOGIN_REDIRECT_ENDPOINT_PREFIX, REFRESH_TOKEN_KEY, SHOW_REMAINING_VERIFICATION_ATTEMPTS, LOGIN_MAX_RETRY_COUNT, LOGIN_RETRY_COOLDOWN, VERIFY_EMAIL_MAX_RETRY_COUNT, VERIFY_EMAIL_RETRY_COOLDOWN
 from src.utils.verify import send_code, verify_code
 from src.api.models.base import AccountData, AuthMeData, EmailVerificationErrorResponse, ErrorResponse, LoginData, OnboardResponseData, ProfileData, RefreshData, SuccessResponse, UserInfo
-from src.api.models.request import ForgotPasswordRequest, LoginRequest, OnboardRequest, ProfilePatchRequest, ResetPasswordRequest, SignupRequest, SocialLoginRequest, UserDeleteByPasswordRequest, UserDeleteByTokenRequest, VerificationRequest, VerifyCodeRequest
+from src.api.models.request import ForgotPasswordRequest, LoginRequest, OnboardRequest, ProfilePatchRequest, ResetPasswordRequest, SignupRequest, SocialLoginRequest, UserConsentRequest, UserDeleteByPasswordRequest, UserDeleteByTokenRequest, VerificationRequest, VerifyCodeRequest, VersionedConsent
 from src.api.models.response import AuthMeResponse, LoginResponse, LogoutResponse, OnboardResponse, RefreshResponse, SignupResponse, VerificationSentResponse
 from src.db.db import SessionDep
-from src.db.models import DeletedUser, OauthAccount, Token, User, UserProfile
+from src.db.models import DeletedUser, OauthAccount, TermsConsent, Token, User, UserProfile
 from src.enums import ErrorResponseCode, JWTTokenStatus, OauthProviderId, UserStatus
 from src.utils.pwd import hash_password, verify_password
 from src.utils.token import AccessTokenPayload, create_access_token, create_refresh_token, hash_jti, verify_refresh_token
@@ -758,3 +758,19 @@ async def reset_password(body: ResetPasswordRequest, session: SessionDep, respon
     session.commit()
     response.status_code = 200
     return SuccessResponse(message="Password reset successful. You may now log in with your new password.")
+
+@auth_router.post("/consent")
+async def consent(request: Request, body: UserConsentRequest, session: SessionDep, response: Response, payload: Annotated[AccessTokenPayload, Depends(check_auth)]):
+    ip = get_ip(request)
+    for consent_id, consent in body.agreements.iter_consents():
+        new_consent = TermsConsent(
+            user_id = payload.sub,
+            consent_id = consent_id,
+            version = (consent.version if isinstance(consent, VersionedConsent) else None),
+            granted = consent.granted,
+            ip = ip
+        )
+        session.add(new_consent)
+    session.commit()
+    response.status_code = 200
+    return SuccessResponse(message="Terms consent successful.")

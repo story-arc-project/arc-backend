@@ -262,5 +262,8 @@ class Agreements(BaseModel):
                 raise ValueError(f"{field} has wrong version")
         return self
 
+    def iter_consents(self) -> list[tuple[str, VersionedConsent | Age14Consent]]:
+        return [(name, getattr(self, name)) for name in Agreements.model_fields]
+
 class UserConsentRequest(BaseModel):
     agreements: Agreements
