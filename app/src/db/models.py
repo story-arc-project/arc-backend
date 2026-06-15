@@ -384,3 +384,12 @@ class DeletedUser(SQLModel, table=True):
             nullable=False
         )
     )
+
+class TermsConsent(SQLModel, table=True):
+    __tablename__: str = "terms_consent"  # pyright: ignore[reportIncompatibleVariableOverride]
+    user_id: uuid.UUID = Field(foreign_key="users.id", sa_type=SAUUID)
+    consent_id: str
+    version: str
+    granted: bool
+    ip: str | None = Field(nullable=True, default=None)
+    agreed_at: datetime
