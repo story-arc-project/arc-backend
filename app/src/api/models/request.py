@@ -5,6 +5,7 @@ from pydantic import BaseModel, EmailStr, field_validator, model_validator, Afte
 import re
 
 from src.enums import Affiliation
+from src.api.models.consent import AGREEABLE_CONSENT_VERSIONS, CONSENT_REQUIRED
 
 def validate_password(v: str):
     if len(v) < 8:
@@ -234,3 +235,32 @@ class ForgotPasswordRequest(BaseModel):
 
 class ResetPasswordRequest(VerifyCodeRequest):
     newPassword: ValidPassword
+
+class VersionedConsent(BaseModel):
+    version: str
+    granted: bool
+
+class Age14Consent(BaseModel):
+    granted: bool
+
+class Agreements(BaseModel):
+    termsOfService: VersionedConsent
+    privacyRequired: VersionedConsent
+    age14: Age14Consent
+    personalizedService: VersionedConsent
+    marketing: VersionedConsent
+
+    @model_validator(mode="after")
+    def validate_required_consents(self) -> "Agreements":
+        for field, required in CONSENT_REQUIRED.items():
+            value = getattr(self, field)
+            if required and (value is None or not value.granted):
+                raise ValueError(f"{field} is required and must be granted")
+        for field, agreeable_version in AGREEABLE_CONSENT_VERSIONS.items():
+            value = getattr(self, field)
+            if value is None or value.version != agreeable_version:
+                raise ValueError(f"{field} has wrong version")
+        return self
+
+class UserConsentRequest(BaseModel):
+    agreements: Agreements
