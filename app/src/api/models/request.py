@@ -1,7 +1,7 @@
 from datetime import date
 from typing import Annotated, Any
 from uuid import UUID
-from pydantic import BaseModel, EmailStr, field_validator, model_validator, AfterValidator
+from pydantic import BaseModel, EmailStr, field_validator, model_validator, AfterValidator, Field
 import re
 
 from src.enums import Affiliation
@@ -19,6 +19,7 @@ def validate_password(v: str):
     return v
 
 ValidPassword = Annotated[str, AfterValidator(validate_password)]
+StrictBool = Annotated[bool, Field(strict=True)]
 
 class LoginRequest(BaseModel):
     email: EmailStr
@@ -238,10 +239,10 @@ class ResetPasswordRequest(VerifyCodeRequest):
 
 class VersionedConsent(BaseModel):
     version: str
-    granted: bool
+    granted: StrictBool
 
 class Age14Consent(BaseModel):
-    granted: bool
+    granted: StrictBool
 
 class Agreements(BaseModel):
     termsOfService: VersionedConsent
