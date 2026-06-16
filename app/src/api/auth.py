@@ -18,6 +18,7 @@ from src.api.models.response import AuthMeResponse, LoginResponse, LogoutRespons
 from src.db.db import SessionDep
 from src.db.models import DeletedUser, OauthAccount, TermsConsent, Token, User, UserProfile
 from src.enums import ErrorResponseCode, JWTTokenStatus, OauthProviderId, UserStatus
+from src.utils.ratelimit import RateLimiter
 from src.utils.pwd import hash_password, verify_password
 from src.utils.token import AccessTokenPayload, create_access_token, create_refresh_token, hash_jti, verify_refresh_token
 from src.db.red import is_locked, increment_attempt, set_lockout, clear as red_clear
@@ -103,76 +104,15 @@ def get_login_response(session: SessionDep, response: Response, result: User, me
 
 class LoginRateLimiter:
     def __init__(self, ip: str | None, email: EmailStr):
-        self.keys = [f"login:email:{email}"]
-        if ip is not None:
-            self.keys.append(f"login:ip:{ip}")
-        for key in self.keys:
-            locked, ttl = is_locked(key)
-            if locked:
-                raise AppException(
-                    status_code = 429,
-                    error = ErrorResponse(
-                        code = ErrorResponseCode.ACCOUNT_LOCKED,
-                        message = f"Too many attempts. Retry in {ttl}s."
-                    )
-                )
+        self.limiter = RateLimiter(ip, email, "login", LOGIN_RETRY_COOLDOWN, LOGIN_MAX_RETRY_COUNT)
     def record_failure(self):
-        for key in self.keys:
-            count = increment_attempt(key, LOGIN_RETRY_COOLDOWN)
-            if count is None:
-                raise AppException(
-                    status_code = 500,
-                    error = ErrorResponse(
-                        code = ErrorResponseCode.SERVER_ERROR,
-                        message = "Lockdown attempt counter"
-                    )
-                )
-            if count >= LOGIN_MAX_RETRY_COUNT:
-                set_lockout(key, LOGIN_RETRY_COOLDOWN)
-                raise AppException(
-                    status_code = 429,
-                    error = ErrorResponse(
-                        code = ErrorResponseCode.ACCOUNT_LOCKED,
-                        message = f"Locked out for {LOGIN_RETRY_COOLDOWN} minutes."
-                    )
-                )
+        self.limiter.record_failure()
     def clear(self):
-        for key in self.keys:
-            red_clear(key)
+        self.limiter.clear()
 
 def check_email_verification_ratelimit(ip: str | None, email: EmailStr):
-    keys = [f"verify:email:{email}"]
-    if ip is not None:
-        keys.append(f"verify:ip:{ip}")
-    for key in keys:
-        locked, ttl = is_locked(key)
-        if locked:
-            raise AppException(
-                status_code = 429,
-                error = ErrorResponse(
-                    code = ErrorResponseCode.ACCOUNT_LOCKED,
-                    message = f"Too many attempts. Retry in {ttl}s."
-                )
-            )
-    for key in keys:
-        count = increment_attempt(key, VERIFY_EMAIL_RETRY_COOLDOWN)
-        if count is None:
-            raise AppException(
-                status_code = 500,
-                error = ErrorResponse(
-                    code = ErrorResponseCode.SERVER_ERROR,
-                    message = "Lockdown attempt counter"
-                )
-            )
-        if count > VERIFY_EMAIL_MAX_RETRY_COUNT:
-            set_lockout(key, VERIFY_EMAIL_RETRY_COOLDOWN)
-            raise AppException(
-                status_code = 429,
-                error = ErrorResponse(
-                    code = ErrorResponseCode.ACCOUNT_LOCKED,
-                    message = f"Locked out for {VERIFY_EMAIL_RETRY_COOLDOWN} minutes."
-                )
-            )
+    limiter = RateLimiter(ip, email, "verify", VERIFY_EMAIL_RETRY_COOLDOWN, VERIFY_EMAIL_MAX_RETRY_COUNT)
+    limiter.record_failure()
 
 @auth_router.post("/signup")
 async def signup(request: Request, body: SignupRequest, session: SessionDep, response: Response):
