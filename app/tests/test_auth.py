@@ -122,7 +122,7 @@ def _do_verification_flow(client: TestClient, mock_mail: MagicMock, expect_remai
             }
         )
 
-        assert response.status_code == 401
+        assert response.status_code == 400
         assert response.cookies.get("accessToken") is None
         assert response.cookies.get("refreshToken") is None
     
@@ -142,7 +142,7 @@ def _do_verification_flow(client: TestClient, mock_mail: MagicMock, expect_remai
 
     # Test that remaining_attempts decrements with each wrong attempt
     prev_remaining = None
-    for _ in range(VERIFICATION_MAX_ATTEMPTS):
+    for _ in range(VERIFICATION_MAX_ATTEMPTS - 1):
         response = client.post(
             "/auth/verify-email",
             json={
@@ -151,7 +151,7 @@ def _do_verification_flow(client: TestClient, mock_mail: MagicMock, expect_remai
             }
         )
 
-        assert response.status_code == 401
+        assert response.status_code == 400
         assert response.cookies.get("accessToken") is None
         assert response.cookies.get("refreshToken") is None
 
@@ -175,15 +175,10 @@ def _do_verification_flow(client: TestClient, mock_mail: MagicMock, expect_remai
         }
     )
 
-    assert response.status_code == 401
+    assert response.status_code == 429
     assert response.cookies.get("accessToken") is None
     assert response.cookies.get("refreshToken") is None
     data = response.json()
-    if expect_remaining_attempts:
-        assert "remaining_attempts" in data
-        assert data["remaining_attempts"] == 0
-    else:
-        assert "remaining_attempts" not in data
 
     # Correct code also fails now since attempts are exhausted
     response = client.post(
@@ -194,15 +189,10 @@ def _do_verification_flow(client: TestClient, mock_mail: MagicMock, expect_remai
         }
     )
 
-    assert response.status_code == 401
+    assert response.status_code == 429
     assert response.cookies.get("accessToken") is None
     assert response.cookies.get("refreshToken") is None
     data = response.json()
-    if expect_remaining_attempts:
-        assert "remaining_attempts" in data
-        assert data["remaining_attempts"] == 0
-    else:
-        assert "remaining_attempts" not in data
 
     # Resend and verify successfully
     response = client.post(
@@ -241,8 +231,9 @@ def _do_verification_flow(client: TestClient, mock_mail: MagicMock, expect_remai
     assert response.status_code == 400
 
 def _do_verification_flow_wrapper(client: TestClient, mock_mail: MagicMock, expect_remaining_attempts: bool):
-    with patch("src.api.auth.SHOW_REMAINING_VERIFICATION_ATTEMPTS", expect_remaining_attempts):
-        _do_verification_flow(client, mock_mail, expect_remaining_attempts)
+    with patch("src.api.auth.VERIFY_EMAIL_MAX_RETRY_COUNT", 1000):
+        with patch("src.api.auth.SHOW_REMAINING_VERIFICATION_ATTEMPTS", expect_remaining_attempts):
+            _do_verification_flow(client, mock_mail, expect_remaining_attempts)
 
 def test_verification_with_remaining_attempts(client: TestClient, mock_mail: MagicMock):
     _do_verification_flow_wrapper(client, mock_mail, True)

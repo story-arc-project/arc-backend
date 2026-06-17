@@ -213,10 +213,10 @@ async def verify(body: VerifyCodeRequest, session: SessionDep, response: Respons
     if verification_result.is_verified == False:
         response.status_code = 400
         if verification_result.remaining_attempts <= 0:
-            response.status_code = 429
+            response.status_code = 500
             return ErrorResponse(
-                code = ErrorResponseCode.TOO_MANY_ATTEMPTS,
-                message = "Too many attempts. Please request a new code."
+                code = ErrorResponseCode.SERVER_ERROR,
+                message = "Wrong attempt counter"
             )
         code = ErrorResponseCode.INVALID_CODE
         msg = "The verification code is incorrect."
@@ -641,10 +641,10 @@ def reset_password_common(body: VerifyCodeRequest, response: Response, delete: b
     if verification_result.is_verified == False:
         response.status_code = 400
         if verification_result.remaining_attempts <= 0:
-            response.status_code = 429
+            response.status_code = 500
             return ErrorResponse(
-                code = ErrorResponseCode.TOO_MANY_ATTEMPTS,
-                message = "Too many attempts. Please request a new code."
+                code = ErrorResponseCode.SERVER_ERROR,
+                message = "Wrong attempt counter"
             )
         code = ErrorResponseCode.INVALID_CODE
         msg = "The verification code is incorrect."
