@@ -36,6 +36,7 @@ class ErrorResponseCode(str, enum.Enum):
     ACCOUNT_DELETED = "ACCOUNT_DELETED"
     TOO_MANY_ATTEMPTS = "TOO_MANY_ATTEMPTS"
     CODE_EXPIRED = "CODE_EXPIRED"
+    CONSENT_MISSING = "CONSENT_MISSING"
 
 class AnalysisStatus(str, enum.Enum):
     PENDING = "pending"

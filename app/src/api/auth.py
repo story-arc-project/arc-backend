@@ -3,7 +3,7 @@ from typing import Annotated
 from uuid import UUID
 from fastapi import APIRouter, Depends, Request, Response
 from pydantic import BaseModel, EmailStr
-from sqlmodel import select
+from sqlmodel import select, func, and_
 
 from src.api.models.exc import AppException
 from src.utils.auth import check_auth
@@ -13,8 +13,9 @@ from src.utils.req import get_ip
 from src.const import ACCESS_TOKEN_KEY, LOGIN_REDIRECT_ENDPOINT_PREFIX, REFRESH_TOKEN_KEY, SHOW_REMAINING_VERIFICATION_ATTEMPTS, LOGIN_MAX_RETRY_COUNT, LOGIN_RETRY_COOLDOWN, VERIFY_EMAIL_MAX_RETRY_COUNT, VERIFY_EMAIL_RETRY_COOLDOWN
 from src.utils.verify import send_code, verify_code
 from src.api.models.base import AccountData, AuthMeData, EmailVerificationErrorResponse, ErrorResponse, LoginData, OnboardResponseData, ProfileData, RefreshData, SuccessResponse, UserInfo
+from src.api.models.consent import CONSENT_REQUIRED
 from src.api.models.request import ForgotPasswordRequest, LoginRequest, OnboardRequest, ProfilePatchRequest, ResetPasswordRequest, SignupRequest, SocialLoginRequest, UserConsentRequest, UserDeleteByPasswordRequest, UserDeleteByTokenRequest, VerificationRequest, VerifyCodeRequest, VersionedConsent
-from src.api.models.response import AuthMeResponse, LoginResponse, LogoutResponse, OnboardResponse, RefreshResponse, SignupResponse, VerificationSentResponse
+from src.api.models.response import AuthMeResponse, LoginResponse, LogoutResponse, OnboardResponse, OnboardConsentErrorResponse, RefreshResponse, SignupResponse, VerificationSentResponse
 from src.db.db import SessionDep
 from src.db.models import DeletedUser, OauthAccount, TermsConsent, Token, User, UserProfile
 from src.enums import ErrorResponseCode, JWTTokenStatus, OauthProviderId, UserStatus
@@ -395,6 +396,40 @@ async def onboard(body: OnboardRequest, session: SessionDep, response: Response,
         return ErrorResponse(
             code = ErrorResponseCode.DUPLICATE_ONBOARDING,
             message = "Onboarding data already exists."
+        )
+    subq = (
+        select(
+            TermsConsent.consent_id,
+            func.max(TermsConsent.agreed_at).label("max_agreed_at")
+        )
+        .where(TermsConsent.user_id == user_id)
+        .group_by(TermsConsent.consent_id)
+        .subquery()
+    )
+    stmt = (
+        select(TermsConsent)
+        .join(
+            subq,
+            and_(
+                TermsConsent.consent_id == subq.c.consent_id,
+                TermsConsent.agreed_at == subq.c.max_agreed_at
+            )
+        )
+        .where(TermsConsent.user_id == user_id)
+    )
+    consents = session.exec(stmt).unique().all()
+    consents_dict = {consent.consent_id: consent for consent in consents}
+    missing_consents = []
+    for required_consent, is_required in CONSENT_REQUIRED.items():
+        consent = consents_dict.get(required_consent)
+        if is_required and (consent is None or not consent.granted):
+            missing_consents.append(required_consent)
+    if len(missing_consents) != 0:
+        response.status_code = 400
+        return OnboardConsentErrorResponse(
+            code = ErrorResponseCode.CONSENT_MISSING,
+            message = "Consent missing.",
+            missing_consent = missing_consents
         )
     user_profile = UserProfile(
         user_id = user_id,

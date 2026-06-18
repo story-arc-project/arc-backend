@@ -705,7 +705,17 @@ valid_onboarding_data = {
     "interest": ["컴퓨터", "AI"]
 }
 
+def test_onboarding_blocked_by_consent(authenticated_client: TestClient):
+    response = authenticated_client.post("/auth/onboarding", json=valid_onboarding_data)
+    assert response.status_code == 400
+    assert len(response.json()["missing_consent"]) == 3
+    req = authenticated_client.post("/auth/consent", json={"agreements": TestConsent()._base_agreements()})
+    assert req.status_code == 200
+    response = authenticated_client.post("/auth/onboarding", json=valid_onboarding_data)
+    assert response.status_code == 200
+
 def test_onboarding_valid_data(authenticated_client: TestClient):
+    authenticated_client.post("/auth/consent", json={"agreements": TestConsent()._base_agreements()})
     response = authenticated_client.post("/auth/onboarding", json=valid_onboarding_data)
     assert response.status_code == 200
 
@@ -769,8 +779,10 @@ def test_onboarding_invalid_data(authenticated_client: TestClient, override: dic
         if v is None:
             data.pop(k, None)
 
+    authenticated_client.post("/auth/consent", json={"agreements": TestConsent()._base_agreements()})
     response = authenticated_client.post("/auth/onboarding", json=data)
     assert response.status_code == expected_status
+    assert response.json()["code"] == "INVALID_INPUT"
 
 
 def test_onboarding_unauthenticated(client: TestClient):
@@ -781,6 +793,7 @@ def test_onboarding_unauthenticated(client: TestClient):
 
 def test_onboarding_duplicate(authenticated_client: TestClient):
     """Second onboarding attempt should fail"""
+    authenticated_client.post("/auth/consent", json={"agreements": TestConsent()._base_agreements()})
     _ = authenticated_client.post("/auth/onboarding", json=valid_onboarding_data)
     response = authenticated_client.post("/auth/onboarding", json=valid_onboarding_data)
     assert response.status_code in (400, 409)
@@ -830,6 +843,7 @@ def test_me(authenticated_client: TestClient):
     assert response.json()["data"]["account"]["email"] == email
     assert response.json()["data"]["onboarded"] == False
     assert response.json()["data"]["profile"] is None
+    authenticated_client.post("/auth/consent", json={"agreements": TestConsent()._base_agreements()})
     _ = authenticated_client.post("/auth/onboarding", json=valid_onboarding_data)
     response = authenticated_client.get("/auth/me")
     assert response.status_code == 200
