@@ -8,13 +8,13 @@ from sqlmodel import select, func, and_
 from src.api.models.exc import AppException
 from src.utils.auth import check_auth
 from src.utils.cors import check_cors
-from src.utils.oauth import google_login
+from src.utils.oauth import social_login_logic
 from src.utils.req import get_ip
 from src.const import ACCESS_TOKEN_KEY, LOGIN_REDIRECT_ENDPOINT_PREFIX, REFRESH_TOKEN_KEY, SHOW_REMAINING_VERIFICATION_ATTEMPTS, LOGIN_MAX_RETRY_COUNT, LOGIN_RETRY_COOLDOWN, VERIFY_EMAIL_MAX_RETRY_COUNT, VERIFY_EMAIL_RETRY_COOLDOWN
 from src.utils.verify import send_code, verify_code
 from src.api.models.base import AccountData, AuthMeData, EmailVerificationErrorResponse, ErrorResponse, LoginData, OnboardResponseData, ProfileData, RefreshData, SuccessResponse, UserInfo
 from src.api.models.consent import CONSENT_REQUIRED
-from src.api.models.request import ForgotPasswordRequest, LoginRequest, OnboardRequest, ProfilePatchRequest, ResetPasswordRequest, SignupRequest, SocialLoginRequest, UserConsentRequest, UserDeleteByPasswordRequest, UserDeleteByTokenRequest, VerificationRequest, VerifyCodeRequest, VersionedConsent
+from src.api.models.request import ForgotPasswordRequest, LoginRequest, OnboardRequest, ProfilePatchRequest, ResetPasswordRequest, SignupRequest, SocialLoginRequest, UserConsentRequest, UserDeleteByPasswordRequest, VerificationRequest, VerifyCodeRequest, VersionedConsent
 from src.api.models.response import AuthMeResponse, LoginResponse, LogoutResponse, OnboardResponse, OnboardConsentErrorResponse, RefreshResponse, SignupResponse, VerificationSentResponse
 from src.db.db import SessionDep
 from src.db.models import DeletedUser, OauthAccount, TermsConsent, Token, User, UserProfile
@@ -258,15 +258,16 @@ async def social_login(request: Request, body: SocialLoginRequest, session: Sess
             code = ErrorResponseCode.CORS_NOT_ALLOWED,
             message = "Origin not allowed"
         )
-    res = google_login(
+    res = social_login_logic(
+        provider = body.provider,
         code = body.token,
-        redirect_uri = origin + LOGIN_REDIRECT_ENDPOINT_PREFIX + OauthProviderId.GOOGLE
+        redirect_uri = origin + LOGIN_REDIRECT_ENDPOINT_PREFIX + body.provider
     )
     if res is None:
         response.status_code = 401
         return ErrorResponse(
             code = ErrorResponseCode.SOCIAL_AUTH_FAILED,
-            message = "Could not verify social credentials with Google."
+            message = "Could not verify social credentials."
         )
     id: str | None = res.get("sub")
     email: str | None = res.get("email")
@@ -275,11 +276,11 @@ async def social_login(request: Request, body: SocialLoginRequest, session: Sess
         response.status_code = 401
         return ErrorResponse(
             code = ErrorResponseCode.SOCIAL_AUTH_FAILED,
-            message = "Could not verify social credentials with Google."
+            message = "Could not verify social credentials."
         )
 
     statement = select(OauthAccount).where(
-        OauthAccount.provider == OauthProviderId.GOOGLE,
+        OauthAccount.provider == body.provider,
         OauthAccount.provider_user_id == id
     )
     _oauth = session.exec(statement).one_or_none()
@@ -300,7 +301,7 @@ async def social_login(request: Request, body: SocialLoginRequest, session: Sess
             raise RuntimeError("User ID missing after flush")
         _oauth = OauthAccount(
             user_id = result.id,
-            provider = OauthProviderId.GOOGLE,
+            provider = body.provider,
             provider_user_id = id
         )
     else:
@@ -591,7 +592,7 @@ async def delete_account_by_password(request: Request, session: SessionDep, body
     return SuccessResponse(message="Delete successful")
 
 @auth_router.delete("/account/social")
-async def delete_account_by_token(request: Request, session: SessionDep, body: UserDeleteByTokenRequest, response: Response, payload: Annotated[AccessTokenPayload, Depends(check_auth)]):
+async def delete_account_by_token(request: Request, session: SessionDep, body: SocialLoginRequest, response: Response, payload: Annotated[AccessTokenPayload, Depends(check_auth)]):
     origin = check_cors(request)
     if origin is None:
         response.status_code = 403
@@ -607,20 +608,21 @@ async def delete_account_by_token(request: Request, session: SessionDep, body: U
             message = "Login required."
         )
     limiter = LoginRateLimiter(get_ip(request), user.email)
-    res = google_login(
+    res = social_login_logic(
+        provider = body.provider,
         code = body.token,
-        redirect_uri = origin + LOGIN_REDIRECT_ENDPOINT_PREFIX + OauthProviderId.GOOGLE
+        redirect_uri = origin + LOGIN_REDIRECT_ENDPOINT_PREFIX + body.provider
     )
     if res is None:
         limiter.record_failure()
         response.status_code = 401
         return ErrorResponse(
             code = ErrorResponseCode.SOCIAL_AUTH_FAILED,
-            message = "Could not verify social credentials with Google."
+            message = "Could not verify social credentials."
         )
     id: str | None = res.get("sub")
     statement = select(OauthAccount).where(
-        OauthAccount.provider == OauthProviderId.GOOGLE,
+        OauthAccount.provider == body.provider,
         OauthAccount.provider_user_id == id
     )
     _oauth = session.exec(statement).one_or_none()
@@ -629,7 +631,7 @@ async def delete_account_by_token(request: Request, session: SessionDep, body: U
         response.status_code = 401
         return ErrorResponse(
             code = ErrorResponseCode.SOCIAL_AUTH_FAILED,
-            message = "Could not verify social credentials with Google."
+            message = "Could not verify social credentials."
         )
     limiter.clear()
     deleted = DeletedUser(user_id=payload.sub)

@@ -3,6 +3,7 @@ import jwt
 from pydantic import EmailStr
 from pydantic.main import BaseModel
 import requests
+from src.enums import OauthProviderId
 
 GOOGLE_TOKEN_ENDPOINT = "https://oauth2.googleapis.com/token"
 GOOGLE_CERTS_ENDPOINT = "https://www.googleapis.com/oauth2/v3/certs"
@@ -52,3 +53,8 @@ def google_login(code: str, redirect_uri: str):
         return None
 
     return payload
+
+def social_login_logic(provider: OauthProviderId, code: str, redirect_uri: str):
+    if provider == OauthProviderId.GOOGLE:
+        return google_login(code, redirect_uri)
+    raise RuntimeError("Reaching here is impossible")

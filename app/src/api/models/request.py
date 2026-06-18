@@ -4,7 +4,7 @@ from uuid import UUID
 from pydantic import BaseModel, EmailStr, field_validator, model_validator, AfterValidator, Field
 import re
 
-from src.enums import Affiliation
+from src.enums import Affiliation, OauthProviderId
 from src.api.models.consent import AGREEABLE_CONSENT_VERSIONS, CONSENT_REQUIRED
 
 def validate_password(v: str):
@@ -37,7 +37,7 @@ class VerifyCodeRequest(BaseModel):
     code: str
 
 class SocialLoginRequest(BaseModel):
-    provider: str = "google" # TODO: restrict to google for now
+    provider: OauthProviderId
     token: str
 
 class OnboardRequest(BaseModel):
@@ -227,9 +227,6 @@ class ResumePostRequest(BaseModel):
 
 class UserDeleteByPasswordRequest(BaseModel):
     password: str
-
-class UserDeleteByTokenRequest(BaseModel):
-    token: str
 
 class ForgotPasswordRequest(BaseModel):
     email: EmailStr
