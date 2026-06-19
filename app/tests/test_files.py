@@ -7,6 +7,23 @@ from sqlmodel import select, Session
 from unittest.mock import MagicMock
 from src.utils.files import S3Settings, S3Client
 from src.db.models import FileMetadata
+from tests.test_auth import get_sent_mail
+
+def _signup_second_user(client: TestClient, mock_mail: MagicMock, email: str = "other2@gmail.com"):
+    """Signs up a second user on the shared client, returning that user's cookies.
+    Does NOT restore the original user's cookies — caller is responsible for that."""
+    client.post("/auth/signup", json={"email": email, "password": "testpassword123"})
+    verify_response = client.post(
+        "/auth/verify-email",
+        json={"email": email, "code": get_sent_mail(mock_mail)["Body"]},
+    )
+    assert verify_response.status_code == 200
+    return dict(client.cookies)
+
+def _restore_cookies(client: TestClient, cookies: dict):
+    client.cookies.clear()
+    for k, v in cookies.items():
+        client.cookies.set(k, v)
 
 class TestSettings:
     def test_settings_minio(self, monkeypatch):
@@ -244,13 +261,24 @@ class TestConfirmUpload:
     def test_confirm_other_user_cannot_confirm(self, authenticated_client: TestClient, client: TestClient, mock_mail: MagicMock):
         data = self._presign(authenticated_client)
         id = data["id"]
+        upload_url = data["upload_url"]
 
-        # second, different user
-        client.post("/auth/signup", json={"email": "other@gmail.com", "password": "testpassword123"})
-        # ... verify email similarly to authenticated_client fixture, omitted for brevity
+        requests.put(
+            upload_url,
+            data=b"a" * 16,
+            headers={"Content-Type": "application/pdf"},
+        )
 
+        original_cookies = dict(authenticated_client.cookies)
+
+        _signup_second_user(client, mock_mail)
         response = client.post("/files/confirm", json={"id": id})
-        assert response.status_code == 404  # owned by a different user, so not found
+        assert response.status_code == 404
+
+        _restore_cookies(client, original_cookies)
+        own_response = client.post("/files/confirm", json={"id": id})
+        # confirm normally — file is still owned by original user
+        assert own_response.status_code == 200
 
 class TestListFiles:
     def _presign_and_upload(
@@ -326,20 +354,18 @@ class TestListFiles:
         id = self._presign_and_upload(authenticated_client, filename="mine.pdf")
         authenticated_client.post("/files/confirm", json={"id": id})
 
-        # second user signs up
-        from tests.test_auth import get_sent_mail
+        original_cookies = dict(authenticated_client.cookies)
 
-        client.post("/auth/signup", json={"email": "other@gmail.com", "password": "testpassword123"})
-        verify_response = client.post(
-            "/auth/verify-email",
-            json={"email": "other@gmail.com", "code": get_sent_mail(mock_mail)["Body"]},
-        )
-        assert verify_response.status_code == 200
-
-        # second user's file list should be empty, not see the first user's file
+        _signup_second_user(client, mock_mail)
         response = client.get("/files/")
         assert response.status_code == 200
         assert response.json()["data"] == []
+
+        _restore_cookies(client, original_cookies)
+        own_response = client.get("/files/")
+        own_files = own_response.json()["data"]
+        assert len(own_files) == 1
+        assert own_files[0]["filename"] == "mine.pdf"
 
     def test_list_requires_auth(self, client: TestClient):
         response = client.get("/files/")
@@ -390,8 +416,6 @@ class TestDownloadFile:
         assert get_response.content == content
 
     def test_download_not_found(self, authenticated_client: TestClient):
-        import uuid
-
         response = authenticated_client.get(f"/files/{uuid.uuid4()}/download")
         assert response.status_code == 404
         assert response.json()["code"] == "NOT_FOUND"
@@ -412,21 +436,17 @@ class TestDownloadFile:
     def test_download_other_user_cannot_access(self, authenticated_client: TestClient, client: TestClient, mock_mail: MagicMock):
         file_id = self._presign_confirm_and_upload(authenticated_client, filename="private.pdf")
 
-        from tests.test_auth import get_sent_mail
+        original_cookies = dict(authenticated_client.cookies)
 
-        client.post("/auth/signup", json={"email": "other@gmail.com", "password": "testpassword123"})
-        verify_response = client.post(
-            "/auth/verify-email",
-            json={"email": "other@gmail.com", "code": get_sent_mail(mock_mail)["Body"]},
-        )
-        assert verify_response.status_code == 200
-
+        _signup_second_user(client, mock_mail)
         response = client.get(f"/files/{file_id}/download")
         assert response.status_code == 404
 
-    def test_download_requires_auth(self, client: TestClient):
-        import uuid
+        _restore_cookies(client, original_cookies)
+        own_response = client.get(f"/files/{file_id}/download")
+        assert own_response.status_code == 200
 
+    def test_download_requires_auth(self, client: TestClient):
         response = client.get(f"/files/{uuid.uuid4()}/download")
         assert response.status_code == 401
 
