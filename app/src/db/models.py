@@ -419,6 +419,7 @@ class FileMetadata(SQLModel, table=True):
     filename: str
     content_type: str
     size: int
+    confirmed: bool = False
     created_at: datetime = Field(
         default_factory=now,
         sa_column=Column(

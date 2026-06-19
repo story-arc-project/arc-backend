@@ -270,3 +270,6 @@ class PresignUploadRequest:
     filename: str
     content_type: str
     size: int
+
+class ConfirmUploadRequest:
+    key: str
