@@ -1,8 +1,8 @@
 from fastapi import APIRouter, Depends
 from src.api.models.exc import AppException, ErrorResponse
-from src.api.models.base import PresignUploadData, SuccessResponse
+from src.api.models.base import FileMetadataPublic, PresignUploadData, SuccessResponse
 from src.api.models.request import ConfirmUploadRequest, PresignUploadRequest
-from src.api.models.response import PresignUploadResponse
+from src.api.models.response import FileListResponse, PresignUploadResponse
 from src.const import EXPIRES_IN
 from src.db.db import SessionDep
 from src.db.models import FileMetadata
@@ -88,3 +88,16 @@ async def confirm_upload(body: ConfirmUploadRequest, session: SessionDep, s3: S3
     session.add(file_record)
     session.commit()
     return SuccessResponse(message="File confirmed")
+
+@files_router.get("/", response_model=FileListResponse)
+async def list_files(session: SessionDep, payload: Annotated[AccessTokenPayload, Depends(check_auth)]):
+    files = session.exec(
+        select(FileMetadata).where(
+            FileMetadata.user_id == payload.sub,
+            FileMetadata.confirmed == True
+        )
+    ).all()
+    return FileListResponse(
+        message="File list fetch success",
+        data=[FileMetadataPublic.model_validate(file) for file in files]
+    )

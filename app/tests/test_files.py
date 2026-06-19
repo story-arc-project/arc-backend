@@ -1,4 +1,5 @@
 import pytest
+import requests
 import uuid
 from pydantic import ValidationError
 from fastapi.testclient import TestClient
@@ -90,8 +91,6 @@ class TestPresign:
        assert url is not None
 
    def test_presigned_url_actually_works(self, s3_client: S3Client):
-       import requests
-
        key = "users/123/upload-test.pdf"
        url = s3_client.presign_upload(key=key)
 
@@ -182,7 +181,6 @@ class TestConfirmUpload:
         upload_url = data["upload_url"]
 
         # actually upload matching bytes to MinIO via the presigned URL
-        import requests
         put_response = requests.put(
             upload_url,
             data=b"a" * 16,
@@ -218,7 +216,6 @@ class TestConfirmUpload:
         key = data["key"]
         upload_url = data["upload_url"]
 
-        import requests
         requests.put(
             upload_url,
             data=b"a" * 999,  # wrong size
@@ -234,7 +231,6 @@ class TestConfirmUpload:
         key = data["key"]
         upload_url = data["upload_url"]
 
-        import requests
         requests.put(
             upload_url,
             data=b"a" * 16,
@@ -255,3 +251,96 @@ class TestConfirmUpload:
 
         response = client.post("/files/confirm", json={"key": key})
         assert response.status_code == 404  # owned by a different user, so not found
+
+class TestListFiles:
+    def _presign_and_upload(
+        self,
+        authenticated_client: TestClient,
+        filename="test.pdf",
+        content_type="application/pdf",
+        data=b"a" * 16,
+    ):
+        response = authenticated_client.post(
+            "/files/presign",
+            json={"filename": filename, "content_type": content_type, "size": len(data)},
+        )
+        body = response.json()["data"]
+        key = body["key"]
+        upload_url = body["upload_url"]
+
+        put = requests.put(upload_url, data=data, headers={"Content-Type": content_type})
+        assert put.status_code == 200
+
+        return key
+
+    def test_list_empty(self, authenticated_client: TestClient):
+        response = authenticated_client.get("/files/")
+        assert response.status_code == 200
+        assert response.json()["data"] == []
+
+    def test_list_only_confirmed_files(self, authenticated_client: TestClient):
+        # presigned but never confirmed — should NOT appear
+        authenticated_client.post(
+            "/files/presign",
+            json={"filename": "unconfirmed.pdf", "content_type": "application/pdf", "size": 16},
+        )
+
+        # presigned, uploaded, and confirmed — SHOULD appear
+        key = self._presign_and_upload(authenticated_client, filename="confirmed.pdf")
+        confirm_response = authenticated_client.post("/files/confirm", json={"key": key})
+        assert confirm_response.status_code == 200
+
+        response = authenticated_client.get("/files/")
+        assert response.status_code == 200
+        files = response.json()["data"]
+
+        assert len(files) == 1
+        assert files[0]["filename"] == "confirmed.pdf"
+
+    def test_list_does_not_expose_key(self, authenticated_client: TestClient):
+        key = self._presign_and_upload(authenticated_client, filename="secret.pdf")
+        authenticated_client.post("/files/confirm", json={"key": key})
+
+        response = authenticated_client.get("/files/")
+        files = response.json()["data"]
+
+        assert "key" not in files[0]
+
+    def test_list_returns_expected_fields(self, authenticated_client: TestClient):
+        key = self._presign_and_upload(
+            authenticated_client, filename="report.pdf", content_type="application/pdf", data=b"x" * 32
+        )
+        authenticated_client.post("/files/confirm", json={"key": key})
+
+        response = authenticated_client.get("/files/")
+        file = response.json()["data"][0]
+
+        assert file["filename"] == "report.pdf"
+        assert file["content_type"] == "application/pdf"
+        assert file["size"] == 32
+        assert "id" in file
+        assert "created_at" in file
+
+    def test_list_only_returns_own_files(self, authenticated_client: TestClient, client: TestClient, mock_mail: MagicMock):
+        # current user uploads + confirms a file
+        key = self._presign_and_upload(authenticated_client, filename="mine.pdf")
+        authenticated_client.post("/files/confirm", json={"key": key})
+
+        # second user signs up
+        from tests.test_auth import get_sent_mail
+
+        client.post("/auth/signup", json={"email": "other@gmail.com", "password": "testpassword123"})
+        verify_response = client.post(
+            "/auth/verify-email",
+            json={"email": "other@gmail.com", "code": get_sent_mail(mock_mail)["Body"]},
+        )
+        assert verify_response.status_code == 200
+
+        # second user's file list should be empty, not see the first user's file
+        response = client.get("/files/")
+        assert response.status_code == 200
+        assert response.json()["data"] == []
+
+    def test_list_requires_auth(self, client: TestClient):
+        response = client.get("/files/")
+        assert response.status_code == 401

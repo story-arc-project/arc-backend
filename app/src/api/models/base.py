@@ -1,6 +1,6 @@
 from datetime import date, datetime
 from uuid import UUID
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel, EmailStr, ConfigDict
 from typing import Any, Generic, TypeVar
 
 from src.enums import Affiliation, AnalysisStatus, ErrorResponseCode, OauthProviderId
@@ -187,3 +187,12 @@ class PresignUploadData(BaseModel):
     key: str
     upload_url: str
     expires_in: int
+
+class FileMetadataPublic(BaseModel):
+    id: UUID
+    filename: str
+    content_type: str
+    size: int
+    created_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
