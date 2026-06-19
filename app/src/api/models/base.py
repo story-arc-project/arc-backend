@@ -184,7 +184,7 @@ class ResumeData(BaseModel):
     result: dict[str, Any] | None
 
 class PresignUploadData(BaseModel):
-    key: str
+    id: UUID
     upload_url: str
     expires_in: int
 

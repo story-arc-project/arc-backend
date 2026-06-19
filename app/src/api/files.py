@@ -30,10 +30,11 @@ async def presign_upload(body: PresignUploadRequest, session: SessionDep, s3: S3
     )
     session.add(file_record)
     session.commit()
+    session.refresh(file_record)
     return PresignUploadResponse(
         message="Presign upload url generated.",
         data=PresignUploadData(
-            key=key,
+            id=file_record.id,
             upload_url=upload_url,
             expires_in=EXPIRES_IN
         )
@@ -44,7 +45,7 @@ async def confirm_upload(body: ConfirmUploadRequest, session: SessionDep, s3: S3
     # TODO: Implement not confirmed file records cleanup
     file_record = session.exec(
         select(FileMetadata).where(
-            FileMetadata.key == body.key,
+            FileMetadata.id == body.id,
             FileMetadata.user_id == payload.sub
         )
     ).one_or_none()
@@ -57,7 +58,7 @@ async def confirm_upload(body: ConfirmUploadRequest, session: SessionDep, s3: S3
             )
         )
     try:
-        head = s3._client.head_object(Bucket=s3.settings.s3_bucket_name, Key=body.key)
+        head = s3._client.head_object(Bucket=s3.settings.s3_bucket_name, Key=file_record.key)
     except s3._client.exceptions.ClientError:
         raise AppException(
             status_code=404,

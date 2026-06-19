@@ -118,7 +118,7 @@ class TestPresignUpload:
         assert response.status_code == 200
         body = response.json()
 
-        assert "key" in body["data"]
+        assert "id" in body["data"]
         assert "upload_url" in body["data"]
         assert body["data"]["upload_url"].startswith("http")
         assert "expires_in" in body["data"]
@@ -132,11 +132,9 @@ class TestPresignUpload:
                 "size": 2048,
             },
         )
-        key = response.json()["data"]["key"]
+        id = response.json()["data"]["id"]
 
-        record = session.exec(
-            select(FileMetadata).where(FileMetadata.key == key)
-        ).one_or_none()
+        record = session.get(FileMetadata, id)
 
         assert record is not None
         assert record.confirmed is False
@@ -144,7 +142,7 @@ class TestPresignUpload:
         assert record.content_type == "application/pdf"
         assert record.size == 2048
 
-    def test_presign_key_is_namespaced_by_user(self, authenticated_client: TestClient):
+    def test_presign_key_is_namespaced_by_user(self, authenticated_client: TestClient, session: Session):
         response = authenticated_client.post(
             "/files/presign",
             json={
@@ -153,7 +151,10 @@ class TestPresignUpload:
                 "size": 100,
             },
         )
-        key = response.json()["data"]["key"]
+        id = response.json()["data"]["id"]
+        record = session.get(FileMetadata, id)
+        assert record is not None
+        key = record.key
         assert key.startswith("users/")
 
     def test_presign_requires_auth(self, client: TestClient):
@@ -177,7 +178,7 @@ class TestConfirmUpload:
 
     def test_confirm_success(self, authenticated_client: TestClient, session: Session):
         data = self._presign(authenticated_client, size=16)
-        key = data["key"]
+        id = data["id"]
         upload_url = data["upload_url"]
 
         # actually upload matching bytes to MinIO via the presigned URL
@@ -188,32 +189,31 @@ class TestConfirmUpload:
         )
         assert put_response.status_code == 200
 
-        response = authenticated_client.post("/files/confirm", json={"key": key})
+        response = authenticated_client.post("/files/confirm", json={"id": id})
         assert response.status_code == 200
 
-        record = session.exec(
-            select(FileMetadata).where(FileMetadata.key == key)
-        ).one_or_none()
+        record = session.get(FileMetadata, id)
+        assert record is not None
         assert record.confirmed is True
 
     def test_confirm_not_found_record(self, authenticated_client: TestClient):
         response = authenticated_client.post(
             "/files/confirm",
-            json={"key": f"users/{uuid.uuid4()}/nonexistent"},
+            json={"id": str(uuid.uuid4())},
         )
         assert response.status_code == 404
 
     def test_confirm_file_missing_in_storage(self, authenticated_client: TestClient):
         data = self._presign(authenticated_client)
-        key = data["key"]
+        id = data["id"]
         # never actually uploaded to S3
 
-        response = authenticated_client.post("/files/confirm", json={"key": key})
+        response = authenticated_client.post("/files/confirm", json={"id": id})
         assert response.status_code == 404
 
     def test_confirm_size_mismatch(self, authenticated_client: TestClient):
         data = self._presign(authenticated_client, size=16)
-        key = data["key"]
+        id = data["id"]
         upload_url = data["upload_url"]
 
         requests.put(
@@ -222,13 +222,13 @@ class TestConfirmUpload:
             headers={"Content-Type": "application/pdf"},
         )
 
-        response = authenticated_client.post("/files/confirm", json={"key": key})
+        response = authenticated_client.post("/files/confirm", json={"id": id})
         assert response.status_code == 400
         assert response.json()["code"] == "METADATA_ERROR"
 
     def test_confirm_content_type_mismatch(self, authenticated_client: TestClient):
         data = self._presign(authenticated_client, content_type="application/pdf", size=16)
-        key = data["key"]
+        id = data["id"]
         upload_url = data["upload_url"]
 
         requests.put(
@@ -237,19 +237,19 @@ class TestConfirmUpload:
             headers={"Content-Type": "image/png"},  # wrong content type
         )
 
-        response = authenticated_client.post("/files/confirm", json={"key": key})
+        response = authenticated_client.post("/files/confirm", json={"id": id})
         assert response.status_code == 400
         assert response.json()["code"] == "METADATA_ERROR"
 
     def test_confirm_other_user_cannot_confirm(self, authenticated_client: TestClient, client: TestClient, mock_mail: MagicMock):
         data = self._presign(authenticated_client)
-        key = data["key"]
+        id = data["id"]
 
         # second, different user
         client.post("/auth/signup", json={"email": "other@gmail.com", "password": "testpassword123"})
         # ... verify email similarly to authenticated_client fixture, omitted for brevity
 
-        response = client.post("/files/confirm", json={"key": key})
+        response = client.post("/files/confirm", json={"id": id})
         assert response.status_code == 404  # owned by a different user, so not found
 
 class TestListFiles:
@@ -265,13 +265,13 @@ class TestListFiles:
             json={"filename": filename, "content_type": content_type, "size": len(data)},
         )
         body = response.json()["data"]
-        key = body["key"]
+        id = body["id"]
         upload_url = body["upload_url"]
 
         put = requests.put(upload_url, data=data, headers={"Content-Type": content_type})
         assert put.status_code == 200
 
-        return key
+        return id
 
     def test_list_empty(self, authenticated_client: TestClient):
         response = authenticated_client.get("/files/")
@@ -286,8 +286,8 @@ class TestListFiles:
         )
 
         # presigned, uploaded, and confirmed — SHOULD appear
-        key = self._presign_and_upload(authenticated_client, filename="confirmed.pdf")
-        confirm_response = authenticated_client.post("/files/confirm", json={"key": key})
+        id = self._presign_and_upload(authenticated_client, filename="confirmed.pdf")
+        confirm_response = authenticated_client.post("/files/confirm", json={"id": id})
         assert confirm_response.status_code == 200
 
         response = authenticated_client.get("/files/")
@@ -298,8 +298,8 @@ class TestListFiles:
         assert files[0]["filename"] == "confirmed.pdf"
 
     def test_list_does_not_expose_key(self, authenticated_client: TestClient):
-        key = self._presign_and_upload(authenticated_client, filename="secret.pdf")
-        authenticated_client.post("/files/confirm", json={"key": key})
+        id = self._presign_and_upload(authenticated_client, filename="secret.pdf")
+        authenticated_client.post("/files/confirm", json={"id": id})
 
         response = authenticated_client.get("/files/")
         files = response.json()["data"]
@@ -307,10 +307,10 @@ class TestListFiles:
         assert "key" not in files[0]
 
     def test_list_returns_expected_fields(self, authenticated_client: TestClient):
-        key = self._presign_and_upload(
+        id = self._presign_and_upload(
             authenticated_client, filename="report.pdf", content_type="application/pdf", data=b"x" * 32
         )
-        authenticated_client.post("/files/confirm", json={"key": key})
+        authenticated_client.post("/files/confirm", json={"id": id})
 
         response = authenticated_client.get("/files/")
         file = response.json()["data"][0]
@@ -323,8 +323,8 @@ class TestListFiles:
 
     def test_list_only_returns_own_files(self, authenticated_client: TestClient, client: TestClient, mock_mail: MagicMock):
         # current user uploads + confirms a file
-        key = self._presign_and_upload(authenticated_client, filename="mine.pdf")
-        authenticated_client.post("/files/confirm", json={"key": key})
+        id = self._presign_and_upload(authenticated_client, filename="mine.pdf")
+        authenticated_client.post("/files/confirm", json={"id": id})
 
         # second user signs up
         from tests.test_auth import get_sent_mail

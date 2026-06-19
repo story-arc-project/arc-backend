@@ -272,4 +272,4 @@ class PresignUploadRequest(BaseModel):
     size: int
 
 class ConfirmUploadRequest(BaseModel):
-    key: str
+    id: UUID
