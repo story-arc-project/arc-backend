@@ -1,6 +1,5 @@
-from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request
-from fastapi.exceptions import RequestValidationError, ValidationException
+from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from os import getenv
 
@@ -8,6 +7,7 @@ from fastapi.responses import JSONResponse
 from src.api.analysis import analysis_router
 from src.api.experiences import experiences_router
 from src.api.export import export_router
+from src.api.files import files_router
 from src.api.internal import internal_router
 from src.api.libraries import libraries_router
 from src.api.models.exc import AppException
@@ -88,4 +88,8 @@ app.include_router(
 app.include_router(
     export_router,
     prefix="/export"
+)
+app.include_router(
+    files_router,
+    prefix="/files"
 )

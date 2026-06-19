@@ -406,3 +406,24 @@ class TermsConsent(SQLModel, table=True):
             nullable=False
         )
     )
+
+class FileMetadata(SQLModel, table=True):
+    __tablename__: str = "file_metadata"  # pyright: ignore[reportIncompatibleVariableOverride]
+    id: uuid.UUID = Field(
+        default_factory=uuid.uuid4,
+        primary_key=True,
+        sa_type=SAUUID
+    )
+    user_id: uuid.UUID = Field(foreign_key="users.id", sa_type=SAUUID)
+    key: str = Field(unique=True, index=True)
+    filename: str
+    content_type: str
+    size: int
+    created_at: datetime = Field(
+        default_factory=now,
+        sa_column=Column(
+            DateTime(timezone=True),
+            server_default=func.now(),
+            nullable=False
+        )
+    )

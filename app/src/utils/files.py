@@ -1,4 +1,8 @@
 import boto3
+from functools import lru_cache
+from fastapi import Depends
+from typing import Annotated
+from src.const import EXPIRES_IN
 from pydantic_settings import BaseSettings
 from mypy_boto3_s3 import S3Client as BotoS3Client
 from botocore.config import Config
@@ -9,6 +13,10 @@ class S3Settings(BaseSettings):
     aws_region: str = "auto"            # use "auto" for R2
     s3_bucket_name: str
     s3_endpoint_url: str | None = None  # required for R2, None for AWS S3
+
+@lru_cache
+def get_s3_settings():
+    return S3Settings()
 
 class S3Client:
     def __init__(self, settings: S3Settings):
@@ -22,7 +30,7 @@ class S3Client:
             config=Config(signature_version="s3v4")
         )
     
-    def presign_upload(self, key: str, content_type: str, expires_in: int = 300):
+    def presign_upload(self, key: str, content_type: str, expires_in: int = EXPIRES_IN):
         return self._client.generate_presigned_url(
             "put_object",
             Params={
@@ -32,3 +40,8 @@ class S3Client:
             },
             ExpiresIn=expires_in
         )
+
+def get_s3_client(settings: Annotated[S3Settings, Depends(get_s3_settings)]):
+    return S3Client(settings)
+
+S3Dep = Annotated[S3Client, Depends(get_s3_client)]

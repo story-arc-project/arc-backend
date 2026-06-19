@@ -182,3 +182,8 @@ class ResumeData(BaseModel):
     created_at: datetime
     updated_at: datetime
     result: dict[str, Any] | None
+
+class PresignUploadData(BaseModel):
+    key: str
+    upload_url: str
+    expires_in: int

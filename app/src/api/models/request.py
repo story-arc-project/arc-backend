@@ -265,3 +265,8 @@ class Agreements(BaseModel):
 
 class UserConsentRequest(BaseModel):
     agreements: Agreements
+
+class PresignUploadRequest:
+    filename: str
+    content_type: str
+    size: int
