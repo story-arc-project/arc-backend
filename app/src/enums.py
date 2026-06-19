@@ -38,6 +38,7 @@ class ErrorResponseCode(str, enum.Enum):
     CODE_EXPIRED = "CODE_EXPIRED"
     CONSENT_MISSING = "CONSENT_MISSING"
     METADATA_ERROR = "METADATA_ERROR"
+    FILE_NOT_CONFIRMED = "FILE_NOT_CONFIRMED"
 
 class AnalysisStatus(str, enum.Enum):
     PENDING = "pending"

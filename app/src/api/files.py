@@ -119,6 +119,14 @@ async def get_download_url(file_id: uuid.UUID, session: SessionDep, s3: S3Dep, p
                 message="File record not found"
             )
         )
+    if not file_record.confirmed:
+        raise AppException(
+            status_code=400,
+            error=ErrorResponse(
+                code=ErrorResponseCode.FILE_NOT_CONFIRMED,
+                message="File not confirmed"
+            )
+        )
     url = s3._client.generate_presigned_url(
         "get_object",
         Params={"Bucket": s3.settings.s3_bucket_name, "Key": file_record.key},
