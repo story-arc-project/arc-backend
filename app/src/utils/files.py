@@ -30,13 +30,12 @@ class S3Client:
             config=Config(signature_version="s3v4")
         )
     
-    def presign_upload(self, key: str, content_type: str, expires_in: int = EXPIRES_IN):
+    def presign_upload(self, key: str, expires_in: int = EXPIRES_IN):
         return self._client.generate_presigned_url(
             "put_object",
             Params={
                 "Bucket": self.settings.s3_bucket_name,
                 "Key": key,
-                "ContentType": content_type
             },
             ExpiresIn=expires_in
         )

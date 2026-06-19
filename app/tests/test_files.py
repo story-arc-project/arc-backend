@@ -1,6 +1,6 @@
 import pytest
 from pydantic import ValidationError
-from src.utils.files import S3Settings
+from src.utils.files import S3Settings, S3Client
 
 class TestSettings:
     def test_settings_minio(self, monkeypatch):
@@ -62,36 +62,33 @@ class TestSettings:
         assert settings.aws_region == "auto"      # default
         assert settings.s3_endpoint_url is None   # default
 
-class TestPresignUpload:
-   def test_returns_url(self, s3_client):
+class TestPresign:
+   def test_returns_url(self, s3_client: S3Client):
        url = s3_client.presign_upload(
            key="users/123/test.pdf",
-           content_type="application/pdf",
        )
        assert url.startswith("http")
        assert "test.pdf" in url
 
-   def test_url_contains_signature(self, s3_client):
+   def test_url_contains_signature(self, s3_client: S3Client):
        url = s3_client.presign_upload(
            key="users/123/test.pdf",
-           content_type="application/pdf",
        )
        assert "X-Amz-Signature" in url
 
-   def test_custom_expiry(self, s3_client):
+   def test_custom_expiry(self, s3_client: S3Client):
        # just verify it doesn't error with custom expiry
        url = s3_client.presign_upload(
            key="users/123/test.pdf",
-           content_type="application/pdf",
            expires_in=60,
        )
        assert url is not None
 
-   def test_presigned_url_actually_works(self, s3_client):
+   def test_presigned_url_actually_works(self, s3_client: S3Client):
        import requests
 
        key = "users/123/upload-test.pdf"
-       url = s3_client.presign_upload(key=key, content_type="application/pdf")
+       url = s3_client.presign_upload(key=key)
 
        response = requests.put(
            url,

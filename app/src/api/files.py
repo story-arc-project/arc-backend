@@ -20,10 +20,7 @@ files_router = APIRouter()
 async def presign_upload(body: PresignUploadRequest, session: SessionDep, s3: S3Dep, payload: Annotated[AccessTokenPayload, Depends(check_auth)]):
     # TODO: Implement allowed content types, max file size
     key = f"users/{payload.sub}/{uuid.uuid4()}"
-    upload_url = s3.presign_upload(
-        key=key,
-        content_type=body.content_type
-    )
+    upload_url = s3.presign_upload(key=key)
     file_record = FileMetadata(
         user_id=payload.sub,
         key=key,
