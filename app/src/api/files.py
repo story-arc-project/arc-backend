@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends
 from src.api.models.exc import AppException, ErrorResponse
 from src.api.models.base import FileMetadataPublic, PresignUploadData, SuccessResponse
 from src.api.models.request import ConfirmUploadRequest, PresignUploadRequest
-from src.api.models.response import FileDownloadResponse, FileListResponse, PresignUploadResponse
+from src.api.models.response import FileDownloadResponse, FileListResponse, FileMetadataResponse, PresignUploadResponse
 from src.const import EXPIRES_IN
 from src.db.db import SessionDep
 from src.db.models import FileMetadata
@@ -92,6 +92,7 @@ async def confirm_upload(body: ConfirmUploadRequest, session: SessionDep, s3: S3
 
 @files_router.get("/", response_model=FileListResponse)
 async def list_files(session: SessionDep, payload: Annotated[AccessTokenPayload, Depends(check_auth)]):
+    # TODO: filter confirmed
     files = session.exec(
         select(FileMetadata).where(
             FileMetadata.user_id == payload.sub,
@@ -101,6 +102,29 @@ async def list_files(session: SessionDep, payload: Annotated[AccessTokenPayload,
     return FileListResponse(
         message="File list fetch success",
         data=[FileMetadataPublic.model_validate(file) for file in files]
+    )
+
+@files_router.get("/{file_id}", response_model=FileMetadataResponse)
+async def get_file(file_id: uuid.UUID, session: SessionDep, payload: Annotated[AccessTokenPayload, Depends(check_auth)]):
+    # TODO: filter confirmed
+    file_record = session.exec(
+        select(FileMetadata).where(
+            FileMetadata.id == file_id,
+            FileMetadata.user_id == payload.sub,
+            FileMetadata.confirmed == True,
+        )
+    ).one_or_none()
+    if file_record is None:
+        raise AppException(
+            status_code=404,
+            error=ErrorResponse(
+                code=ErrorResponseCode.NOT_FOUND,
+                message="File record not found"
+            )
+        )
+    return FileMetadataResponse(
+        message="File metadata fetched",
+        data=FileMetadataPublic.model_validate(file_record)
     )
 
 @files_router.get("/{file_id}/download")
