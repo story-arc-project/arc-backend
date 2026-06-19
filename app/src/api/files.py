@@ -128,3 +128,23 @@ async def get_download_url(file_id: uuid.UUID, session: SessionDep, s3: S3Dep, p
         message="File download url generated",
         data=url
     )
+
+@files_router.delete("/{file_id}", status_code=204)
+async def delete_file(file_id: uuid.UUID, session: SessionDep, s3: S3Dep, payload: Annotated[AccessTokenPayload, Depends(check_auth)]):
+    file_record = session.exec(
+        select(FileMetadata).where(
+            FileMetadata.id == file_id,
+            FileMetadata.user_id == payload.sub
+        )
+    ).one_or_none()
+    if file_record is None:
+        raise AppException(
+            status_code=404,
+            error=ErrorResponse(
+                code=ErrorResponseCode.NOT_FOUND,
+                message="File record not found"
+            )
+        )
+    s3._client.delete_object(Bucket=s3.settings.s3_bucket_name, Key=file_record.key)
+    session.delete(file_record)
+    session.commit()

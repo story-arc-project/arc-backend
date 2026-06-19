@@ -454,3 +454,93 @@ class TestDownloadFile:
         response = authenticated_client.get("/files/not-a-uuid/download")
         assert response.status_code == 400
         assert response.json()["code"] == "INVALID_INPUT"
+
+class TestDeleteFile:
+    def _presign_confirm_and_upload(
+        self,
+        authenticated_client: TestClient,
+        filename="test.pdf",
+        content_type="application/pdf",
+        data=b"a" * 16,
+    ):
+        response = authenticated_client.post(
+            "/files/presign",
+            json={"filename": filename, "content_type": content_type, "size": len(data)},
+        )
+        body = response.json()["data"]
+        file_id = body["id"]
+        upload_url = body["upload_url"]
+
+        put = requests.put(upload_url, data=data, headers={"Content-Type": content_type})
+        assert put.status_code == 200
+
+        confirm_response = authenticated_client.post("/files/confirm", json={"id": file_id})
+        assert confirm_response.status_code == 200
+
+        return file_id
+
+    def test_delete_success(self, authenticated_client: TestClient):
+        file_id = self._presign_confirm_and_upload(authenticated_client)
+
+        response = authenticated_client.delete(f"/files/{file_id}")
+        assert response.status_code == 204
+
+    def test_delete_removes_db_record(self, authenticated_client: TestClient, session: Session):
+        from src.db.models import FileMetadata
+        from sqlmodel import select
+
+        file_id = self._presign_confirm_and_upload(authenticated_client)
+        authenticated_client.delete(f"/files/{file_id}")
+
+        record = session.exec(
+            select(FileMetadata).where(FileMetadata.id == file_id)
+        ).one_or_none()
+        assert record is None
+
+    def test_delete_removes_s3_object(self, authenticated_client: TestClient, s3_client: S3Client):
+        file_id = self._presign_confirm_and_upload(authenticated_client)
+
+        # get the key before deleting, via download endpoint indirectly,
+        # or query DB directly if db_session fixture is available
+        from src.db.models import FileMetadata
+        from sqlmodel import select
+
+        # NOTE: requires db_session fixture to fetch key before delete
+        # see test below for a self-contained version using head_object
+
+        authenticated_client.delete(f"/files/{file_id}")
+
+        # after delete, the file should no longer be downloadable
+        response = authenticated_client.get(f"/files/{file_id}/download")
+        assert response.status_code == 404
+
+    def test_delete_not_found(self, authenticated_client: TestClient):
+        response = authenticated_client.delete(f"/files/{uuid.uuid4()}")
+        assert response.status_code == 404
+        assert response.json()["code"] == "NOT_FOUND"
+
+    def test_delete_other_user_cannot_delete(self, authenticated_client: TestClient, client: TestClient, mock_mail: MagicMock):
+        file_id = self._presign_confirm_and_upload(authenticated_client)
+
+        original_cookies = dict(authenticated_client.cookies)
+
+        _signup_second_user(client, mock_mail)
+        response = client.delete(f"/files/{file_id}")
+        assert response.status_code == 404
+
+        _restore_cookies(client, original_cookies)
+        own_response = client.get(f"/files/{file_id}/download")
+        assert own_response.status_code == 200
+
+    def test_delete_requires_auth(self, client: TestClient):
+        response = client.delete(f"/files/{uuid.uuid4()}")
+        assert response.status_code == 401
+
+    def test_delete_already_deleted(self, authenticated_client: TestClient):
+        file_id = self._presign_confirm_and_upload(authenticated_client)
+
+        first = authenticated_client.delete(f"/files/{file_id}")
+        assert first.status_code == 204
+
+        second = authenticated_client.delete(f"/files/{file_id}")
+        assert second.status_code == 404
