@@ -60,13 +60,31 @@ async def confirm_upload(body: ConfirmUploadRequest, session: SessionDep, s3: S3
             )
         )
     try:
-        s3._client.head_object(Bucket=s3.settings.s3_bucket_name, Key=body.key)
+        head = s3._client.head_object(Bucket=s3.settings.s3_bucket_name, Key=body.key)
     except s3._client.exceptions.ClientError:
         raise AppException(
             status_code=404,
             error=ErrorResponse(
                 code=ErrorResponseCode.NOT_FOUND,
                 message="File not found"
+            )
+        )
+    actual_size = head["ContentLength"]
+    actual_content_type = head.get("ContentType", "")
+    if actual_size != file_record.size:
+        raise AppException(
+            status_code=400,
+            error=ErrorResponse(
+                code=ErrorResponseCode.METADATA_ERROR,
+                message="File size does not match metadata"
+            )
+        )
+    if actual_content_type != file_record.content_type:
+        raise AppException(
+            status_code=400,
+            error=ErrorResponse(
+                code=ErrorResponseCode.METADATA_ERROR,
+                message="File content type does not match metadata"
             )
         )
     file_record.confirmed = True

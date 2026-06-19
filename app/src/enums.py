@@ -37,6 +37,7 @@ class ErrorResponseCode(str, enum.Enum):
     TOO_MANY_ATTEMPTS = "TOO_MANY_ATTEMPTS"
     CODE_EXPIRED = "CODE_EXPIRED"
     CONSENT_MISSING = "CONSENT_MISSING"
+    METADATA_ERROR = "METADATA_ERROR"
 
 class AnalysisStatus(str, enum.Enum):
     PENDING = "pending"
