@@ -23,11 +23,12 @@ dependencies = [
 
 [dependency-groups]
 dev = [
+    "boto3-stubs[s3]>=1.43.32",
     "fakeredis>=2.34.1",
     "freezegun>=1.5.5",
     "httpx>=0.28.1",
     "pytest>=9.0.2",
-    "testcontainers[postgres]>=4.14.2",
+    "testcontainers[minio,postgres]>=4.14.2",
 ]
 
 [tool.pytest.ini_options]

@@ -61,3 +61,45 @@ class TestSettings:
 
         assert settings.aws_region == "auto"      # default
         assert settings.s3_endpoint_url is None   # default
+
+class TestPresignUpload:
+   def test_returns_url(self, s3_client):
+       url = s3_client.presign_upload(
+           key="users/123/test.pdf",
+           content_type="application/pdf",
+       )
+       assert url.startswith("http")
+       assert "test.pdf" in url
+
+   def test_url_contains_signature(self, s3_client):
+       url = s3_client.presign_upload(
+           key="users/123/test.pdf",
+           content_type="application/pdf",
+       )
+       assert "X-Amz-Signature" in url
+
+   def test_custom_expiry(self, s3_client):
+       # just verify it doesn't error with custom expiry
+       url = s3_client.presign_upload(
+           key="users/123/test.pdf",
+           content_type="application/pdf",
+           expires_in=60,
+       )
+       assert url is not None
+
+   def test_presigned_url_actually_works(self, s3_client):
+       import requests
+
+       key = "users/123/upload-test.pdf"
+       url = s3_client.presign_upload(key=key, content_type="application/pdf")
+
+       response = requests.put(
+           url,
+           data=b"fake pdf content",
+           headers={"Content-Type": "application/pdf"},
+       )
+       assert response.status_code == 200
+
+       # verify the file exists in minio
+       obj = s3_client._client.get_object(Bucket="test-bucket", Key=key)
+       assert obj["Body"].read() == b"fake pdf content"
