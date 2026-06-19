@@ -6,7 +6,7 @@ from sqlalchemy import text
 from sqlalchemy.pool import NullPool
 from sqlmodel import SQLModel, Session, create_engine
 from testcontainers.minio import MinioContainer
-from src.utils.files import S3Settings, S3Client
+from src.utils.files import S3Settings, S3Client, get_s3_client
 from testcontainers.postgres import PostgresContainer
 import os
 
@@ -23,6 +23,33 @@ def fake_redis():
     
     with patch("src.db.red.r", fake):
         yield fake
+
+@pytest.fixture(scope="session")
+def minio_container():
+    with MinioContainer() as minio:
+        yield minio
+
+@pytest.fixture
+def s3_settings(minio_container: MinioContainer):
+    config = minio_container.get_config()
+    return S3Settings(
+        aws_access_key_id=config["access_key"],
+        aws_secret_access_key=config["secret_key"],
+        aws_region="us-east-1",
+        s3_bucket_name="test-bucket",
+        s3_endpoint_url=f"http://{config["endpoint"]}"
+    )
+
+@pytest.fixture
+def s3_client(s3_settings: S3Settings):
+    client = S3Client(s3_settings)
+    bucket_name = s3_settings.s3_bucket_name
+    client._client.create_bucket(Bucket=bucket_name)
+    yield client
+    objects = client._client.list_objects(Bucket=bucket_name).get("Contents", [])
+    for obj in objects:
+        client._client.delete_object(Bucket=bucket_name, Key=obj["Key"])
+    client._client.delete_bucket(Bucket=bucket_name)
 
 @pytest.fixture(autouse=True)
 def mock_mail():
@@ -71,12 +98,15 @@ def session_fixture():
 
 
 @pytest.fixture
-def client(session: Session):
+def client(session: Session, s3_client: S3Client):
     def override():
         with Session(session.get_bind()) as new_session:
             yield new_session
+    def override_s3():
+        return s3_client
     
     app.dependency_overrides[get_session] = override
+    app.dependency_overrides[get_s3_client] = override_s3
     yield TestClient(
         app,
         f"https://{TESTSERVER_HOST}",
@@ -100,30 +130,3 @@ def authenticated_client(client: TestClient, mock_mail: MagicMock):
     assert client.cookies.get("refreshToken") is not None
     assert client.cookies.get("accessToken") is not None
     return client
-
-@pytest.fixture(scope="session")
-def minio_container():
-    with MinioContainer() as minio:
-        yield minio
-
-@pytest.fixture
-def s3_settings(minio_container: MinioContainer):
-    config = minio_container.get_config()
-    return S3Settings(
-        aws_access_key_id=config["access_key"],
-        aws_secret_access_key=config["secret_key"],
-        aws_region="us-east-1",
-        s3_bucket_name="test-bucket",
-        s3_endpoint_url=f"http://{config["endpoint"]}"
-    )
-
-@pytest.fixture
-def s3_client(s3_settings: S3Settings):
-    client = S3Client(s3_settings)
-    bucket_name = s3_settings.s3_bucket_name
-    client._client.create_bucket(Bucket=bucket_name)
-    yield client
-    objects = client._client.list_objects(Bucket=bucket_name).get("Contents", [])
-    for obj in objects:
-        client._client.delete_object(Bucket=bucket_name, Key=obj["Key"])
-    client._client.delete_bucket(Bucket=bucket_name)

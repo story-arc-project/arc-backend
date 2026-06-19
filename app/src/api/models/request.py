@@ -266,10 +266,10 @@ class Agreements(BaseModel):
 class UserConsentRequest(BaseModel):
     agreements: Agreements
 
-class PresignUploadRequest:
+class PresignUploadRequest(BaseModel):
     filename: str
     content_type: str
     size: int
 
-class ConfirmUploadRequest:
+class ConfirmUploadRequest(BaseModel):
     key: str
