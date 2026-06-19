@@ -18,11 +18,10 @@ from src.api.models.request import ForgotPasswordRequest, LoginRequest, OnboardR
 from src.api.models.response import AuthMeResponse, LoginResponse, LogoutResponse, OnboardResponse, OnboardConsentErrorResponse, RefreshResponse, SignupResponse, VerificationSentResponse
 from src.db.db import SessionDep
 from src.db.models import DeletedUser, OauthAccount, TermsConsent, Token, User, UserProfile
-from src.enums import ErrorResponseCode, JWTTokenStatus, OauthProviderId, UserStatus
+from src.enums import ErrorResponseCode, JWTTokenStatus, UserStatus
 from src.utils.ratelimit import RateLimiter
 from src.utils.pwd import hash_password, verify_password
 from src.utils.token import AccessTokenPayload, create_access_token, create_refresh_token, hash_jti, verify_refresh_token
-from src.db.red import is_locked, increment_attempt, set_lockout, clear as red_clear
 
 auth_router = APIRouter()
 
