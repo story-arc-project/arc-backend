@@ -62,3 +62,6 @@ class PresignUploadResponse(SuccessResponseWithData):
 
 class FileListResponse(SuccessResponseWithData):
     data: list[FileMetadataPublic]
+
+class FileDownloadResponse(SuccessResponseWithData):
+    data: str

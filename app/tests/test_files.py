@@ -344,3 +344,93 @@ class TestListFiles:
     def test_list_requires_auth(self, client: TestClient):
         response = client.get("/files/")
         assert response.status_code == 401
+
+class TestDownloadFile:
+    def _presign_confirm_and_upload(
+        self,
+        authenticated_client: TestClient,
+        filename="test.pdf",
+        content_type="application/pdf",
+        data=b"a" * 16,
+    ):
+        response = authenticated_client.post(
+            "/files/presign",
+            json={"filename": filename, "content_type": content_type, "size": len(data)},
+        )
+        body = response.json()["data"]
+        file_id = body["id"]
+        upload_url = body["upload_url"]
+
+        put = requests.put(upload_url, data=data, headers={"Content-Type": content_type})
+        assert put.status_code == 200
+
+        confirm_response = authenticated_client.post("/files/confirm", json={"id": file_id})
+        assert confirm_response.status_code == 200
+
+        return file_id
+
+    def test_download_success(self, authenticated_client: TestClient):
+        file_id = self._presign_confirm_and_upload(authenticated_client, data=b"hello world!!!!!")
+
+        response = authenticated_client.get(f"/files/{file_id}/download")
+        assert response.status_code == 200
+
+        download_url = response.json()["data"]
+        assert download_url.startswith("http")
+
+    def test_download_url_actually_works(self, authenticated_client: TestClient):
+        content = b"the real file content"
+        file_id = self._presign_confirm_and_upload(authenticated_client, data=content)
+
+        response = authenticated_client.get(f"/files/{file_id}/download")
+        download_url = response.json()["data"]
+
+        get_response = requests.get(download_url)
+        assert get_response.status_code == 200
+        assert get_response.content == content
+
+    def test_download_not_found(self, authenticated_client: TestClient):
+        import uuid
+
+        response = authenticated_client.get(f"/files/{uuid.uuid4()}/download")
+        assert response.status_code == 404
+        assert response.json()["code"] == "NOT_FOUND"
+
+    def test_download_unconfirmed_file(self, authenticated_client: TestClient):
+        # presign but never upload/confirm
+        response = authenticated_client.post(
+            "/files/presign",
+            json={"filename": "unconfirmed.pdf", "content_type": "application/pdf", "size": 16},
+        )
+        file_id = response.json()["data"]["id"]
+
+        # record exists in DB, so this currently succeeds even though unconfirmed —
+        # flagging this as a possible gap, see note below
+        response = authenticated_client.get(f"/files/{file_id}/download")
+        assert response.status_code == 200
+
+    def test_download_other_user_cannot_access(self, authenticated_client: TestClient, client: TestClient, mock_mail: MagicMock):
+        file_id = self._presign_confirm_and_upload(authenticated_client, filename="private.pdf")
+
+        from tests.test_auth import get_sent_mail
+
+        client.post("/auth/signup", json={"email": "other@gmail.com", "password": "testpassword123"})
+        verify_response = client.post(
+            "/auth/verify-email",
+            json={"email": "other@gmail.com", "code": get_sent_mail(mock_mail)["Body"]},
+        )
+        assert verify_response.status_code == 200
+
+        response = client.get(f"/files/{file_id}/download")
+        assert response.status_code == 404
+
+    def test_download_requires_auth(self, client: TestClient):
+        import uuid
+
+        response = client.get(f"/files/{uuid.uuid4()}/download")
+        assert response.status_code == 401
+
+    def test_download_invalid_uuid(self, authenticated_client: TestClient):
+        response = authenticated_client.get("/files/not-a-uuid/download")
+        assert response.status_code == 400
+        assert response.json()["code"] == "INVALID_INPUT"

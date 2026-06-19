@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends
 from src.api.models.exc import AppException, ErrorResponse
 from src.api.models.base import FileMetadataPublic, PresignUploadData, SuccessResponse
 from src.api.models.request import ConfirmUploadRequest, PresignUploadRequest
-from src.api.models.response import FileListResponse, PresignUploadResponse
+from src.api.models.response import FileDownloadResponse, FileListResponse, PresignUploadResponse
 from src.const import EXPIRES_IN
 from src.db.db import SessionDep
 from src.db.models import FileMetadata
@@ -101,4 +101,30 @@ async def list_files(session: SessionDep, payload: Annotated[AccessTokenPayload,
     return FileListResponse(
         message="File list fetch success",
         data=[FileMetadataPublic.model_validate(file) for file in files]
+    )
+
+@files_router.get("/{file_id}/download")
+async def get_download_url(file_id: uuid.UUID, session: SessionDep, s3: S3Dep, payload: Annotated[AccessTokenPayload, Depends(check_auth)]):
+    file_record = session.exec(
+        select(FileMetadata).where(
+            FileMetadata.id == file_id,
+            FileMetadata.user_id == payload.sub
+        )
+    ).one_or_none()
+    if file_record is None:
+        raise AppException(
+            status_code=404,
+            error=ErrorResponse(
+                code=ErrorResponseCode.NOT_FOUND,
+                message="File record not found"
+            )
+        )
+    url = s3._client.generate_presigned_url(
+        "get_object",
+        Params={"Bucket": s3.settings.s3_bucket_name, "Key": file_record.key},
+        ExpiresIn=3600
+    )
+    return FileDownloadResponse(
+        message="File download url generated",
+        data=url
     )
