@@ -516,7 +516,7 @@ class TestDownloadFile:
         # record exists in DB, so this currently succeeds even though unconfirmed —
         # flagging this as a possible gap, see note below
         response = authenticated_client.get(f"/files/{file_id}/download")
-        assert response.status_code == 200
+        assert response.status_code == 400
 
     def test_download_other_user_cannot_access(self, authenticated_client: TestClient, client: TestClient, mock_mail: MagicMock):
         file_id = self._presign_confirm_and_upload(authenticated_client, filename="private.pdf")

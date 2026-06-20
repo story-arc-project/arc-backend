@@ -14,5 +14,6 @@ LOGIN_RETRY_COOLDOWN = 10 # minutes
 VERIFY_EMAIL_MAX_RETRY_COUNT = 5
 VERIFY_EMAIL_RETRY_COOLDOWN = 10 # minutes
 
-# File upload
-EXPIRES_IN = 300 # seconds
+# File configurations
+UPLOAD_EXPIRES_IN = 300 # seconds
+DOWNLOAD_EXPIRES_IN = 3600 # seconds

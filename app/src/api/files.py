@@ -3,7 +3,7 @@ from src.api.models.exc import AppException, ErrorResponse
 from src.api.models.base import FileMetadataPublic, PresignUploadData, SuccessResponse
 from src.api.models.request import ConfirmUploadRequest, PresignUploadRequest
 from src.api.models.response import FileDownloadResponse, FileListResponse, FileMetadataResponse, PresignUploadResponse
-from src.const import EXPIRES_IN
+from src.const import UPLOAD_EXPIRES_IN
 from src.db.db import SessionDep
 from src.db.models import FileMetadata
 from src.enums import ErrorResponseCode
@@ -36,7 +36,7 @@ async def presign_upload(body: PresignUploadRequest, session: SessionDep, s3: S3
         data=PresignUploadData(
             id=file_record.id,
             upload_url=upload_url,
-            expires_in=EXPIRES_IN
+            expires_in=UPLOAD_EXPIRES_IN
         )
     )
 
@@ -58,7 +58,7 @@ async def confirm_upload(body: ConfirmUploadRequest, session: SessionDep, s3: S3
             )
         )
     try:
-        head = s3._client.head_object(Bucket=s3.settings.s3_bucket_name, Key=file_record.key)
+        head = s3.get_head(file_record.key)
     except s3._client.exceptions.ClientError:
         raise AppException(
             status_code=404,
@@ -151,11 +151,7 @@ async def get_download_url(file_id: uuid.UUID, session: SessionDep, s3: S3Dep, p
                 message="File not confirmed"
             )
         )
-    url = s3._client.generate_presigned_url(
-        "get_object",
-        Params={"Bucket": s3.settings.s3_bucket_name, "Key": file_record.key},
-        ExpiresIn=3600
-    )
+    url = s3.presign_download(file_record.key)
     return FileDownloadResponse(
         message="File download url generated",
         data=url
@@ -177,6 +173,6 @@ async def delete_file(file_id: uuid.UUID, session: SessionDep, s3: S3Dep, payloa
                 message="File record not found"
             )
         )
-    s3._client.delete_object(Bucket=s3.settings.s3_bucket_name, Key=file_record.key)
+    s3.remove(file_record.key)
     session.delete(file_record)
     session.commit()
