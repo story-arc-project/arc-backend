@@ -3,7 +3,7 @@ from src.api.models.exc import AppException, ErrorResponse
 from src.api.models.base import FileMetadataPublic, PresignUploadData, SuccessResponse
 from src.api.models.request import ConfirmUploadRequest, PresignUploadRequest
 from src.api.models.response import FileDownloadResponse, FileListResponse, FileMetadataResponse, PresignUploadResponse
-from src.const import UPLOAD_EXPIRES_IN
+from src.const import UPLOAD_EXPIRES_IN, ALLOWED_UPLOAD_CONTENT_SIZE, ALLOWED_UPLOAD_CONTENT_TYPE
 from src.db.db import SessionDep
 from src.db.models import FileMetadata
 from src.enums import ErrorResponseCode
@@ -18,7 +18,22 @@ files_router = APIRouter()
 
 @files_router.post("/presign", response_model=PresignUploadResponse)
 async def presign_upload(body: PresignUploadRequest, session: SessionDep, s3: S3Dep, payload: Annotated[AccessTokenPayload, Depends(check_auth)]):
-    # TODO: Implement allowed content types, max file size
+    if body.size < 0 or body.size > ALLOWED_UPLOAD_CONTENT_SIZE * 1024 * 1024:
+        raise AppException(
+            status_code=400,
+            error=ErrorResponse(
+                code=ErrorResponseCode.BAD_REQUEST,
+                message="File size above limit"
+            )
+        )
+    if body.content_type not in ALLOWED_UPLOAD_CONTENT_TYPE:
+        raise AppException(
+            status_code=400,
+            error=ErrorResponse(
+                code=ErrorResponseCode.BAD_REQUEST,
+                message="File content type not allowed"
+            )
+        )
     key = f"users/{payload.sub}/{uuid.uuid4()}"
     upload_url = s3.presign_upload(key=key)
     file_record = FileMetadata(

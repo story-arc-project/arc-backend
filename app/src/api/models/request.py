@@ -268,8 +268,8 @@ class UserConsentRequest(BaseModel):
 
 class PresignUploadRequest(BaseModel):
     filename: str
-    content_type: str
-    size: int
+    content_type: str # MIME
+    size: int # bytes
 
 class ConfirmUploadRequest(BaseModel):
     id: UUID
