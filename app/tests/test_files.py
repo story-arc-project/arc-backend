@@ -28,7 +28,7 @@ def _restore_cookies(client: TestClient, cookies: dict):
         client.cookies.set(k, v)
 
 class TestSettings:
-    def test_settings_minio(self, monkeypatch):
+    def test_settings_minio(self, monkeypatch: pytest.MonkeyPatch):
         monkeypatch.setenv("AWS_ACCESS_KEY_ID", "arcdev")
         monkeypatch.setenv("AWS_SECRET_ACCESS_KEY", "arcdev-minio-2026")
         monkeypatch.setenv("AWS_REGION", "us-east-1")
@@ -43,7 +43,7 @@ class TestSettings:
         assert settings.s3_bucket_name == "test-bucket"
         assert settings.s3_endpoint_url == "http://localhost:9000"
 
-    def test_settings_s3(self, monkeypatch):
+    def test_settings_s3(self, monkeypatch: pytest.MonkeyPatch):
         monkeypatch.setenv("AWS_ACCESS_KEY_ID", "AKIA...")
         monkeypatch.setenv("AWS_SECRET_ACCESS_KEY", "secret")
         monkeypatch.setenv("AWS_REGION", "ap-northeast-2")
@@ -55,7 +55,7 @@ class TestSettings:
         assert settings.aws_region == "ap-northeast-2"
         assert settings.s3_endpoint_url is None  # uses AWS default
 
-    def test_settings_r2(self, monkeypatch):
+    def test_settings_r2(self, monkeypatch: pytest.MonkeyPatch):
         monkeypatch.setenv("AWS_ACCESS_KEY_ID", "r2_key")
         monkeypatch.setenv("AWS_SECRET_ACCESS_KEY", "r2_secret")
         monkeypatch.setenv("AWS_REGION", "auto")
@@ -67,7 +67,7 @@ class TestSettings:
         assert settings.aws_region == "auto"
         assert settings.s3_endpoint_url == "https://<account_id>.r2.cloudflarestorage.com"
 
-    def test_settings_missing_required(self, monkeypatch):
+    def test_settings_missing_required(self, monkeypatch: pytest.MonkeyPatch):
         monkeypatch.delenv("AWS_ACCESS_KEY_ID", raising=False)
         monkeypatch.delenv("AWS_SECRET_ACCESS_KEY", raising=False)
         monkeypatch.delenv("S3_BUCKET_NAME", raising=False)
@@ -75,7 +75,7 @@ class TestSettings:
         with pytest.raises(ValidationError):
             S3Settings()
 
-    def test_settings_defaults(self, monkeypatch):
+    def test_settings_defaults(self, monkeypatch: pytest.MonkeyPatch):
         monkeypatch.setenv("AWS_ACCESS_KEY_ID", "key")
         monkeypatch.setenv("AWS_SECRET_ACCESS_KEY", "secret")
         monkeypatch.setenv("S3_BUCKET_NAME", "bucket")
