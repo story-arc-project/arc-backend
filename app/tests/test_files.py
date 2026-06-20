@@ -3,11 +3,13 @@ import requests
 import uuid
 from pydantic import ValidationError
 from fastapi.testclient import TestClient
-from sqlmodel import select, Session
+from sqlmodel import Session
 from unittest.mock import MagicMock
 from src.utils.files import S3Settings, S3Client
 from src.db.models import FileMetadata
 from tests.test_auth import get_sent_mail
+from src.const import ALLOWED_UPLOAD_CONTENT_SIZE
+from src.enums import ErrorResponseCode
 
 def _signup_second_user(client: TestClient, mock_mail: MagicMock, email: str = "other2@gmail.com"):
     """Signs up a second user on the shared client, returning that user's cookies.
@@ -184,6 +186,45 @@ class TestPresignUpload:
             },
         )
         assert response.status_code == 401
+
+    def test_presign_rejects_oversized_file(self, authenticated_client: TestClient):
+        response = authenticated_client.post(
+            "/files/presign",
+            json={
+                "filename": "huge.pdf",
+                "content_type": "application/pdf",
+                "size": ALLOWED_UPLOAD_CONTENT_SIZE * 1024 * 1024 + 1,
+            },
+        )
+        assert response.status_code == 400
+        body = response.json()
+        assert body["code"] == ErrorResponseCode.BAD_REQUEST
+
+    def test_presign_rejects_negative_size(self, authenticated_client: TestClient):
+        response = authenticated_client.post(
+            "/files/presign",
+            json={
+                "filename": "negative.pdf",
+                "content_type": "application/pdf",
+                "size": -1,
+            },
+        )
+        assert response.status_code == 400
+        body = response.json()
+        assert body["code"] == ErrorResponseCode.BAD_REQUEST
+
+    def test_presign_rejects_disallowed_content_type(self, authenticated_client: TestClient):
+        response = authenticated_client.post(
+            "/files/presign",
+            json={
+                "filename": "malware.exe",
+                "content_type": "application/x-msdownload",
+                "size": 1024,
+            },
+        )
+        assert response.status_code == 400
+        body = response.json()
+        assert body["code"] == ErrorResponseCode.BAD_REQUEST
 
 class TestConfirmUpload:
     def _presign(self, authenticated_client: TestClient, filename="test.pdf", content_type="application/pdf", size=16):
