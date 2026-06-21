@@ -1,9 +1,9 @@
-from fastapi import Depends, Request
+from fastapi import Depends, Request, Response
 from fastapi_limiter.depends import RateLimiter as FastAPILimiter
 from pydantic import EmailStr
 from pydantic_settings import BaseSettings
 from pyrate_limiter import Duration, Limiter, Rate
-from typing import Annotated, Literal
+from typing import Annotated, Callable, Literal
 
 from src.api.models.base import ErrorResponse, ErrorResponseCode
 from src.api.models.exc import AppException
@@ -68,40 +68,71 @@ class AnalysisRateLimitSettings(BaseSettings):
 
 analysis_rate_limit_settings = AnalysisRateLimitSettings()
 
-async def get_user_id_identifier(payload: Annotated[AccessTokenPayload, Depends(check_auth)]):
-    return f"user:{payload.sub}"
 async def get_ip_identifier(request: Request):
     return f"ip:{get_ip(request)}"
 
-analysis_rate_limiters: dict[Literal["individual", "comprehensive", "keyword"], dict[Literal["user", "ip"], FastAPILimiter]] = {
+async def analysis_rate_limit_callback(request: Request, response: Response):
+    raise AppException(
+        429,
+        ErrorResponse(
+            code=ErrorResponseCode.TOO_MANY_ATTEMPTS,
+            message="Too many requests."
+        )
+    )
+
+class UserRateLimiter:
+    def __init__(
+        self,
+        limiter: Limiter,
+        callback: Callable = analysis_rate_limit_callback,
+        blocking: bool = False,
+    ):
+        self.limiter = limiter
+        self.callback = callback
+        self.blocking = blocking
+
+    async def __call__(
+        self,
+        request: Request,
+        response: Response,
+        payload: Annotated[AccessTokenPayload, Depends(check_auth)]
+    ):
+        route = request.scope.get("route")
+        path = getattr(route, "path", request.scope["path"])
+        key = f"user:{payload.sub}:{request.method}:{path}"
+        success = await self.limiter.try_acquire_async(key, blocking=self.blocking)
+        if not success:
+            return await self.callback(request, response)
+
+analysis_rate_limiters: dict[Literal["individual", "comprehensive", "keyword"], dict[Literal["user", "ip"], UserRateLimiter | FastAPILimiter]] = {
     "individual": {
-        "user": FastAPILimiter(
-            limiter=Limiter(Rate(analysis_rate_limit_settings.rate_limit_analysis_individual, Duration.HOUR)),
-            identifier=get_user_id_identifier
+        "user": UserRateLimiter(
+            limiter=Limiter(Rate(analysis_rate_limit_settings.rate_limit_analysis_individual, Duration.HOUR))
         ),
         "ip": FastAPILimiter(
             limiter=Limiter(Rate(analysis_rate_limit_settings.rate_limit_analysis_individual, Duration.HOUR)),
-            identifier=get_ip_identifier
+            identifier=get_ip_identifier,
+            callback=analysis_rate_limit_callback
         )
     },
     "comprehensive": {
-        "user": FastAPILimiter(
-            limiter=Limiter(Rate(analysis_rate_limit_settings.rate_limit_analysis_comprehensive, Duration.HOUR)),
-            identifier=get_user_id_identifier
+        "user": UserRateLimiter(
+            limiter=Limiter(Rate(analysis_rate_limit_settings.rate_limit_analysis_comprehensive, Duration.HOUR))
         ),
         "ip": FastAPILimiter(
             limiter=Limiter(Rate(analysis_rate_limit_settings.rate_limit_analysis_comprehensive, Duration.HOUR)),
-            identifier=get_ip_identifier
+            identifier=get_ip_identifier,
+            callback=analysis_rate_limit_callback
         )
     },
     "keyword": {
-        "user": FastAPILimiter(
-            limiter=Limiter(Rate(analysis_rate_limit_settings.rate_limit_analysis_keyword, Duration.HOUR)),
-            identifier=get_user_id_identifier
+        "user": UserRateLimiter(
+            limiter=Limiter(Rate(analysis_rate_limit_settings.rate_limit_analysis_keyword, Duration.HOUR))
         ),
         "ip": FastAPILimiter(
             limiter=Limiter(Rate(analysis_rate_limit_settings.rate_limit_analysis_keyword, Duration.HOUR)),
-            identifier=get_ip_identifier
+            identifier=get_ip_identifier,
+            callback=analysis_rate_limit_callback
         )
     }
 }
