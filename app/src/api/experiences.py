@@ -15,12 +15,20 @@ from src.db.db import SessionDep
 from src.db.models import Experience, IndividualAnalysis
 from src.enums import ErrorResponseCode
 from src.utils.auth import check_auth
+from src.utils.ratelimit import analysis_rate_limiters
 from src.utils.token import AccessTokenPayload
 
 experiences_router = APIRouter()
 
 @experiences_router.post("/")
-async def post_experience(body: ExperiencePostRequest, session: SessionDep, response: Response, payload: Annotated[AccessTokenPayload, Depends(check_auth)]):
+async def post_experience(
+    body: ExperiencePostRequest,
+    session: SessionDep,
+    response: Response,
+    payload: Annotated[AccessTokenPayload, Depends(check_auth)],
+    _user_limit: Annotated[None, Depends(analysis_rate_limiters["individual"]["user"])],
+    _ip_limit: Annotated[None, Depends(analysis_rate_limiters["individual"]["ip"])]
+):
     try:
         new_experience = Experience(
             user_id = payload.sub,

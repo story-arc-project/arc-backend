@@ -39,6 +39,14 @@ class TestAnalysisRateLimit:
         with patch("src.api.analysis.requests.post", return_value=mock_response) as mock_post:
             yield mock_post
 
+    @pytest.fixture
+    def mock_experience_ai_analyst(self):
+        mock_response = MagicMock()
+        mock_response.json.return_value = {"task_id": str(uuid4())}
+        mock_response.raise_for_status.return_value = None
+        with patch("src.api.experiences.requests.post", return_value=mock_response) as mock_post:
+            yield mock_post
+
     def _add_profile(self, session: Session, user_id):
         profile = UserProfile(
             user_id=user_id,
@@ -154,6 +162,56 @@ class TestAnalysisRateLimit:
         assert second_response.status_code == 429
         assert second_response.json()["code"] == ErrorResponseCode.TOO_MANY_ATTEMPTS
         assert mock_ai_analyst.call_count == 1
+
+    def test_post_experience_is_rate_limited_by_user(
+        self,
+        authenticated_client: TestClient,
+        mock_experience_ai_analyst,
+    ):
+        self._set_analysis_limit("individual", "user", 1)
+        self._set_analysis_limit("individual", "ip", 10)
+
+        request_body = {"type": "career", "content": {"title": "Internship"}}
+        first_response = authenticated_client.post(
+            "/experiences",
+            json=request_body,
+            headers={"X-Forwarded-For": "203.0.113.40"},
+        )
+        second_response = authenticated_client.post(
+            "/experiences",
+            json=request_body,
+            headers={"X-Forwarded-For": "203.0.113.41"},
+        )
+
+        assert first_response.status_code == 201
+        assert second_response.status_code == 429
+        assert second_response.json()["code"] == ErrorResponseCode.TOO_MANY_ATTEMPTS
+        assert mock_experience_ai_analyst.call_count == 1
+
+    def test_post_experience_is_rate_limited_by_ip(
+        self,
+        authenticated_client: TestClient,
+        mock_experience_ai_analyst,
+    ):
+        self._set_analysis_limit("individual", "user", 10)
+        self._set_analysis_limit("individual", "ip", 1)
+
+        request_body = {"type": "career", "content": {"title": "Internship"}}
+        first_response = authenticated_client.post(
+            "/experiences",
+            json=request_body,
+            headers={"X-Forwarded-For": "203.0.113.50"},
+        )
+        second_response = authenticated_client.post(
+            "/experiences",
+            json=request_body,
+            headers={"X-Forwarded-For": "203.0.113.50"},
+        )
+
+        assert first_response.status_code == 201
+        assert second_response.status_code == 429
+        assert second_response.json()["code"] == ErrorResponseCode.TOO_MANY_ATTEMPTS
+        assert mock_experience_ai_analyst.call_count == 1
 
     def test_check_auth_runs_once_per_rate_limited_request(
         self,
