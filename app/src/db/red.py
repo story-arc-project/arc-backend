@@ -2,12 +2,12 @@ from typing import Literal
 from pydantic import EmailStr
 import redis
 
-from src.const import VERIFICATION_CODE_EXPIRE, VERIFICATION_MAX_ATTEMPTS
+from src.const import REDIS_HOST, REDIS_PORT, VERIFICATION_CODE_EXPIRE
 
 MIN_IN_SEC = 60
 PURPOSE_SCOPE = Literal["verify", "reset"]
 
-r = redis.Redis("redis", 6379, decode_responses=True)
+r = redis.Redis(REDIS_HOST, REDIS_PORT, decode_responses=True)
 
 def _verify_keygen(email: EmailStr, purpose: PURPOSE_SCOPE):
     return f"{purpose}:{email}"

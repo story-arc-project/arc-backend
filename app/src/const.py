@@ -23,3 +23,7 @@ ALLOWED_UPLOAD_CONTENT_TYPE = [
     "image/png",
     "image/jpeg"
 ] # MIME type
+
+# Redis configurations
+REDIS_HOST = "redis"
+REDIS_PORT = 6379
