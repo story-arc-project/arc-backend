@@ -1,11 +1,12 @@
 from unittest.mock import patch, MagicMock
-from uuid import UUID, uuid4
+from uuid import uuid4
 import pytest
 from fastapi.testclient import TestClient
-from sqlmodel import Session, select
+from sqlmodel import Session
+from pyrate_limiter import Limiter, Rate, Duration
 
-from src.db.models import Experience
 from src.utils.auth import check_auth
+from src.utils.ratelimit import analysis_rate_limiters
 
 
 @pytest.fixture
@@ -16,6 +17,18 @@ def mock_ai_analyst():
     with patch("src.api.experiences.requests.post", return_value=mock_response) as mock_post:
         yield mock_post
 
+@pytest.fixture(autouse=True)
+def reset_analysis_limiters():
+    for limiters in analysis_rate_limiters.values():
+        for limiter in limiters.values():
+            limiter.limiter = Limiter(Rate(100, Duration.HOUR))
+            for bucket in limiter.limiter.buckets():
+                bucket.flush()
+    yield
+    for limiters in analysis_rate_limiters.values():
+        for limiter in limiters.values():
+            for bucket in limiter.limiter.buckets():
+                bucket.flush()
 
 def test_post_experience_returns_201(authenticated_client: TestClient, mock_ai_analyst):
     data = {"type": "career", "content": {"a": "b"}}

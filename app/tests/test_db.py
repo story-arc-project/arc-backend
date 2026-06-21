@@ -26,11 +26,6 @@ class TestDeleteCode:
         delete_code(EMAIL, PURPOSE)
         assert get_code(EMAIL, PURPOSE) is None
 
-    def test_delete_removes_limit_key(self, fake_redis: FakeRedis):
-        store_code(EMAIL, CODE, PURPOSE)
-        delete_code(EMAIL, PURPOSE)
-        assert fake_redis.get(f"limit:{EMAIL}") is None
-
     def test_delete_idempotent(self, fake_redis: FakeRedis):
         store_code(EMAIL, CODE, PURPOSE)
         delete_code(EMAIL, PURPOSE)
@@ -41,11 +36,5 @@ class TestTTL:
     def test_verify_key_has_ttl(self, fake_redis: FakeRedis):
         store_code(EMAIL, CODE, PURPOSE)
         ttl = fake_redis.ttl(f"verify:{EMAIL}")
-        assert isinstance(ttl, int)
-        assert ttl > 0
-
-    def test_limit_key_has_ttl(self, fake_redis: FakeRedis):
-        store_code(EMAIL, CODE, PURPOSE)
-        ttl = fake_redis.ttl(f"limit:{EMAIL}")
         assert isinstance(ttl, int)
         assert ttl > 0
