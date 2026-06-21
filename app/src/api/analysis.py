@@ -14,6 +14,7 @@ from src.db.db import SessionDep
 from src.db.models import ComprehensiveAnalysis, Experience, IndividualAnalysis, KeywordAnalysis, UserProfile
 from src.enums import ErrorResponseCode
 from src.utils.auth import check_auth
+from src.utils.ratelimit import analysis_rate_limiters
 from src.utils.token import AccessTokenPayload
 
 analysis_router = APIRouter()
@@ -74,7 +75,14 @@ async def get_individual_analysis(analysis_id: UUID, session: SessionDep, respon
     )
 
 @analysis_router.post("/comprehensive")
-async def post_comprehensive_analysis(body: ComprehensiveAnalysisPostRequest, session: SessionDep, response: Response, payload: Annotated[AccessTokenPayload, Depends(check_auth)]):
+async def post_comprehensive_analysis(
+    body: ComprehensiveAnalysisPostRequest,
+    session: SessionDep,
+    response: Response,
+    payload: Annotated[AccessTokenPayload, Depends(check_auth)],
+    _user_limit: Annotated[None, Depends(analysis_rate_limiters["comprehensive"]["user"])],
+    _ip_limit: Annotated[None, Depends(analysis_rate_limiters["comprehensive"]["ip"])]
+):
     statement = select(Experience).where(col(Experience.id).in_(body.experiences))
     result = session.exec(statement).all()
     user_profile = session.exec(select(UserProfile).where(UserProfile.user_id == payload.sub)).one_or_none()
@@ -228,7 +236,14 @@ async def delete_comprehensive_analysis(analysis_id: UUID, session: SessionDep, 
     )
 
 @analysis_router.post("/keyword")
-async def post_keyword_analysis(body: KeywordAnalysisPostRequest, session: SessionDep, response: Response, payload: Annotated[AccessTokenPayload, Depends(check_auth)]):
+async def post_keyword_analysis(
+    body: KeywordAnalysisPostRequest,
+    session: SessionDep,
+    response: Response,
+    payload: Annotated[AccessTokenPayload, Depends(check_auth)],
+    _user_limit: Annotated[None, Depends(analysis_rate_limiters["keyword"]["user"])],
+    _ip_limit: Annotated[None, Depends(analysis_rate_limiters["keyword"]["ip"])]
+):
     statement = select(Experience).where(Experience.user_id == payload.sub)
     result = session.exec(statement).all()
     user_input: list[str] = []
