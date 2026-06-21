@@ -108,7 +108,15 @@ async def get_experience_by_id(experience_id: UUID, session: SessionDep, respons
     )
 
 @experiences_router.put("/{experience_id}")
-async def put_experience_by_id(body: ExperiencePutRequest, experience_id: UUID, session: SessionDep, response: Response, payload: Annotated[AccessTokenPayload, Depends(check_auth)]):
+async def put_experience_by_id(
+    body: ExperiencePutRequest,
+    experience_id: UUID,
+    session: SessionDep,
+    response: Response,
+    payload: Annotated[AccessTokenPayload, Depends(check_auth)],
+    _user_limit: Annotated[None, Depends(analysis_rate_limiters["individual"]["user"])],
+    _ip_limit: Annotated[None, Depends(analysis_rate_limiters["individual"]["ip"])]
+):
     statement = select(Experience).where(Experience.id == experience_id)
     result = session.exec(statement).one_or_none()
     if result is None:
@@ -130,6 +138,17 @@ async def put_experience_by_id(body: ExperiencePutRequest, experience_id: UUID, 
     try:
         result.content = body.content
         result.importance = body.importance
+        new_individual_analysis = IndividualAnalysis(
+            user_id=payload.sub,
+            experience_id = result.id
+        )
+        req = requests.post("http://ai_analyst:8001/individual", json={
+            "analysis_id": str(new_individual_analysis.id),
+            "input": [json.dumps(body.content)]
+        })
+        req.raise_for_status()
+        new_individual_analysis.task_id = req.json()["task_id"]
+        session.add(new_individual_analysis)
         session.add(result)
         session.commit()
         session.refresh(result)
