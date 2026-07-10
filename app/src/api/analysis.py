@@ -242,7 +242,15 @@ async def get_comprehensive_analysis(analysis_id: UUID, session: SessionDep, res
 @analysis_router.delete("/comprehensive/{analysis_id}")
 async def delete_comprehensive_analysis(analysis_id: UUID, session: SessionDep, response: Response, payload: Annotated[AccessTokenPayload, Depends(check_auth)]):
     statement = (
-        select(ComprehensiveAnalysis)
+        select(ComprehensiveAnalysis, AnalysisBookmark)
+        .outerjoin(
+            AnalysisBookmark,
+            and_(
+                AnalysisBookmark.analysis_id == ComprehensiveAnalysis.id,
+                AnalysisBookmark.analysis_type == AnalysisType.comprehensive,
+                AnalysisBookmark.user_id == payload.sub
+            )
+        )
         .where(ComprehensiveAnalysis.id == analysis_id)
     )
     result = session.exec(statement).one_or_none()
@@ -254,7 +262,8 @@ async def delete_comprehensive_analysis(analysis_id: UUID, session: SessionDep, 
                 message = "Analysis not found"
             )
         )
-    if result.user_id != payload.sub:
+    analysis, bookmark = result
+    if analysis.user_id != payload.sub:
         raise AppException(
             403,
             ErrorResponse(
@@ -263,7 +272,9 @@ async def delete_comprehensive_analysis(analysis_id: UUID, session: SessionDep, 
             )
         )
     try:
-        session.delete(result)
+        session.delete(analysis)
+        if bookmark is not None:
+            session.delete(bookmark)
         session.commit()
     except:
         session.rollback()
@@ -403,7 +414,15 @@ async def get_keyword_analysis(analysis_id: UUID, session: SessionDep, response:
 @analysis_router.delete("/keyword/{analysis_id}")
 async def delete_keyword_analysis(analysis_id: UUID, session: SessionDep, response: Response, payload: Annotated[AccessTokenPayload, Depends(check_auth)]):
     statement = (
-        select(KeywordAnalysis)
+        select(KeywordAnalysis, AnalysisBookmark)
+        .outerjoin(
+            AnalysisBookmark,
+            and_(
+                AnalysisBookmark.analysis_id == KeywordAnalysis.id,
+                AnalysisBookmark.analysis_type == AnalysisType.keyword,
+                AnalysisBookmark.user_id == payload.sub
+            )
+        )
         .where(KeywordAnalysis.id == analysis_id)
     )
     result = session.exec(statement).one_or_none()
@@ -415,7 +434,8 @@ async def delete_keyword_analysis(analysis_id: UUID, session: SessionDep, respon
                 message = "Analysis not found"
             )
         )
-    if result.user_id != payload.sub:
+    analysis, bookmark = result
+    if analysis.user_id != payload.sub:
         raise AppException(
             403,
             ErrorResponse(
@@ -424,7 +444,9 @@ async def delete_keyword_analysis(analysis_id: UUID, session: SessionDep, respon
             )
         )
     try:
-        session.delete(result)
+        session.delete(analysis)
+        if bookmark is not None:
+            session.delete(bookmark)
         session.commit()
     except:
         session.rollback()
