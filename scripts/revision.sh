@@ -4,8 +4,14 @@ cd "$(dirname "$0")/../app" || exit 1
 source ../.env
 
 OVERRIDE_FILE="../docker-compose.db-expose.yml"
+REVISION_FILE=""
+COMPLETED=0
 
 cleanup() {
+  if [ "$COMPLETED" -eq 0 ] && [ -n "$REVISION_FILE" ] && [ -f "$REVISION_FILE" ]; then
+    echo "Interrupted — removing generated revision file: $REVISION_FILE"
+    rm -f "$REVISION_FILE"
+  fi
   docker compose -f "$OVERRIDE_FILE" down
   rm -f "$OVERRIDE_FILE"
 }
@@ -25,8 +31,12 @@ until docker compose -f $OVERRIDE_FILE exec db pg_isready -U $DB_USER -d $DB_NAM
 done
 
 DATABASE_URL=$DATABASE_URL uv run alembic upgrade head
-DATABASE_URL=$DATABASE_URL uv run alembic revision --autogenerate -m "$1"
+file_path=$(DATABASE_URL=$DATABASE_URL uv run alembic revision --autogenerate -m "$1")
+REVISION_FILE=$(echo "$file_path" | grep -oE '/app/[^ ]+\.py' | sed 's|^/app/|./|')
 
-echo "Migration file generated. Edit it, then press Enter to run upgrade head..."
+echo "Migration file generated at: $REVISION_FILE"
+echo "Edit it, then press Enter to run upgrade head..."
 read -r
 DATABASE_URL=$DATABASE_URL uv run alembic upgrade head
+
+COMPLETED=1
