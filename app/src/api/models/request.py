@@ -216,6 +216,13 @@ class LibraryPostRequest(BaseModel):
             raise ValueError("Name must not be empty")
         return v
 
+class LibraryPatchRequest(BaseModel):
+    name: str | None = None
+    color: str | None = None
+    icon: str | None = None
+    filter: dict[str, Any] | None = None
+    sort_order: int | None = None
+
 class ComprehensiveAnalysisPostRequest(BaseModel):
     experiences: list[UUID]
 

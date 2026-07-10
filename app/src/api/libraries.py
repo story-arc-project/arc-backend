@@ -5,7 +5,7 @@ from sqlmodel import select
 
 from src.api.models.base import ErrorResponse, ExperienceResponseData, ExperiencesResponseData, LibrariesResponseData, LibraryContentData, LibraryResponseData, SuccessResponse, SuccessResponseWithData, UUIDData
 from src.api.models.exc import AppException
-from src.api.models.request import LibraryPostRequest
+from src.api.models.request import LibraryPatchRequest, LibraryPostRequest
 from src.api.models.response import DeleteSuccessResponse, PostSuccessResponse
 from src.db.db import SessionDep
 from src.db.models import Experience, Library, LibraryExperienceRelation
@@ -232,4 +232,55 @@ async def delete_library_by_id(library_id: UUID, session: SessionDep, response: 
     response.status_code = 204
     return DeleteSuccessResponse(
         message = "Library deleted."
+    )
+
+@libraries_router.patch("/{library_id}")
+async def patch_library_by_id(library_id: UUID, body: LibraryPatchRequest, session: SessionDep, response: Response, payload: Annotated[AccessTokenPayload, Depends(check_auth)]):
+    library = session.exec(select(Library).where(Library.id == library_id)).one_or_none()
+    if library is None:
+        raise AppException(
+            404,
+            ErrorResponse(
+                code = ErrorResponseCode.NOT_FOUND,
+                message = "Library not found"
+            )
+        )
+    if library.user_id != payload.sub:
+        raise AppException(
+            403,
+            ErrorResponse(
+                code = ErrorResponseCode.RESOURCE_NOT_ALLOWED,
+                message = "Access for the resource is not allowed"
+            )
+        )
+    if library.is_system:
+        raise AppException(
+            400,
+            ErrorResponse(
+                code = ErrorResponseCode.BAD_REQUEST,
+                message = "System library cannot be modified."
+            )
+        )
+
+    update_data = body.model_dump(exclude_unset=True)
+    for key, value in update_data.items():
+        setattr(library, key, value)
+
+    try:
+        session.add(library)
+        session.commit()
+        session.refresh(library)
+    except:
+        session.rollback()
+        raise AppException(
+            500,
+            ErrorResponse(
+                code=ErrorResponseCode.SERVER_ERROR,
+                message="Server side error."
+            )
+        )
+    response.status_code = 200
+    return SuccessResponseWithData[LibraryResponseData](
+        message = "Library updated.",
+        data = LibraryResponseData(**library.model_dump())
     )
