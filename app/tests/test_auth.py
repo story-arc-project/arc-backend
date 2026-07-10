@@ -15,10 +15,11 @@ from src.utils.mail import send_mail
 from src.enums import ErrorResponseCode, JWTTokenStatus
 from src.db.red import is_locked, increment_attempt, set_lockout, clear, get_attempt_count
 from src.api.models.consent import AGREEABLE_CONSENT_VERSIONS
+from tests.const import AUTHENTICATED_EMAIL
 
 
 # Test data
-email = "test@gmail.com"
+email = AUTHENTICATED_EMAIL
 password = "testpassword123"
 
 

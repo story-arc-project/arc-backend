@@ -10,7 +10,7 @@ from src.utils.files import S3Settings, S3Client, get_s3_client
 from testcontainers.postgres import PostgresContainer
 import os
 
-from tests.const import TESTFRONT_HOST, TESTSERVER_HOST
+from tests.const import AUTHENTICATED_EMAIL, TESTFRONT_HOST, TESTSERVER_HOST
 os.environ["FRONTEND_HOSTS"] = f"https://{TESTFRONT_HOST}"
 os.environ.setdefault("RATE_LIMIT_ANALYSIS_INDIVIDUAL", "10")
 os.environ.setdefault("RATE_LIMIT_ANALYSIS_COMPREHENSIVE", "10")
@@ -61,7 +61,7 @@ def mock_mail():
 
         def fake_env(key: str):
             return {
-                "GMAIL": "test@gmail.com",
+                "GMAIL": AUTHENTICATED_EMAIL,
                 "GMAIL_PASSWORD": "password"
             }.get(key)
 
@@ -122,7 +122,7 @@ def client(session: Session, s3_client: S3Client):
 @pytest.fixture
 def authenticated_client(client: TestClient, mock_mail: MagicMock):
     # Test data
-    email = "test@gmail.com"
+    email = AUTHENTICATED_EMAIL
     password = "testpassword123"
     _ = client.post("/auth/signup", json={"email": email, "password": password})
     response = client.post("/auth/verify-email", json={
