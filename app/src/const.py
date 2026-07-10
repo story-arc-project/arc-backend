@@ -27,3 +27,5 @@ ALLOWED_UPLOAD_CONTENT_TYPE = [
 # Redis configurations
 REDIS_HOST = "redis"
 REDIS_PORT = 6379
+
+ADMIN_PAGE_NOT_ALLOWED = "Admin page not allowed"

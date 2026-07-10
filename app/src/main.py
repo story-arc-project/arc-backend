@@ -1,4 +1,4 @@
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, Request, Response
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from os import getenv
@@ -13,6 +13,7 @@ from src.api.libraries import libraries_router
 from src.api.models.exc import AppException
 from src.api.presets import presets_router
 from src.api.auth import auth_router, remove_tokens
+from src.const import ADMIN_PAGE_NOT_ALLOWED
 from src.enums import ErrorResponseCode
 
 app = FastAPI()
@@ -29,6 +30,11 @@ app.add_middleware(
 
 @app.exception_handler(AppException)
 async def app_exception_handler(request: Request, exc: AppException):
+    if exc.error.message == ADMIN_PAGE_NOT_ALLOWED:
+        return Response(
+            status_code = exc.status_code,
+            content = '{"detail":"Not Found"}'
+        )
     response = JSONResponse(
         status_code = exc.status_code,
         content = exc.error.model_dump()
