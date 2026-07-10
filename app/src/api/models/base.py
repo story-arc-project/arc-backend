@@ -199,7 +199,6 @@ class FileMetadataPublic(BaseModel):
 
 class BookmarkData(BaseModel):
     id: UUID
-    analysis_type: AnalysisType
-    analysis_id: UUID
+    type: AnalysisType
     created_at: datetime
     updated_at: datetime

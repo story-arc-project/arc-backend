@@ -387,9 +387,8 @@ async def get_bookmarks(session: SessionDep, response: Response, payload: Annota
     return BookmarkListResponse(
         message = "Fetch success.",
         data = [BookmarkData(
-            id = bookmark.id,
-            analysis_type = bookmark.analysis_type,
-            analysis_id = bookmark.analysis_id,
+            id = bookmark.analysis_id,
+            type = bookmark.analysis_type,
             created_at = bookmark.created_at,
             updated_at = bookmark.updated_at
         ) for bookmark in result]
