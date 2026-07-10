@@ -1,6 +1,6 @@
 #!/bin/bash
 set -e
-cd "$(dirname "$0")/app" || exit 1
+cd "$(dirname "$0")/../app" || exit 1
 source ../.env
 
 OVERRIDE_FILE="../docker-compose.db-expose.yml"
