@@ -2,7 +2,7 @@ PROJECT_NAME ?= arc-backend
 COMPOSE := docker compose -f ./docker-compose.yml --project-directory . -p "$(PROJECT_NAME)"
 COMPOSE_INIT := docker compose -f ./init/docker-compose.yml --project-directory . -p "$(PROJECT_NAME)"
 
-.PHONY: build stop run revision
+.PHONY: build stop certificate run revision
 
 build:
 	COMPOSE_BAKE=true $(COMPOSE) build
@@ -10,10 +10,12 @@ build:
 stop:
 	$(COMPOSE) down
 
-run: build stop
+certificate:
 	set -e; \
 	trap '$(COMPOSE_INIT) down' EXIT; \
-	$(COMPOSE_INIT) up --exit-code-from certbot; \
+	$(COMPOSE_INIT) up --exit-code-from certbot
+
+run: build stop certificate
 	$(COMPOSE) up -d
 
 revision:
