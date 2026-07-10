@@ -12,7 +12,7 @@ from src.api.models.request import ComprehensiveAnalysisPostRequest, KeywordAnal
 from src.api.models.response import BookmarkListResponse, ComprehensiveAnalysisListResponse, ComprehensiveAnalysisResponse, DeleteSuccessResponse, IndividualAnalysisListResponse, IndividualAnalysisResponse, KeywordAnalysisListResponse, KeywordAnalysisResponse
 from src.db.db import SessionDep
 from src.db.models import AnalysisBookmark, ComprehensiveAnalysis, Experience, IndividualAnalysis, KeywordAnalysis, UserProfile
-from src.enums import ErrorResponseCode
+from src.enums import AnalysisType, ErrorResponseCode
 from src.utils.auth import check_auth
 from src.utils.ratelimit import analysis_rate_limiters
 from src.utils.token import AccessTokenPayload
@@ -393,4 +393,70 @@ async def get_bookmarks(session: SessionDep, response: Response, payload: Annota
             created_at = bookmark.created_at,
             updated_at = bookmark.updated_at
         ) for bookmark in result]
+    )
+
+@analysis_router.post("/bookmarks/{analysis_id}")
+async def add_bookmark(analysis_id: UUID, session: SessionDep, response: Response, payload: Annotated[AccessTokenPayload, Depends(check_auth)]):
+    analysis_type = None
+    owner_id = None
+    for model, type_name in (
+        (IndividualAnalysis, AnalysisType.individual),
+        (ComprehensiveAnalysis, AnalysisType.comprehensive),
+        (KeywordAnalysis, AnalysisType.keyword),
+    ):
+        statement = select(model).where(model.id == analysis_id)
+        result = session.exec(statement).one_or_none()
+        if result is not None:
+            analysis_type = type_name
+            owner_id = result.user_id
+            break
+    if analysis_type is None:
+        raise AppException(
+            404,
+            ErrorResponse(
+                code=ErrorResponseCode.NOT_FOUND,
+                message="Analysis not found"
+            )
+        )
+    if owner_id != payload.sub:
+        raise AppException(
+            403,
+            ErrorResponse(
+                code=ErrorResponseCode.RESOURCE_NOT_ALLOWED,
+                message="Access for the resource is not allowed"
+            )
+        )
+    existing_statement = (
+        select(AnalysisBookmark)
+        .where(AnalysisBookmark.user_id == payload.sub)
+        .where(AnalysisBookmark.analysis_id == analysis_id)
+        .where(AnalysisBookmark.analysis_type == analysis_type)
+    )
+    existing_bookmark = session.exec(existing_statement).one_or_none()
+    if existing_bookmark is not None:
+        response.status_code = 200
+        return SuccessResponse(
+            message="Bookmark already exists."
+        )
+    try:
+        new_bookmark = AnalysisBookmark(
+            user_id=payload.sub,
+            analysis_type=analysis_type,
+            analysis_id=analysis_id
+        )
+        session.add(new_bookmark)
+        session.commit()
+        session.refresh(new_bookmark)
+    except:
+        session.rollback()
+        raise AppException(
+            500,
+            ErrorResponse(
+                code=ErrorResponseCode.SERVER_ERROR,
+                message="Server side error."
+            )
+        )
+    response.status_code = 200
+    return SuccessResponse(
+        message="Bookmark added."
     )
