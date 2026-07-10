@@ -6,12 +6,12 @@ from fastapi import APIRouter, Depends, Response
 from sqlmodel import col, select
 import json
 
-from src.api.models.base import ComprehensiveAnalysisData, ComprehensiveAnalysisList, ComprehensiveAnalysisListData, ErrorResponse, IndividualAnalysisData, IndividualAnalysisList, IndividualAnalysisListData, SuccessResponse, KeywordAnalysisList, KeywordAnalysisListData, KeywordAnalysisData
+from src.api.models.base import BookmarkData, ComprehensiveAnalysisData, ComprehensiveAnalysisList, ComprehensiveAnalysisListData, ErrorResponse, IndividualAnalysisData, IndividualAnalysisList, IndividualAnalysisListData, SuccessResponse, KeywordAnalysisList, KeywordAnalysisListData, KeywordAnalysisData
 from src.api.models.exc import AppException
 from src.api.models.request import ComprehensiveAnalysisPostRequest, KeywordAnalysisPostRequest
-from src.api.models.response import ComprehensiveAnalysisListResponse, ComprehensiveAnalysisResponse, DeleteSuccessResponse, IndividualAnalysisListResponse, IndividualAnalysisResponse, KeywordAnalysisListResponse, KeywordAnalysisResponse
+from src.api.models.response import BookmarkListResponse, ComprehensiveAnalysisListResponse, ComprehensiveAnalysisResponse, DeleteSuccessResponse, IndividualAnalysisListResponse, IndividualAnalysisResponse, KeywordAnalysisListResponse, KeywordAnalysisResponse
 from src.db.db import SessionDep
-from src.db.models import ComprehensiveAnalysis, Experience, IndividualAnalysis, KeywordAnalysis, UserProfile
+from src.db.models import AnalysisBookmark, ComprehensiveAnalysis, Experience, IndividualAnalysis, KeywordAnalysis, UserProfile
 from src.enums import ErrorResponseCode
 from src.utils.auth import check_auth
 from src.utils.ratelimit import analysis_rate_limiters
@@ -374,4 +374,23 @@ async def delete_keyword_analysis(analysis_id: UUID, session: SessionDep, respon
     response.status_code = 204
     return DeleteSuccessResponse(
         message = "Keyword analysis deleted."
+    )
+
+@analysis_router.get("/bookmarks")
+async def get_bookmarks(session: SessionDep, response: Response, payload: Annotated[AccessTokenPayload, Depends(check_auth)]):
+    statement = (
+        select(AnalysisBookmark)
+        .where(AnalysisBookmark.user_id == payload.sub)
+    )
+    result = session.exec(statement).all()
+    response.status_code = 200
+    return BookmarkListResponse(
+        message = "Fetch success.",
+        data = [BookmarkData(
+            id = bookmark.id,
+            analysis_type = bookmark.analysis_type,
+            analysis_id = bookmark.analysis_id,
+            created_at = bookmark.created_at,
+            updated_at = bookmark.updated_at
+        ) for bookmark in result]
     )

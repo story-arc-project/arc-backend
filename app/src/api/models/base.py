@@ -3,7 +3,7 @@ from uuid import UUID
 from pydantic import BaseModel, EmailStr, ConfigDict
 from typing import Any, Generic, TypeVar
 
-from src.enums import Affiliation, AnalysisStatus, ErrorResponseCode, OauthProviderId
+from src.enums import Affiliation, AnalysisStatus, AnalysisType, ErrorResponseCode, OauthProviderId
 
 T = TypeVar("T")
 
@@ -196,3 +196,10 @@ class FileMetadataPublic(BaseModel):
     created_at: datetime
 
     model_config = ConfigDict(from_attributes=True)
+
+class BookmarkData(BaseModel):
+    id: UUID
+    analysis_type: AnalysisType
+    analysis_id: UUID
+    created_at: datetime
+    updated_at: datetime
