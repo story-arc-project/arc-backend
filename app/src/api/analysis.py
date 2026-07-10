@@ -459,3 +459,36 @@ async def add_bookmark(analysis_id: UUID, session: SessionDep, response: Respons
     return SuccessResponse(
         message="Bookmark added."
     )
+
+@analysis_router.delete("/bookmarks/{analysis_id}")
+async def remove_bookmark(analysis_id: UUID, session: SessionDep, response: Response, payload: Annotated[AccessTokenPayload, Depends(check_auth)]):
+    statement = (
+        select(AnalysisBookmark)
+        .where(AnalysisBookmark.user_id == payload.sub)
+        .where(AnalysisBookmark.analysis_id == analysis_id)
+    )
+    result = session.exec(statement).one_or_none()
+    if result is None:
+        raise AppException(
+            404,
+            ErrorResponse(
+                code=ErrorResponseCode.NOT_FOUND,
+                message="Bookmark not found"
+            )
+        )
+    try:
+        session.delete(result)
+        session.commit()
+    except:
+        session.rollback()
+        raise AppException(
+            500,
+            ErrorResponse(
+                code=ErrorResponseCode.SERVER_ERROR,
+                message="Server side error."
+            )
+        )
+    response.status_code = 204
+    return DeleteSuccessResponse(
+        message="Bookmark removed."
+    )
