@@ -19,4 +19,5 @@ run: build stop certificate
 	$(COMPOSE) up -d
 
 revision:
+	@test -n "$(MSG)" || (echo "Usage: make revision MSG='message'" && exit 1)
 	./scripts/revision.sh "$(MSG)"
