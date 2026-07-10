@@ -3,7 +3,7 @@ import requests
 from typing import Annotated
 from uuid import UUID
 from fastapi import APIRouter, Depends, Response
-from sqlmodel import col, select
+from sqlmodel import col, select, and_
 import json
 
 from src.api.models.base import BookmarkData, ComprehensiveAnalysisData, ComprehensiveAnalysisList, ComprehensiveAnalysisListData, ErrorResponse, IndividualAnalysisData, IndividualAnalysisList, IndividualAnalysisListData, SuccessResponse, KeywordAnalysisList, KeywordAnalysisListData, KeywordAnalysisData
@@ -22,8 +22,16 @@ analysis_router = APIRouter()
 @analysis_router.get("/individual")
 async def get_individual_analyses(session: SessionDep, response: Response, payload: Annotated[AccessTokenPayload, Depends(check_auth)]):
     statement = (
-        select(IndividualAnalysis, Experience)
+        select(IndividualAnalysis, Experience, AnalysisBookmark)
         .join(Experience)
+        .outerjoin(
+            AnalysisBookmark,
+            and_(
+                AnalysisBookmark.analysis_id == IndividualAnalysis.id,
+                AnalysisBookmark.analysis_type == AnalysisType.individual,
+                AnalysisBookmark.user_id == payload.sub
+            )
+        )
         .where(Experience.user_id == payload.sub)
     )
     result = session.exec(statement).all()
@@ -38,16 +46,25 @@ async def get_individual_analyses(session: SessionDep, response: Response, paylo
                 experience_id = analysis.experience_id,
                 title = experience.content.get("title", ""),
                 created_at = analysis.created_at,
-                updated_at = analysis.updated_at
-            ) for analysis, experience in result]
+                updated_at = analysis.updated_at,
+                is_bookmarked = (bookmark is not None)
+            ) for analysis, experience, bookmark in result]
         )
     )
 
 @analysis_router.get("/individual/{analysis_id}")
 async def get_individual_analysis(analysis_id: UUID, session: SessionDep, response: Response, payload: Annotated[AccessTokenPayload, Depends(check_auth)]):
     statement = (
-        select(IndividualAnalysis, Experience)
+        select(IndividualAnalysis, Experience, AnalysisBookmark)
         .join(Experience)
+        .outerjoin(
+            AnalysisBookmark,
+            and_(
+                AnalysisBookmark.analysis_id == IndividualAnalysis.id,
+                AnalysisBookmark.analysis_type == AnalysisType.individual,
+                AnalysisBookmark.user_id == payload.sub
+            )
+        )
         .where(IndividualAnalysis.id == analysis_id)
     )
     result = session.exec(statement).one_or_none()
@@ -59,7 +76,7 @@ async def get_individual_analysis(analysis_id: UUID, session: SessionDep, respon
                 message = "Analysis not found"
             )
         )
-    analysis, experience = result
+    analysis, experience, bookmark = result
     if experience.user_id != payload.sub:
         raise AppException(
             403,
@@ -71,7 +88,15 @@ async def get_individual_analysis(analysis_id: UUID, session: SessionDep, respon
     response.status_code = 200
     return IndividualAnalysisResponse(
         message = "Fetch success.",
-        data = IndividualAnalysisData(**analysis.model_dump())
+        data = IndividualAnalysisData(
+            id = analysis.id,
+            status = analysis.status,
+            experience_id = analysis.experience_id,
+            created_at = analysis.created_at,
+            updated_at = analysis.updated_at,
+            result = analysis.result,
+            is_bookmarked = (bookmark is not None)
+        )
     )
 
 @analysis_router.post("/comprehensive")
@@ -140,7 +165,15 @@ async def post_comprehensive_analysis(
 @analysis_router.get("/comprehensive")
 async def get_comprehensive_analyses(session: SessionDep, response: Response, payload: Annotated[AccessTokenPayload, Depends(check_auth)]):
     statement = (
-        select(ComprehensiveAnalysis)
+        select(ComprehensiveAnalysis, AnalysisBookmark)
+        .outerjoin(
+            AnalysisBookmark,
+            and_(
+                AnalysisBookmark.analysis_id == ComprehensiveAnalysis.id,
+                AnalysisBookmark.analysis_type == AnalysisType.comprehensive,
+                AnalysisBookmark.user_id == payload.sub
+            )
+        )
         .where(ComprehensiveAnalysis.user_id == payload.sub)
     )
     result = session.exec(statement).all()
@@ -154,15 +187,24 @@ async def get_comprehensive_analyses(session: SessionDep, response: Response, pa
                 status = analysis.status,
                 experience_ids = analysis.experience_ids,
                 created_at = analysis.created_at,
-                updated_at = analysis.updated_at
-            ) for analysis in result]
+                updated_at = analysis.updated_at,
+                is_bookmarked = (bookmark is not None)
+            ) for analysis, bookmark in result]
         )
     )
 
 @analysis_router.get("/comprehensive/{analysis_id}")
 async def get_comprehensive_analysis(analysis_id: UUID, session: SessionDep, response: Response, payload: Annotated[AccessTokenPayload, Depends(check_auth)]):
     statement = (
-        select(ComprehensiveAnalysis)
+        select(ComprehensiveAnalysis, AnalysisBookmark)
+        .outerjoin(
+            AnalysisBookmark,
+            and_(
+                AnalysisBookmark.analysis_id == ComprehensiveAnalysis.id,
+                AnalysisBookmark.analysis_type == AnalysisType.comprehensive,
+                AnalysisBookmark.user_id == payload.sub
+            )
+        )
         .where(ComprehensiveAnalysis.id == analysis_id)
     )
     result = session.exec(statement).one_or_none()
@@ -174,7 +216,8 @@ async def get_comprehensive_analysis(analysis_id: UUID, session: SessionDep, res
                 message = "Analysis not found"
             )
         )
-    if result.user_id != payload.sub:
+    analysis, bookmark = result
+    if analysis.user_id != payload.sub:
         raise AppException(
             403,
             ErrorResponse(
@@ -186,12 +229,13 @@ async def get_comprehensive_analysis(analysis_id: UUID, session: SessionDep, res
     return ComprehensiveAnalysisResponse(
         message = "Fetch success.",
         data = ComprehensiveAnalysisData(
-            id = result.id,
-            status = result.status,
-            experience_ids = result.experience_ids,
-            result = result.result,
-            created_at = result.created_at,
-            updated_at = result.updated_at
+            id = analysis.id,
+            status = analysis.status,
+            experience_ids = analysis.experience_ids,
+            result = analysis.result,
+            created_at = analysis.created_at,
+            updated_at = analysis.updated_at,
+            is_bookmarked = (bookmark is not None)
         )
     )
 
@@ -282,7 +326,16 @@ async def post_keyword_analysis(
 @analysis_router.get("/keyword")
 async def get_keyword_analyses(session: SessionDep, response: Response, payload: Annotated[AccessTokenPayload, Depends(check_auth)]):
     statement = (
-        select(KeywordAnalysis).where(KeywordAnalysis.user_id == payload.sub)
+        select(KeywordAnalysis, AnalysisBookmark)
+        .outerjoin(
+            AnalysisBookmark,
+            and_(
+                AnalysisBookmark.analysis_id == KeywordAnalysis.id,
+                AnalysisBookmark.analysis_type == AnalysisType.keyword,
+                AnalysisBookmark.user_id == payload.sub
+            )
+        )
+        .where(KeywordAnalysis.user_id == payload.sub)
     )
     result = session.exec(statement).all()
     response.status_code = 200
@@ -295,15 +348,24 @@ async def get_keyword_analyses(session: SessionDep, response: Response, payload:
                 status = analysis.status,
                 keywords = analysis.keywords,
                 created_at = analysis.created_at,
-                updated_at = analysis.updated_at
-            ) for analysis in result]
+                updated_at = analysis.updated_at,
+                is_bookmarked = (bookmark is not None)
+            ) for analysis, bookmark in result]
         )
     )
 
 @analysis_router.get("/keyword/{analysis_id}")
 async def get_keyword_analysis(analysis_id: UUID, session: SessionDep, response: Response, payload: Annotated[AccessTokenPayload, Depends(check_auth)]):
     statement = (
-        select(KeywordAnalysis)
+        select(KeywordAnalysis, AnalysisBookmark)
+        .outerjoin(
+            AnalysisBookmark,
+            and_(
+                AnalysisBookmark.analysis_id == KeywordAnalysis.id,
+                AnalysisBookmark.analysis_type == AnalysisType.keyword,
+                AnalysisBookmark.user_id == payload.sub
+            )
+        )
         .where(KeywordAnalysis.id == analysis_id)
     )
     result = session.exec(statement).one_or_none()
@@ -315,7 +377,8 @@ async def get_keyword_analysis(analysis_id: UUID, session: SessionDep, response:
                 message = "Analysis not found"
             )
         )
-    if result.user_id != payload.sub:
+    analysis, bookmark = result
+    if analysis.user_id != payload.sub:
         raise AppException(
             403,
             ErrorResponse(
@@ -327,12 +390,13 @@ async def get_keyword_analysis(analysis_id: UUID, session: SessionDep, response:
     return KeywordAnalysisResponse(
         message = "Fetch success.",
         data = KeywordAnalysisData(
-            id = result.id,
-            status = result.status,
-            keywords = result.keywords,
-            result = result.result,
-            created_at = result.created_at,
-            updated_at = result.updated_at
+            id = analysis.id,
+            status = analysis.status,
+            keywords = analysis.keywords,
+            result = analysis.result,
+            created_at = analysis.created_at,
+            updated_at = analysis.updated_at,
+            is_bookmarked = (bookmark is not None)
         )
     )
 

@@ -117,6 +117,7 @@ class IndividualAnalysisData(BaseModel):
     created_at: datetime
     updated_at: datetime
     result: dict[str, Any] | None
+    is_bookmarked: bool
 
 class IndividualAnalysisListData(BaseModel):
     id: UUID
@@ -125,6 +126,7 @@ class IndividualAnalysisListData(BaseModel):
     title: str
     created_at: datetime
     updated_at: datetime
+    is_bookmarked: bool
 
 class IndividualAnalysisList(BaseModel):
     count: int
@@ -137,6 +139,7 @@ class ComprehensiveAnalysisData(BaseModel):
     created_at: datetime
     updated_at: datetime
     result: dict[str, Any] | None
+    is_bookmarked: bool
 
 class ComprehensiveAnalysisListData(BaseModel):
     id: UUID
@@ -144,6 +147,7 @@ class ComprehensiveAnalysisListData(BaseModel):
     experience_ids: list[UUID]
     created_at: datetime
     updated_at: datetime
+    is_bookmarked: bool
 
 class ComprehensiveAnalysisList(BaseModel):
     count: int
@@ -156,6 +160,7 @@ class KeywordAnalysisData(BaseModel):
     created_at: datetime
     updated_at: datetime
     result: dict[str, Any] | None
+    is_bookmarked: bool
 
 class KeywordAnalysisListData(BaseModel):
     id: UUID
@@ -163,6 +168,7 @@ class KeywordAnalysisListData(BaseModel):
     keywords: list[str]
     created_at: datetime
     updated_at: datetime
+    is_bookmarked: bool
 
 class KeywordAnalysisList(BaseModel):
     count: int
