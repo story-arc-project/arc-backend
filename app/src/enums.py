@@ -51,3 +51,8 @@ class Affiliation(str, enum.Enum):
     EMPLOYED = "employed"
     JOBSEEKER = "jobseeker"
     OTHER = "other"
+
+class AnalysisType(str, enum.Enum):
+    individual = "individual"
+    comprehensive = "comprehensive"
+    keyword = "keyword"

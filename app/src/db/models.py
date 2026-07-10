@@ -3,7 +3,7 @@ from typing import Any
 import uuid
 from sqlalchemy import DateTime, func, Column, UUID as SAUUID
 from sqlalchemy.sql.functions import now
-from src.enums import Affiliation, AnalysisStatus, OauthProviderId, UserStatus
+from src.enums import Affiliation, AnalysisStatus, AnalysisType, OauthProviderId, UserStatus
 from sqlmodel import ARRAY, Field, SQLModel, String, UniqueConstraint
 from sqlalchemy.dialects.postgresql import JSONB
 from pgvector.sqlalchemy import Vector
@@ -425,6 +425,34 @@ class FileMetadata(SQLModel, table=True):
         sa_column=Column(
             DateTime(timezone=True),
             server_default=func.now(),
+            nullable=False
+        )
+    )
+
+class AnalysisBookmark(SQLModel, table=True):
+    __tablename__: str = "analysis_bookmarks"  # pyright: ignore[reportIncompatibleVariableOverride]
+    id: uuid.UUID = Field(
+        default_factory=uuid.uuid4,
+        primary_key=True,
+        sa_type=SAUUID
+    )
+    user_id: uuid.UUID = Field(foreign_key="users.id", sa_type=SAUUID)
+    analysis_type: AnalysisType = Field(nullable=False)
+    analysis_id: uuid.UUID = Field(nullable=False, index=True)
+    created_at: datetime = Field(
+        default_factory=now,
+        sa_column=Column(
+            DateTime(timezone=True),
+            server_default=func.now(),
+            nullable=False
+        )
+    )
+    updated_at: datetime = Field(
+        default_factory=now,
+        sa_column=Column(
+            DateTime(timezone=True),
+            server_default=func.now(),
+            onupdate=func.now(),
             nullable=False
         )
     )
