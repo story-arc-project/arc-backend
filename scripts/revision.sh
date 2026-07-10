@@ -5,6 +5,12 @@ source ../.env
 
 OVERRIDE_FILE="../docker-compose.db-expose.yml"
 
+cleanup() {
+  docker compose -f "$OVERRIDE_FILE" down
+  rm -f "$OVERRIDE_FILE"
+}
+trap cleanup EXIT
+
 sed 's/image: pgvector\/pgvector:pg16/image: pgvector\/pgvector:pg16\n    ports:\n      - "5432:5432"/' ../docker-compose.yml > $OVERRIDE_FILE
 
 docker compose -f $OVERRIDE_FILE down
@@ -24,6 +30,3 @@ DATABASE_URL=$DATABASE_URL uv run alembic revision --autogenerate -m "$1"
 echo "Migration file generated. Edit it, then press Enter to run upgrade head..."
 read -r
 DATABASE_URL=$DATABASE_URL uv run alembic upgrade head
-
-docker compose -f $OVERRIDE_FILE down
-rm $OVERRIDE_FILE
