@@ -15,7 +15,7 @@ def is_admin_email(email: str):
     admin_email_list = [e.strip() for e in admin_emails.split(",") if e.strip()]
     return email in admin_email_list
 
-async def require_admin(session: SessionDep, accessToken: Annotated[str | None, Cookie()]):
+async def require_admin(session: SessionDep, accessToken: Annotated[str | None, Cookie()] = None):
     try:
         payload = check_auth(session, accessToken)
     except AppException:
