@@ -1,9 +1,10 @@
-from fastapi import FastAPI, Request, Response
+from fastapi import Depends, FastAPI, Request, Response
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from os import getenv
 
 from fastapi.responses import JSONResponse
+from src.api.admin import admin_router
 from src.api.analysis import analysis_router
 from src.api.experiences import experiences_router
 from src.api.export import export_router
@@ -15,6 +16,7 @@ from src.api.presets import presets_router
 from src.api.auth import auth_router, remove_tokens
 from src.const import ADMIN_PAGE_NOT_ALLOWED
 from src.enums import ErrorResponseCode
+from src.utils.admin import require_admin
 
 app = FastAPI()
 
@@ -98,4 +100,9 @@ app.include_router(
 app.include_router(
     files_router,
     prefix="/files"
+)
+app.include_router(
+    admin_router,
+    prefix="/admin",
+    dependencies=[Depends(require_admin)]
 )
