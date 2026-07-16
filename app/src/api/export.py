@@ -86,7 +86,9 @@ async def get_resumes(session: SessionDep, response: Response, payload: Annotate
         data = ResumeList(
             count = len(result),
             contents = [ResumeListData(
-                id = analysis.id
+                id = analysis.id,
+                created_at = analysis.created_at,
+                updated_at = analysis.updated_at
             ) for analysis in result]
         )
     )
