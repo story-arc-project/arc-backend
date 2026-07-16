@@ -25,7 +25,7 @@ async def comprehensive(body: Annotated[ComprehensiveRequest, Body()], response:
 
 @app.post("/keyword")
 async def keyword(body: Annotated[KeywordRequest, Body()], response: Response):
-    task = process_keyword.delay(str(body.analysis_id), body.keywords, body.input)
+    task = process_keyword.delay(str(body.analysis_id), body.input, body.keywords)
     response.status_code = 200
     return {
         "task_id": task.id
