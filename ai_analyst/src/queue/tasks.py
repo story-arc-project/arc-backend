@@ -13,18 +13,18 @@ def _load_main(type: Literal["individual", "comprehensive", "keyword_analysis", 
 FRONTEND_API_URL = "http://app:8000"
 INTERNAL_SECRET_KEY = "INTERNAL_SECRET"
 
-def sign_body(body: dict[str, Any]):
+def sign_body(body_bytes: bytes):
     key = getenv(INTERNAL_SECRET_KEY)
     if key is None:
         raise ValueError("Internal secret not set.")
-    body_bytes = json.dumps(body, separators=(",", ":")).encode()
     return hmac.new(key.encode(), body_bytes, hashlib.sha256).hexdigest()
 
 def call_frontend(endpoint: str, body: dict[str, Any]):
+    body_bytes = json.dumps(body, separators=(",", ":"), sort_keys=True, default=str).encode()
     response = requests.post(
         f"{FRONTEND_API_URL}{endpoint}",
-        json=body,
-        headers={"X-Signature": sign_body(body)},
+        data=body_bytes,
+        headers={"X-Signature": sign_body(body_bytes)},
         timeout=10
     )
     response.raise_for_status()

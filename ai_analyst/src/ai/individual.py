@@ -915,11 +915,11 @@ def main(user_input):
 
 
     # ── 최종 JSON 출력 ──
-    return json.dumps({
+    return {
         "status": "success",
         "vector": vector,
         "result": result
-    }, ensure_ascii=False, indent=2)
+    }
 
 
 

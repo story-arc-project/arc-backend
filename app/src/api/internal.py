@@ -56,7 +56,7 @@ async def fail_individual(analysis_type: str, body: Annotated[dict[str, Any], De
 @internal_router.post("/individual/success")
 async def success_individual(body: Annotated[dict[str, Any], Depends(check_internal)], session: SessionDep, response: Response):
     analysis_id: str | None = body.get("analysis_id")
-    result: str | None = body.get("result")
+    result: dict | None = body.get("result")
     if analysis_id is None or result is None:
         raise AppException(
             status_code = 400,
@@ -75,7 +75,7 @@ async def success_individual(body: Annotated[dict[str, Any], Depends(check_inter
                 message = ""
             )
         )
-    analysis_result: dict[str, Any] = json.loads(result)
+    analysis_result: dict[str, Any] = result
     analysis.vector = analysis_result.get("vector")
     analysis.result = analysis_result.get("result")
     analysis.status = AnalysisStatus.SUCCESS
@@ -87,7 +87,7 @@ async def success_individual(body: Annotated[dict[str, Any], Depends(check_inter
 @internal_router.post("/comprehensive/success")
 async def success_comprehensive(body: Annotated[dict[str, Any], Depends(check_internal)], session: SessionDep, response: Response):
     analysis_id: str | None = body.get("analysis_id")
-    result: str | None = body.get("result")
+    result: dict | None = body.get("result")
     if analysis_id is None or result is None:
         raise AppException(
             status_code = 400,
@@ -106,7 +106,7 @@ async def success_comprehensive(body: Annotated[dict[str, Any], Depends(check_in
                 message = ""
             )
         )
-    analysis_result: dict[str, Any] = json.loads(result)
+    analysis_result: dict[str, Any] = result
     analysis.vector = analysis_result.get("vector")
     analysis.result = analysis_result.get("result")
     analysis.status = AnalysisStatus.SUCCESS
@@ -118,7 +118,7 @@ async def success_comprehensive(body: Annotated[dict[str, Any], Depends(check_in
 @internal_router.post("/keyword/success")
 async def success_keyword(body: Annotated[dict[str, Any], Depends(check_internal)], session: SessionDep, response: Response):
     analysis_id: str | None = body.get("analysis_id")
-    result: str | None = body.get("result")
+    result: dict | None = body.get("result")
     if analysis_id is None or result is None:
         raise AppException(
             status_code = 400,
@@ -137,7 +137,7 @@ async def success_keyword(body: Annotated[dict[str, Any], Depends(check_internal
                 message = ""
             )
         )
-    analysis.result = json.loads(result)
+    analysis.result = result
     analysis.status = AnalysisStatus.SUCCESS
     session.add(analysis)
     session.commit()
@@ -147,7 +147,7 @@ async def success_keyword(body: Annotated[dict[str, Any], Depends(check_internal
 @internal_router.post("/resume/success")
 async def success_resume(body: Annotated[dict[str, Any], Depends(check_internal)], session: SessionDep, response: Response):
     resume_id: str | None = body.get("resume_id")
-    result: str | None = body.get("result")
+    result: dict | None = body.get("result")
     if resume_id is None or result is None:
         raise AppException(
             status_code = 400,
@@ -166,7 +166,7 @@ async def success_resume(body: Annotated[dict[str, Any], Depends(check_internal)
                 message = ""
             )
         )
-    resume.result = json.loads(result)
+    resume.result = result
     session.add(resume)
     session.commit()
     response.status_code = 200
