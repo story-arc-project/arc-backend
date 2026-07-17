@@ -1,7 +1,7 @@
 from datetime import date, datetime
 from uuid import UUID
 from pydantic import BaseModel, EmailStr, ConfigDict
-from typing import Any, Generic, TypeVar
+from typing import Any, Generic, Literal, TypeVar
 
 from src.enums import Affiliation, AnalysisStatus, AnalysisType, ErrorResponseCode, OauthProviderId
 
@@ -114,6 +114,7 @@ class IndividualAnalysisData(BaseModel):
     id: UUID
     status: AnalysisStatus
     experience_id: UUID
+    type: Literal["individual"] = "individual"
     created_at: datetime
     updated_at: datetime
     result: dict[str, Any] | None
@@ -124,6 +125,7 @@ class IndividualAnalysisListData(BaseModel):
     status: AnalysisStatus
     experience_id: UUID
     title: str
+    type: Literal["individual"] = "individual"
     created_at: datetime
     updated_at: datetime
     is_bookmarked: bool
@@ -140,6 +142,7 @@ class ComprehensiveAnalysisData(BaseModel):
     id: UUID
     status: AnalysisStatus
     experiences: list[ComprehensiveAnalysisExperienceData]
+    type: Literal["comprehensive"] = "comprehensive"
     created_at: datetime
     updated_at: datetime
     result: dict[str, Any] | None
@@ -150,6 +153,7 @@ class ComprehensiveAnalysisListData(BaseModel):
     id: UUID
     status: AnalysisStatus
     experiences: list[ComprehensiveAnalysisExperienceData]
+    type: Literal["comprehensive"] = "comprehensive"
     created_at: datetime
     updated_at: datetime
     is_bookmarked: bool
@@ -163,6 +167,7 @@ class KeywordAnalysisData(BaseModel):
     id: UUID
     status: AnalysisStatus
     keywords: list[str]
+    type: Literal["keyword"] = "keyword"
     created_at: datetime
     updated_at: datetime
     result: dict[str, Any] | None
@@ -173,6 +178,7 @@ class KeywordAnalysisListData(BaseModel):
     id: UUID
     status: AnalysisStatus
     keywords: list[str]
+    type: Literal["keyword"] = "keyword"
     created_at: datetime
     updated_at: datetime
     is_bookmarked: bool
