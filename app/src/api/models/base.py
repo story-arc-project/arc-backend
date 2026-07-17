@@ -132,10 +132,14 @@ class IndividualAnalysisList(BaseModel):
     count: int
     contents: list[IndividualAnalysisListData]
 
+class ComprehensiveAnalysisExperienceData(BaseModel):
+    id: UUID
+    title: str
+
 class ComprehensiveAnalysisData(BaseModel):
     id: UUID
     status: AnalysisStatus
-    experience_ids: list[UUID]
+    experiences: list[ComprehensiveAnalysisExperienceData]
     created_at: datetime
     updated_at: datetime
     result: dict[str, Any] | None
@@ -144,7 +148,7 @@ class ComprehensiveAnalysisData(BaseModel):
 class ComprehensiveAnalysisListData(BaseModel):
     id: UUID
     status: AnalysisStatus
-    experience_ids: list[UUID]
+    experiences: list[ComprehensiveAnalysisExperienceData]
     created_at: datetime
     updated_at: datetime
     is_bookmarked: bool

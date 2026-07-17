@@ -6,7 +6,7 @@ from fastapi import APIRouter, Depends, Response
 from sqlmodel import col, select, and_
 import json
 
-from src.api.models.base import BookmarkData, ComprehensiveAnalysisData, ComprehensiveAnalysisList, ComprehensiveAnalysisListData, ErrorResponse, IndividualAnalysisData, IndividualAnalysisList, IndividualAnalysisListData, SuccessResponse, KeywordAnalysisList, KeywordAnalysisListData, KeywordAnalysisData
+from src.api.models.base import BookmarkData, ComprehensiveAnalysisData, ComprehensiveAnalysisExperienceData, ComprehensiveAnalysisList, ComprehensiveAnalysisListData, ErrorResponse, IndividualAnalysisData, IndividualAnalysisList, IndividualAnalysisListData, SuccessResponse, KeywordAnalysisList, KeywordAnalysisListData, KeywordAnalysisData
 from src.api.models.exc import AppException
 from src.api.models.request import ComprehensiveAnalysisPostRequest, KeywordAnalysisPostRequest
 from src.api.models.response import BookmarkListResponse, ComprehensiveAnalysisListResponse, ComprehensiveAnalysisResponse, DeleteSuccessResponse, IndividualAnalysisListResponse, IndividualAnalysisResponse, KeywordAnalysisListResponse, KeywordAnalysisResponse
@@ -162,6 +162,37 @@ async def post_comprehensive_analysis(
         message = "Queued new comprehensive analysis."
     )
 
+def get_experience_titles(session: SessionDep, experience_ids: set[UUID]):
+    if len(experience_ids) == 0:
+        print("experience_ids length is 0")
+        raise AppException(
+            500,
+            ErrorResponse(
+                code = ErrorResponseCode.SERVER_ERROR,
+                message = "Internal server error"
+            )
+        )
+    experience_titles: dict[UUID, str] = {}
+    experience_rows = session.exec(
+        select(Experience.id, Experience.content)
+        .where(col(Experience.id).in_(experience_ids))
+    ).all()
+    for experience_row in experience_rows:
+        exp_id, content = experience_row
+        experience_titles[exp_id] = content.get("title", "")
+    if len(experience_titles) != len(experience_ids):
+        print("Experience titles and ids length do not match")
+        print(experience_ids)
+        print(experience_titles)
+        raise AppException(
+            500,
+            ErrorResponse(
+                code = ErrorResponseCode.SERVER_ERROR,
+                message = "Internal server error"
+            )
+        )
+    return experience_titles
+
 @analysis_router.get("/comprehensive")
 async def get_comprehensive_analyses(session: SessionDep, response: Response, payload: Annotated[AccessTokenPayload, Depends(check_auth)]):
     statement = (
@@ -177,6 +208,12 @@ async def get_comprehensive_analyses(session: SessionDep, response: Response, pa
         .where(ComprehensiveAnalysis.user_id == payload.sub)
     )
     result = session.exec(statement).all()
+    experience_ids = {
+        exp_id
+        for analysis, _ in result
+        for exp_id in analysis.experience_ids
+    }
+    experience_titles = get_experience_titles(session, experience_ids)
     response.status_code = 200
     return ComprehensiveAnalysisListResponse(
         message = "Fetch success.",
@@ -185,7 +222,13 @@ async def get_comprehensive_analyses(session: SessionDep, response: Response, pa
             contents = [ComprehensiveAnalysisListData(
                 id = analysis.id,
                 status = analysis.status,
-                experience_ids = analysis.experience_ids,
+                experiences = [
+                    ComprehensiveAnalysisExperienceData(
+                        id = exp_id,
+                        title = experience_titles[exp_id]
+                    )
+                    for exp_id in analysis.experience_ids
+                ],
                 created_at = analysis.created_at,
                 updated_at = analysis.updated_at,
                 is_bookmarked = (bookmark is not None)
@@ -225,13 +268,24 @@ async def get_comprehensive_analysis(analysis_id: UUID, session: SessionDep, res
                 message = "Access for the resource is not allowed"
             )
         )
+    experience_ids = {
+        exp_id
+        for exp_id in analysis.experience_ids
+    }
+    experience_titles = get_experience_titles(session, experience_ids)
     response.status_code = 200
     return ComprehensiveAnalysisResponse(
         message = "Fetch success.",
         data = ComprehensiveAnalysisData(
             id = analysis.id,
             status = analysis.status,
-            experience_ids = analysis.experience_ids,
+            experiences = [
+                ComprehensiveAnalysisExperienceData(
+                    id = exp_id,
+                    title = experience_titles[exp_id]
+                )
+                for exp_id in analysis.experience_ids
+            ],
             result = analysis.result,
             created_at = analysis.created_at,
             updated_at = analysis.updated_at,
