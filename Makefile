@@ -2,7 +2,7 @@ PROJECT_NAME ?= arc-backend
 COMPOSE := docker compose -f ./docker-compose.yml --project-directory . -p "$(PROJECT_NAME)"
 COMPOSE_INIT := docker compose -f ./init/docker-compose.yml --project-directory . -p "$(PROJECT_NAME)"
 
-.PHONY: build stop certificate run revision
+.PHONY: build stop certificate run revision logs
 
 build:
 	COMPOSE_BAKE=true $(COMPOSE) build
@@ -21,3 +21,6 @@ run: build stop certificate
 revision:
 	@test -n "$(MSG)" || (echo "Usage: make revision MSG='message'" && exit 1)
 	./scripts/revision.sh "$(MSG)"
+
+logs:
+	$(COMPOSE) logs -f
