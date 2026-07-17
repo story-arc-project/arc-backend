@@ -160,7 +160,8 @@ async def post_comprehensive_analysis(
     title = f"{list(titles.values())[0]} 외 {len(experience_ids)-1}개"
     new_comprehensive_analysis = ComprehensiveAnalysis(
         user_id = payload.sub,
-        experience_ids = [experience.id for experience in result]
+        experience_ids = [experience.id for experience in result],
+        title = title
     )
     for experience in result:
         if experience.user_id != payload.sub:
@@ -241,7 +242,7 @@ async def get_comprehensive_analyses(session: SessionDep, response: Response, pa
                 created_at = analysis.created_at,
                 updated_at = analysis.updated_at,
                 is_bookmarked = (bookmark is not None),
-                title = f"{[title for title in [experience_titles.get(exp_id) for exp_id in analysis.experience_ids] if title is not None][0]} 외 {len(analysis.experience_ids)-1}개"
+                title = analysis.title
             ) for analysis, bookmark in result]
         )
     )
@@ -300,7 +301,7 @@ async def get_comprehensive_analysis(analysis_id: UUID, session: SessionDep, res
             created_at = analysis.created_at,
             updated_at = analysis.updated_at,
             is_bookmarked = (bookmark is not None),
-            title = f"{list(experience_titles.values())[0]} 외 {len(experience_ids)-1}개"
+            title = analysis.title
         )
     )
 
@@ -367,12 +368,14 @@ async def post_keyword_analysis(
     statement = select(Experience).where(Experience.user_id == payload.sub)
     result = session.exec(statement).all()
     user_input: list[str] = []
+    title = f"{", ".join(body.keywords)} 분석"
     for experience in result:
         user_input.append(str(experience.content))
     try:
         new_keyword_analysis = KeywordAnalysis(
             user_id = payload.sub,
-            keywords = body.keywords
+            keywords = body.keywords,
+            title = title
         )
         req = requests.post("http://ai_analyst:8001/keyword", json={
             "analysis_id": str(new_keyword_analysis.id),
@@ -430,7 +433,7 @@ async def get_keyword_analyses(session: SessionDep, response: Response, payload:
                 created_at = analysis.created_at,
                 updated_at = analysis.updated_at,
                 is_bookmarked = (bookmark is not None),
-                title = f"{", ".join(analysis.keywords)} 분석"
+                title = analysis.title
             ) for analysis, bookmark in result]
         )
     )
@@ -478,7 +481,7 @@ async def get_keyword_analysis(analysis_id: UUID, session: SessionDep, response:
             created_at = analysis.created_at,
             updated_at = analysis.updated_at,
             is_bookmarked = (bookmark is not None),
-            title = f"{", ".join(analysis.keywords)} 분석"
+            title = analysis.title
         )
     )
 

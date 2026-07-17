@@ -281,6 +281,7 @@ class ComprehensiveAnalysis(SQLModel, table=True):
     user_id: uuid.UUID = Field(foreign_key="users.id", index=True)
     task_id: str | None = Field(nullable=True, index=True, default=None)
     status: AnalysisStatus = AnalysisStatus.QUEUED
+    title: str
     experience_ids: list[uuid.UUID] = Field(
         sa_column=Column(ARRAY(SAUUID))
     )
@@ -351,6 +352,7 @@ class KeywordAnalysis(SQLModel, table=True):
     keywords: list[str] = Field(sa_column=Column(ARRAY(String)))
     task_id: str | None = Field(nullable=True, index=True, default=None)
     status: AnalysisStatus = AnalysisStatus.QUEUED
+    title: str
     result: dict[str, Any] | None = Field(
         default=None,
         sa_column=Column(JSONB, nullable=True, default=None)
