@@ -1,13 +1,14 @@
 import traceback
 from typing import Annotated
+from uuid import UUID
 from fastapi import APIRouter, Depends, Response
 from sqlmodel import select
 import requests
 
-from src.api.models.base import ErrorResponse, ResumeList, ResumeListData, UUIDDataWithTitleNone
+from src.api.models.base import ErrorResponse, ResumeData, ResumeList, ResumeListData, UUIDDataWithTitleNone
 from src.api.models.exc import AppException
 from src.api.models.request import ResumePostRequest
-from src.api.models.response import PostSuccessResponse, ResumeListResponse
+from src.api.models.response import PostSuccessResponse, ResumeListResponse, ResumeResponse
 from src.db.db import SessionDep
 from src.db.models import Experience, Resume, User, UserProfile
 from src.enums import ErrorResponseCode
@@ -97,5 +98,38 @@ async def get_resumes(session: SessionDep, response: Response, payload: Annotate
                 created_at = analysis.created_at,
                 updated_at = analysis.updated_at
             ) for analysis in result]
+        )
+    )
+
+@export_router.get("/resume/{resume_id}")
+async def get_resume(resume_id: UUID, session: SessionDep, response: Response, payload: Annotated[AccessTokenPayload, Depends(check_auth)]):
+    resume = session.get(Resume, resume_id)
+    if resume is None:
+        raise AppException(
+            404,
+            ErrorResponse(
+                code = ErrorResponseCode.NOT_FOUND,
+                message = "Resume not found"
+            )
+        )
+    if resume.user_id != payload.sub:
+        raise AppException(
+            403,
+            ErrorResponse(
+                code = ErrorResponseCode.RESOURCE_NOT_ALLOWED,
+                message = "Access for the resource is not allowed"
+            )
+        )
+    response.status_code = 200
+    return ResumeResponse(
+        message = "Fetch success.",
+        data = ResumeData(
+            id = resume.id,
+            title = resume.title,
+            language = resume.language,
+            status = resume.status,
+            created_at = resume.created_at,
+            updated_at = resume.updated_at,
+            result = resume.result
         )
     )

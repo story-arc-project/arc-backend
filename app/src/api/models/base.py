@@ -212,6 +212,8 @@ class ResumeList(BaseModel):
 class ResumeData(BaseModel):
     id: UUID
     title: str | None
+    language: Language
+    status: AnalysisStatus
     created_at: datetime
     updated_at: datetime
     result: dict[str, Any] | None
