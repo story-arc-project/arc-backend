@@ -64,6 +64,9 @@ class AuthMeData(BaseModel):
 class UUIDData(BaseModel):
     id: UUID
 
+class UUIDDataWithTitle(UUIDData):
+    title: str
+
 class ExperienceResponseData(BaseModel):
     id: UUID
     user_id: UUID

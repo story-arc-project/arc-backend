@@ -6,7 +6,7 @@ from fastapi import APIRouter, Depends, Response
 from sqlmodel import col, select, and_
 import json
 
-from src.api.models.base import BookmarkData, ComprehensiveAnalysisData, ComprehensiveAnalysisExperienceData, ComprehensiveAnalysisList, ComprehensiveAnalysisListData, ErrorResponse, IndividualAnalysisData, IndividualAnalysisList, IndividualAnalysisListData, SuccessResponse, KeywordAnalysisList, KeywordAnalysisListData, KeywordAnalysisData, UUIDData
+from src.api.models.base import BookmarkData, ComprehensiveAnalysisData, ComprehensiveAnalysisExperienceData, ComprehensiveAnalysisList, ComprehensiveAnalysisListData, ErrorResponse, IndividualAnalysisData, IndividualAnalysisList, IndividualAnalysisListData, SuccessResponse, KeywordAnalysisList, KeywordAnalysisListData, KeywordAnalysisData, UUIDData, UUIDDataWithTitle
 from src.api.models.exc import AppException
 from src.api.models.request import ComprehensiveAnalysisPostRequest, KeywordAnalysisPostRequest
 from src.api.models.response import BookmarkListResponse, ComprehensiveAnalysisListResponse, ComprehensiveAnalysisResponse, DeleteSuccessResponse, IndividualAnalysisListResponse, IndividualAnalysisResponse, KeywordAnalysisListResponse, KeywordAnalysisResponse, PostSuccessResponse
@@ -16,6 +16,30 @@ from src.enums import AnalysisType, ErrorResponseCode
 from src.utils.auth import check_auth
 from src.utils.ratelimit import analysis_rate_limiters
 from src.utils.token import AccessTokenPayload
+
+def get_experience_titles(session: SessionDep, experience_ids: set[UUID]):
+    if len(experience_ids) == 0:
+        print("experience_ids length is 0")
+        raise AppException(
+            500,
+            ErrorResponse(
+                code = ErrorResponseCode.SERVER_ERROR,
+                message = "Internal server error"
+            )
+        )
+    experience_titles: dict[UUID, str] = {}
+    experience_rows = session.exec(
+        select(Experience.id, Experience.content)
+        .where(col(Experience.id).in_(experience_ids))
+    ).all()
+    for experience_row in experience_rows:
+        exp_id, content = experience_row
+        experience_titles[exp_id] = content.get("title", "")
+    if len(experience_titles) != len(experience_ids):
+        print("Warning: Experience titles and ids length do not match")
+        print(experience_ids)
+        print(experience_titles)
+    return experience_titles
 
 analysis_router = APIRouter()
 
@@ -131,6 +155,9 @@ async def post_comprehensive_analysis(
     user_input: list[str] = []
     for experience in result:
         user_input.append(str(experience.content))
+    experience_ids = [experience.id for experience in result]
+    titles = get_experience_titles(session, set(experience_ids))
+    title = f"{list(titles.values())[0]} 외 {len(experience_ids)-1}개"
     new_comprehensive_analysis = ComprehensiveAnalysis(
         user_id = payload.sub,
         experience_ids = [experience.id for experience in result]
@@ -169,34 +196,11 @@ async def post_comprehensive_analysis(
     response.status_code = 200
     return PostSuccessResponse(
         message = "Queued new comprehensive analysis.",
-        data = UUIDData(
-            id = new_comprehensive_analysis.id
+        data = UUIDDataWithTitle(
+            id = new_comprehensive_analysis.id,
+            title = title
         )
     )
-
-def get_experience_titles(session: SessionDep, experience_ids: set[UUID]):
-    if len(experience_ids) == 0:
-        print("experience_ids length is 0")
-        raise AppException(
-            500,
-            ErrorResponse(
-                code = ErrorResponseCode.SERVER_ERROR,
-                message = "Internal server error"
-            )
-        )
-    experience_titles: dict[UUID, str] = {}
-    experience_rows = session.exec(
-        select(Experience.id, Experience.content)
-        .where(col(Experience.id).in_(experience_ids))
-    ).all()
-    for experience_row in experience_rows:
-        exp_id, content = experience_row
-        experience_titles[exp_id] = content.get("title", "")
-    if len(experience_titles) != len(experience_ids):
-        print("Warning: Experience titles and ids length do not match")
-        print(experience_ids)
-        print(experience_titles)
-    return experience_titles
 
 @analysis_router.get("/comprehensive")
 async def get_comprehensive_analyses(session: SessionDep, response: Response, payload: Annotated[AccessTokenPayload, Depends(check_auth)]):
