@@ -226,6 +226,9 @@ class LibraryPatchRequest(BaseModel):
 class ComprehensiveAnalysisPostRequest(BaseModel):
     experiences: list[UUID]
 
+class ComprehensiveAnalysisPatchRequest(BaseModel):
+    title: str
+
 class KeywordAnalysisPostRequest(BaseModel):
     keywords: list[str]
     # target: str

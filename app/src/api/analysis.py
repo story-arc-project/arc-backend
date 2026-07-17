@@ -8,7 +8,7 @@ import json
 
 from src.api.models.base import BookmarkData, ComprehensiveAnalysisData, ComprehensiveAnalysisExperienceData, ComprehensiveAnalysisList, ComprehensiveAnalysisListData, ErrorResponse, IndividualAnalysisData, IndividualAnalysisList, IndividualAnalysisListData, SuccessResponse, KeywordAnalysisList, KeywordAnalysisListData, KeywordAnalysisData, UUIDData, UUIDDataWithTitle
 from src.api.models.exc import AppException
-from src.api.models.request import ComprehensiveAnalysisPostRequest, KeywordAnalysisPostRequest
+from src.api.models.request import ComprehensiveAnalysisPatchRequest, ComprehensiveAnalysisPostRequest, KeywordAnalysisPostRequest
 from src.api.models.response import BookmarkListResponse, ComprehensiveAnalysisListResponse, ComprehensiveAnalysisResponse, DeleteSuccessResponse, IndividualAnalysisListResponse, IndividualAnalysisResponse, KeywordAnalysisListResponse, KeywordAnalysisResponse, PostSuccessResponse
 from src.db.db import SessionDep
 from src.db.models import AnalysisBookmark, ComprehensiveAnalysis, Experience, IndividualAnalysis, KeywordAnalysis, UserProfile
@@ -203,6 +203,66 @@ async def post_comprehensive_analysis(
         )
     )
 
+@analysis_router.patch("/comprehensive/{analysis_id}")
+async def patch_comprehensive_analysis(
+    analysis_id: UUID,
+    body: ComprehensiveAnalysisPatchRequest,
+    session: SessionDep,
+    response: Response,
+    payload: Annotated[AccessTokenPayload, Depends(check_auth)],
+    _user_limit: Annotated[None, Depends(analysis_rate_limiters["comprehensive"]["user"])],
+    _ip_limit: Annotated[None, Depends(analysis_rate_limiters["comprehensive"]["ip"])]
+):
+    title_length = len(body.title)
+    if title_length <= 0 or title_length > 100:
+        raise AppException(
+            status_code = 400,
+            error = ErrorResponse(
+                code = ErrorResponseCode.BAD_REQUEST,
+                message = "Title length is invalid"
+            )
+        )
+    analysis = session.get(ComprehensiveAnalysis, analysis_id)
+    if analysis is None:
+        raise AppException(
+            404,
+            ErrorResponse(
+                code = ErrorResponseCode.NOT_FOUND,
+                message = "Comprehensive analysis not found"
+            )
+        ) 
+    if analysis.user_id != payload.sub:
+        raise AppException(
+            403,
+            ErrorResponse(
+                code = ErrorResponseCode.RESOURCE_NOT_ALLOWED,
+                message = "Access for the resource is not allowed"
+            )
+        )
+    analysis.title = body.title
+    try:
+        session.add(analysis)
+        session.commit()
+        session.refresh(analysis)
+    except Exception:
+        traceback.print_exc()
+        session.rollback()
+        raise AppException(
+            500,
+            ErrorResponse(
+                code=ErrorResponseCode.SERVER_ERROR,
+                message="Server side error."
+            )
+        )
+    response.status_code = 200
+    return PostSuccessResponse(
+        message = "Comprehensive analysis patch success.",
+        data = UUIDDataWithTitle(
+            id = analysis.id,
+            title = body.title
+        )
+    )
+    
 @analysis_router.get("/comprehensive")
 async def get_comprehensive_analyses(session: SessionDep, response: Response, payload: Annotated[AccessTokenPayload, Depends(check_auth)]):
     statement = (
