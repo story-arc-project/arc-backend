@@ -181,16 +181,9 @@ def get_experience_titles(session: SessionDep, experience_ids: set[UUID]):
         exp_id, content = experience_row
         experience_titles[exp_id] = content.get("title", "")
     if len(experience_titles) != len(experience_ids):
-        print("Experience titles and ids length do not match")
+        print("Warning: Experience titles and ids length do not match")
         print(experience_ids)
         print(experience_titles)
-        raise AppException(
-            500,
-            ErrorResponse(
-                code = ErrorResponseCode.SERVER_ERROR,
-                message = "Internal server error"
-            )
-        )
     return experience_titles
 
 @analysis_router.get("/comprehensive")
@@ -225,7 +218,7 @@ async def get_comprehensive_analyses(session: SessionDep, response: Response, pa
                 experiences = [
                     ComprehensiveAnalysisExperienceData(
                         id = exp_id,
-                        title = experience_titles[exp_id]
+                        title = experience_titles.get(exp_id)
                     )
                     for exp_id in analysis.experience_ids
                 ],
@@ -282,7 +275,7 @@ async def get_comprehensive_analysis(analysis_id: UUID, session: SessionDep, res
             experiences = [
                 ComprehensiveAnalysisExperienceData(
                     id = exp_id,
-                    title = experience_titles[exp_id]
+                    title = experience_titles.get(exp_id)
                 )
                 for exp_id in analysis.experience_ids
             ],

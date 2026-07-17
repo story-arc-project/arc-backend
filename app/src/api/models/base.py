@@ -134,7 +134,7 @@ class IndividualAnalysisList(BaseModel):
 
 class ComprehensiveAnalysisExperienceData(BaseModel):
     id: UUID
-    title: str
+    title: str | None
 
 class ComprehensiveAnalysisData(BaseModel):
     id: UUID
