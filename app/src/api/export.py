@@ -5,9 +5,9 @@ from fastapi import APIRouter, Depends, Response
 from sqlmodel import select
 import requests
 
-from src.api.models.base import ErrorResponse, ResumeData, ResumeList, ResumeListData, UUIDDataWithTitleNone
+from src.api.models.base import ErrorResponse, ResumeData, ResumeList, ResumeListData, UUIDDataWithTitle, UUIDDataWithTitleNone
 from src.api.models.exc import AppException
-from src.api.models.request import ResumePostRequest
+from src.api.models.request import ResumePatchRequest, ResumePostRequest
 from src.api.models.response import PostSuccessResponse, ResumeListResponse, ResumeResponse
 from src.db.db import SessionDep
 from src.db.models import Experience, Resume, User, UserProfile
@@ -139,5 +139,54 @@ async def get_resume(resume_id: UUID, session: SessionDep, response: Response, p
             created_at = resume.created_at,
             updated_at = resume.updated_at,
             result = resume.result
+        )
+    )
+
+@export_router.patch("/resume/{resume_id}")
+async def patch_resume(
+    analysis_id: UUID,
+    body: ResumePatchRequest,
+    session: SessionDep,
+    response: Response,
+    payload: Annotated[AccessTokenPayload, Depends(check_auth)]
+):
+    resume = session.get(Resume, analysis_id)
+    if resume is None:
+        raise AppException(
+            404,
+            ErrorResponse(
+                code = ErrorResponseCode.NOT_FOUND,
+                message = "Resume not found"
+            )
+        ) 
+    if resume.user_id != payload.sub:
+        raise AppException(
+            403,
+            ErrorResponse(
+                code = ErrorResponseCode.RESOURCE_NOT_ALLOWED,
+                message = "Access for the resource is not allowed"
+            )
+        )
+    resume.title = body.title
+    try:
+        session.add(resume)
+        session.commit()
+        session.refresh(resume)
+    except Exception:
+        traceback.print_exc()
+        session.rollback()
+        raise AppException(
+            500,
+            ErrorResponse(
+                code=ErrorResponseCode.SERVER_ERROR,
+                message="Server side error."
+            )
+        )
+    response.status_code = 200
+    return PostSuccessResponse(
+        message = "Keyword analysis patch success.",
+        data = UUIDDataWithTitle(
+            id = resume.id,
+            title = body.title
         )
     )
