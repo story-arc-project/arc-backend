@@ -441,7 +441,7 @@ async def post_keyword_analysis(
             "analysis_id": str(new_keyword_analysis.id),
             "input": json.dumps(user_input),
             "keywords": body.keywords,
-            "target": "" # TODO: Connect target to API
+            "target": body.target
         })
         req.raise_for_status()
         new_keyword_analysis.task_id = req.json()["task_id"]

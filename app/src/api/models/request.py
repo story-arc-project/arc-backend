@@ -231,7 +231,7 @@ class ComprehensiveAnalysisPatchRequest(BaseModel):
 
 class KeywordAnalysisPostRequest(BaseModel):
     keywords: list[str]
-    # target: str
+    target: str = ""
 
 class ResumePostRequest(BaseModel):
     language: str
