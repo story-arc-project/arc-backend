@@ -8,7 +8,7 @@ import requests
 from src.api.models.base import ErrorResponse, ResumeData, ResumeList, ResumeListData, UUIDDataWithTitle, UUIDDataWithTitleNone
 from src.api.models.exc import AppException
 from src.api.models.request import ResumePatchRequest, ResumePostRequest
-from src.api.models.response import PostSuccessResponse, ResumeListResponse, ResumeResponse
+from src.api.models.response import DeleteSuccessResponse, PostSuccessResponse, ResumeListResponse, ResumeResponse
 from src.db.db import SessionDep
 from src.db.models import Experience, Resume, User, UserProfile
 from src.enums import ErrorResponseCode
@@ -158,7 +158,7 @@ async def patch_resume(
                 code = ErrorResponseCode.NOT_FOUND,
                 message = "Resume not found"
             )
-        ) 
+        )
     if resume.user_id != payload.sub:
         raise AppException(
             403,
@@ -189,4 +189,40 @@ async def patch_resume(
             id = resume.id,
             title = body.title
         )
+    )
+
+@export_router.delete("/resume/{resume_id}")
+async def remove_bookmark(resume_id: UUID, session: SessionDep, response: Response, payload: Annotated[AccessTokenPayload, Depends(check_auth)]):
+    resume = session.get(Resume, resume_id)
+    if resume is None:
+        raise AppException(
+            404,
+            ErrorResponse(
+                code=ErrorResponseCode.NOT_FOUND,
+                message="Resume not found"
+            )
+        )
+    if resume.user_id != payload.sub:
+        raise AppException(
+            403,
+            ErrorResponse(
+                code = ErrorResponseCode.RESOURCE_NOT_ALLOWED,
+                message = "Access for the resource is not allowed"
+            )
+        )
+    try:
+        session.delete(resume)
+        session.commit()
+    except:
+        session.rollback()
+        raise AppException(
+            500,
+            ErrorResponse(
+                code=ErrorResponseCode.SERVER_ERROR,
+                message="Server side error."
+            )
+        )
+    response.status_code = 204
+    return DeleteSuccessResponse(
+        message="Resume removed."
     )
