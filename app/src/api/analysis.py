@@ -6,7 +6,7 @@ from fastapi import APIRouter, Depends, Response
 from sqlmodel import col, select, and_
 import json
 
-from src.api.models.base import BookmarkData, ComprehensiveAnalysisData, ComprehensiveAnalysisExperienceData, ComprehensiveAnalysisList, ComprehensiveAnalysisListData, ErrorResponse, IndividualAnalysisData, IndividualAnalysisList, IndividualAnalysisListData, SuccessResponse, KeywordAnalysisList, KeywordAnalysisListData, KeywordAnalysisData, UUIDData, UUIDDataWithTitle
+from src.api.models.base import BookmarkData, ComprehensiveAnalysisData, ComprehensiveAnalysisExperienceData, ComprehensiveAnalysisList, ComprehensiveAnalysisListData, ErrorResponse, IndividualAnalysisData, IndividualAnalysisList, IndividualAnalysisListData, SuccessResponse, KeywordAnalysisList, KeywordAnalysisListData, KeywordAnalysisData, UUIDDataWithTitle
 from src.api.models.exc import AppException
 from src.api.models.request import ComprehensiveAnalysisPatchRequest, ComprehensiveAnalysisPostRequest, KeywordAnalysisPostRequest
 from src.api.models.response import BookmarkListResponse, ComprehensiveAnalysisListResponse, ComprehensiveAnalysisResponse, DeleteSuccessResponse, IndividualAnalysisListResponse, IndividualAnalysisResponse, KeywordAnalysisListResponse, KeywordAnalysisResponse, PostSuccessResponse
@@ -461,8 +461,9 @@ async def post_keyword_analysis(
     response.status_code = 200
     return PostSuccessResponse(
         message = "Queued new keyword analysis.",
-        data = UUIDData(
-            id = new_keyword_analysis.id
+        data = UUIDDataWithTitle(
+            id = new_keyword_analysis.id,
+            title = title
         )
     )
 
