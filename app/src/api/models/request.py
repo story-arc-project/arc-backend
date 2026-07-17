@@ -233,6 +233,9 @@ class KeywordAnalysisPostRequest(BaseModel):
     keywords: list[str]
     target: str = ""
 
+class KeywordAnalysisPatchRequest(BaseModel):
+    title: str
+
 class ResumePostRequest(BaseModel):
     language: str
 
