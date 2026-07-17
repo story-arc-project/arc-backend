@@ -67,6 +67,9 @@ class UUIDData(BaseModel):
 class UUIDDataWithTitle(UUIDData):
     title: str
 
+class UUIDDataWithTitleNone(UUIDData):
+    title: str | None
+
 class ExperienceResponseData(BaseModel):
     id: UUID
     user_id: UUID
@@ -196,6 +199,7 @@ class KeywordAnalysisList(BaseModel):
 
 class ResumeListData(BaseModel):
     id: UUID
+    title: str | None
     created_at: datetime
     updated_at: datetime
 
@@ -205,6 +209,7 @@ class ResumeList(BaseModel):
 
 class ResumeData(BaseModel):
     id: UUID
+    title: str | None
     created_at: datetime
     updated_at: datetime
     result: dict[str, Any] | None

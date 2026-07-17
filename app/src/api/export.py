@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, Response
 from sqlmodel import select
 import requests
 
-from src.api.models.base import ErrorResponse, ResumeList, ResumeListData, UUIDData
+from src.api.models.base import ErrorResponse, ResumeList, ResumeListData, UUIDDataWithTitleNone
 from src.api.models.exc import AppException
 from src.api.models.request import ResumePostRequest
 from src.api.models.response import PostSuccessResponse, ResumeListResponse
@@ -33,17 +33,17 @@ async def post_resume(body: ResumePostRequest, session: SessionDep, response: Re
     sources: list[str] = []
     for experience in result:
         sources.append(str(experience.content))
-    try:
-        new_resume = Resume(user_id = payload.sub)
-        for experience in result:
-            if experience.user_id != payload.sub:
-                raise AppException(
-                    403,
-                    ErrorResponse(
-                        code = ErrorResponseCode.RESOURCE_NOT_ALLOWED,
-                        message = "Access for the resource is not allowed"
-                    )
+    new_resume = Resume(user_id = payload.sub, language = body.language, title = body.title)
+    for experience in result:
+        if experience.user_id != payload.sub:
+            raise AppException(
+                403,
+                ErrorResponse(
+                    code = ErrorResponseCode.RESOURCE_NOT_ALLOWED,
+                    message = "Access for the resource is not allowed"
                 )
+        )
+    try:
         req = requests.post("http://ai_analyst:8001/resume", json={
             "resume_id": str(new_resume.id),
             "sources": sources,
@@ -71,8 +71,9 @@ async def post_resume(body: ResumePostRequest, session: SessionDep, response: Re
     response.status_code = 200
     return PostSuccessResponse(
         message = "Resume generation queued successfully.",
-        data = UUIDData(
-            id = new_resume.id
+        data = UUIDDataWithTitleNone(
+            id = new_resume.id,
+            title = new_resume.title
         )
     )
 
@@ -90,6 +91,7 @@ async def get_resumes(session: SessionDep, response: Response, payload: Annotate
             count = len(result),
             contents = [ResumeListData(
                 id = analysis.id,
+                title = analysis.title,
                 created_at = analysis.created_at,
                 updated_at = analysis.updated_at
             ) for analysis in result]

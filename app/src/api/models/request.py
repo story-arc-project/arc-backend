@@ -4,7 +4,7 @@ from uuid import UUID
 from pydantic import BaseModel, EmailStr, field_validator, model_validator, AfterValidator, Field
 import re
 
-from src.enums import Affiliation, OauthProviderId
+from src.enums import Affiliation, Language, OauthProviderId
 from src.api.models.consent import AGREEABLE_CONSENT_VERSIONS, CONSENT_REQUIRED
 
 def validate_password(v: str):
@@ -237,7 +237,8 @@ class KeywordAnalysisPatchRequest(BaseModel):
     title: str
 
 class ResumePostRequest(BaseModel):
-    language: str
+    language: Language
+    title: str | None = None
 
 class UserDeleteByPasswordRequest(BaseModel):
     password: str

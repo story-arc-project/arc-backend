@@ -3,7 +3,7 @@ from typing import Any
 import uuid
 from sqlalchemy import DateTime, func, Column, UUID as SAUUID
 from sqlalchemy.sql.functions import now
-from src.enums import Affiliation, AnalysisStatus, AnalysisType, OauthProviderId, UserStatus
+from src.enums import Affiliation, AnalysisStatus, AnalysisType, Language, OauthProviderId, UserStatus
 from sqlmodel import ARRAY, Field, SQLModel, String, UniqueConstraint
 from sqlalchemy.dialects.postgresql import JSONB
 from pgvector.sqlalchemy import Vector
@@ -319,6 +319,8 @@ class Resume(SQLModel, table=True):
         sa_type=SAUUID
     )
     user_id: uuid.UUID = Field(foreign_key="users.id", index=True)
+    language: Language
+    title: str | None = None
     result: dict[str, Any] | None = Field(
         default=None,
         sa_column=Column(JSONB, nullable=True, default=None)

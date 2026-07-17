@@ -56,3 +56,7 @@ class AnalysisType(str, enum.Enum):
     individual = "individual"
     comprehensive = "comprehensive"
     keyword = "keyword"
+
+class Language(str, enum.Enum):
+    ko = "ko"
+    en = "en"
