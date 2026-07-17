@@ -410,7 +410,8 @@ async def get_keyword_analyses(session: SessionDep, response: Response, payload:
                 keywords = analysis.keywords,
                 created_at = analysis.created_at,
                 updated_at = analysis.updated_at,
-                is_bookmarked = (bookmark is not None)
+                is_bookmarked = (bookmark is not None),
+                title = f"{", ".join(analysis.keywords)} 분석"
             ) for analysis, bookmark in result]
         )
     )
@@ -457,7 +458,8 @@ async def get_keyword_analysis(analysis_id: UUID, session: SessionDep, response:
             result = analysis.result,
             created_at = analysis.created_at,
             updated_at = analysis.updated_at,
-            is_bookmarked = (bookmark is not None)
+            is_bookmarked = (bookmark is not None),
+            title = f"{", ".join(analysis.keywords)} 분석"
         )
     )
 

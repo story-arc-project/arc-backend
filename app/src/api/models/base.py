@@ -167,6 +167,7 @@ class KeywordAnalysisData(BaseModel):
     updated_at: datetime
     result: dict[str, Any] | None
     is_bookmarked: bool
+    title: str
 
 class KeywordAnalysisListData(BaseModel):
     id: UUID
@@ -175,6 +176,7 @@ class KeywordAnalysisListData(BaseModel):
     created_at: datetime
     updated_at: datetime
     is_bookmarked: bool
+    title: str
 
 class KeywordAnalysisList(BaseModel):
     count: int
