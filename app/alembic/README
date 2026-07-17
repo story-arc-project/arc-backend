@@ -1,1 +1,101 @@
-Generic single-database configuration.
+# Database Migration Guide (Alembic)
+
+This project uses **Alembic** to manage PostgreSQL schema migrations. Migration files are generated locally via `make revision` and applied to production as part of `make build`.
+
+## Overview
+
+- Models are defined with **SQLModel** in the backend codebase (`app/`).
+- `make revision` runs `scripts/revision.sh`, which spins up a **temporary, disposable Postgres container**, brings it to the current migration head, then autogenerates a diff against your model changes.
+- This temp DB is wiped and rebuilt from scratch every time — it never contains real data, so autogenerate only ever compares “head schema” vs. “your model changes,” not against production state.
+- Migration files are version-controlled and applied to production via `make build`.
+
+## Creating a new migration
+
+Run:
+
+```bash
+make revision MSG="add audit_log table"
+```
+
+This calls `./scripts/revision.sh "add audit_log table"` (uses `$1` as the revision message), which does the following:
+
+1. **cd’s into `app/`** and sources `../.env` for `DB_USER`, `DB_PASSWORD`, `DB_NAME`.
+1. Generates a temporary `docker-compose.db-expose.yml` override that exposes Postgres on `localhost:5432` (your main `docker-compose.yml` doesn’t expose this port).
+1. **Tears down and deletes the `arc-backend_db_data` volume** — the temp DB always starts empty.
+1. Brings up a fresh `db` container and waits for `pg_isready`.
+1. Runs `alembic upgrade head` to bring the fresh DB to the current migration head.
+1. Runs `alembic revision --autogenerate -m "$1"`, diffing your SQLModel changes against that head.
+1. Prints the generated file path and **pauses, waiting for you to press Enter**.
+1. **At this pause, open and edit the generated migration file** — this is your one chance to fix what autogenerate got wrong before it’s applied.
+1. After you press Enter, runs `alembic upgrade head` again to apply your (possibly edited) migration to the temp DB, as a sanity check that it actually runs cleanly.
+1. Cleans up: tears down the temp DB container and deletes the override compose file.
+
+### What happens if you Ctrl+C or it errors out
+
+The script’s `cleanup()` trap runs on exit:
+
+- If you haven’t yet pressed Enter (`COMPLETED` still `0`) and a revision file was generated, **it deletes that generated file** — so an abandoned run doesn’t leave a stray, unapplied migration in your repo.
+- Either way, it tears down the temp `db` container and removes the generated override compose file.
+
+## Why review matters here
+
+Because the diff is against a clean head (not real production data), autogenerate is doing schema-vs-schema comparison, which is generally reliable — but it still commonly misses or mishandles:
+
+- Server-side defaults (`server_default=sa.text("now()")`)
+- Enum type changes
+- Renames (may generate a drop + add instead of an `alter_column`/rename)
+- Composite indexes vs. multiple single-column indexes
+- Data migrations (backfilling a new non-nullable column needs a manual `op.execute(...)` step) — since the temp DB is always empty, **the script’s own upgrade-head sanity check won’t catch missing backfill logic**, because there’s no data to backfill in the first place.
+
+Use the Enter-key pause to fix these before confirming.
+
+## Naming migration messages
+
+Keep `MSG` short, imperative, and specific — it’s passed directly as `$1` and becomes the revision’s message:
+
+```bash
+make revision MSG="add index on audit_log.user_id"
+make revision MSG="add unique constraint to analysis_bookmark"
+```
+
+## Applying migrations
+
+- **Local generation/testing**: handled entirely by `make revision` above — no separate `alembic upgrade` step needed locally.
+- **Production**: migrations are applied via `make build`. Confirm with your team exactly where in the build/startup process `alembic upgrade head` runs (e.g. image entrypoint) if you need to debug a failed deploy.
+
+## Checking migration state
+
+Useful when debugging locally against the temp DB (while `docker-compose.db-expose.yml` is up) or inside a running container:
+
+```bash
+alembic current      # shows current DB revision
+alembic history       # shows full migration chain
+alembic heads         # shows head(s) — should be exactly one in a healthy repo
+```
+
+## Rolling back
+
+```bash
+alembic downgrade -1        # step back one revision
+alembic downgrade <rev_id>  # go to a specific revision
+```
+
+Use with caution in production — since there’s no staging environment with real data in this workflow, a bad downgrade in production is the first time it would touch real data. Treat `downgrade()` review as seriously as `upgrade()` review.
+
+## Common pitfalls (project-specific)
+
+- **No real-data dry run**: because the generation DB is always empty, this workflow never exercises the migration against production-shaped data before deploy. Data-dependent migrations (backfills, type changes on populated columns) need extra-careful manual review — the “it ran cleanly” signal from the script only proves it runs on an empty schema.
+- **Polymorphic/loose foreign keys** (e.g. `analysis_id` referencing one of several tables without a real FK constraint): Alembic won’t manage `ON DELETE CASCADE` for these — handle at the application layer.
+- **`server_default` vs. application-level defaults**: verify the generated migration actually includes `server_default=sa.text("now()")` when relied on for security/audit correctness — SQLModel field defaults don’t always propagate to the DDL.
+- **Composite indexes**: autogenerate may create single-column indexes instead of a needed composite one (e.g. `(user_id, created_at)`) — edit by hand during the pause step.
+- **Multiple heads**: if two branches each add a migration independently, run `alembic merge heads -m "merge migrations"` to resolve before `make build` deploys.
+- **`.env` required**: the script sources `../.env` for DB credentials — make sure it’s present and correct locally, or the temp DB container won’t start correctly.
+
+## Checklist before merging a migration PR
+
+- [ ] `alembic heads` shows a single head after your change
+- [ ] Generated file edited at the pause step for anything autogenerate got wrong
+- [ ] `upgrade()` and `downgrade()` both reviewed manually
+- [ ] Indexes/constraints match the ticket’s actual query/access patterns
+- [ ] No destructive change (drop column/table) without a backfill or deprecation plan — remember there’s no real-data test for this
+- [ ] Confirmed the script’s post-edit `alembic upgrade head` ran cleanly (no errors printed after pressing Enter)

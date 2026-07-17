@@ -24,3 +24,7 @@ chmod +x run.sh
 Currently, the project uses minio container through docker-compose.yml configuration. To change to S3 or S3-compatible cloud services (e.g. R2), following files need to be changed.
 - docker-compose.yml
 - nginx/default.conf.template
+
+## About DB migrations
+
+This project uses alembic for PostgreSQL database migration. Refer to [Migration guide](app/alembic/README)
