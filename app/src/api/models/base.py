@@ -144,6 +144,7 @@ class ComprehensiveAnalysisData(BaseModel):
     updated_at: datetime
     result: dict[str, Any] | None
     is_bookmarked: bool
+    title: str
 
 class ComprehensiveAnalysisListData(BaseModel):
     id: UUID
@@ -152,6 +153,7 @@ class ComprehensiveAnalysisListData(BaseModel):
     created_at: datetime
     updated_at: datetime
     is_bookmarked: bool
+    title: str
 
 class ComprehensiveAnalysisList(BaseModel):
     count: int

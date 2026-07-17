@@ -224,7 +224,8 @@ async def get_comprehensive_analyses(session: SessionDep, response: Response, pa
                 ],
                 created_at = analysis.created_at,
                 updated_at = analysis.updated_at,
-                is_bookmarked = (bookmark is not None)
+                is_bookmarked = (bookmark is not None),
+                title = f"{[title for title in [experience_titles.get(exp_id) for exp_id in analysis.experience_ids] if title is not None][0]} 외 {len(analysis.experience_ids)-1}개"
             ) for analysis, bookmark in result]
         )
     )
@@ -282,7 +283,8 @@ async def get_comprehensive_analysis(analysis_id: UUID, session: SessionDep, res
             result = analysis.result,
             created_at = analysis.created_at,
             updated_at = analysis.updated_at,
-            is_bookmarked = (bookmark is not None)
+            is_bookmarked = (bookmark is not None),
+            title = f"{list(experience_titles.values())[0]} 외 {len(experience_ids)-1}개"
         )
     )
 
