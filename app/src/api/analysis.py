@@ -123,28 +123,28 @@ async def post_comprehensive_analysis(
     user_input: list[str] = []
     for experience in result:
         user_input.append(str(experience.content))
-    try:
-        new_comprehensive_analysis = ComprehensiveAnalysis(
-            user_id = payload.sub,
-            experience_ids = [experience.id for experience in result]
-        )
-        for experience in result:
-            if experience.user_id != payload.sub:
-                raise AppException(
-                    403,
-                    ErrorResponse(
-                        code = ErrorResponseCode.RESOURCE_NOT_ALLOWED,
-                        message = "Access for the resource is not allowed"
-                    )
+    new_comprehensive_analysis = ComprehensiveAnalysis(
+        user_id = payload.sub,
+        experience_ids = [experience.id for experience in result]
+    )
+    for experience in result:
+        if experience.user_id != payload.sub:
+            raise AppException(
+                403,
+                ErrorResponse(
+                    code = ErrorResponseCode.RESOURCE_NOT_ALLOWED,
+                    message = "Access for the resource is not allowed"
                 )
-        req = requests.post("http://ai_analyst:8001/comprehensive", json={
-            "analysis_id": str(new_comprehensive_analysis.id),
-            "input": user_input,
-            "school": user_profile.school,
-            "department": user_profile.department
-        })
-        req.raise_for_status()
-        new_comprehensive_analysis.task_id = req.json()["task_id"]
+            )
+    req = requests.post("http://ai_analyst:8001/comprehensive", json={
+        "analysis_id": str(new_comprehensive_analysis.id),
+        "input": user_input,
+        "school": user_profile.school,
+        "department": user_profile.department
+    })
+    req.raise_for_status()
+    new_comprehensive_analysis.task_id = req.json()["task_id"]
+    try:
         session.add(new_comprehensive_analysis)
         session.commit()
         session.refresh(new_comprehensive_analysis)
