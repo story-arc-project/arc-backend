@@ -114,6 +114,7 @@ class IndividualAnalysisData(BaseModel):
     id: UUID
     status: AnalysisStatus
     experience_id: UUID
+    title: str
     type: Literal["individual"] = "individual"
     created_at: datetime
     updated_at: datetime

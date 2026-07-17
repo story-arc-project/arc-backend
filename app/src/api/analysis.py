@@ -92,6 +92,7 @@ async def get_individual_analysis(analysis_id: UUID, session: SessionDep, respon
             id = analysis.id,
             status = analysis.status,
             experience_id = analysis.experience_id,
+            title = experience.content.get("title", ""),
             created_at = analysis.created_at,
             updated_at = analysis.updated_at,
             result = analysis.result,
