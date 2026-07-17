@@ -65,6 +65,7 @@ class AnalysisRateLimitSettings(BaseSettings):
     rate_limit_analysis_individual: int
     rate_limit_analysis_comprehensive: int
     rate_limit_analysis_keyword: int
+    rate_limit_export_resume: int
 
 analysis_rate_limit_settings = AnalysisRateLimitSettings()
 
@@ -104,7 +105,7 @@ class UserRateLimiter:
         if not success:
             return await self.callback(request, response)
 
-analysis_rate_limiters: dict[Literal["individual", "comprehensive", "keyword"], dict[Literal["user", "ip"], UserRateLimiter | FastAPILimiter]] = {
+analysis_rate_limiters: dict[Literal["individual", "comprehensive", "keyword", "resume"], dict[Literal["user", "ip"], UserRateLimiter | FastAPILimiter]] = {
     "individual": {
         "user": UserRateLimiter(
             limiter=Limiter(Rate(analysis_rate_limit_settings.rate_limit_analysis_individual, Duration.HOUR))
@@ -131,6 +132,16 @@ analysis_rate_limiters: dict[Literal["individual", "comprehensive", "keyword"], 
         ),
         "ip": FastAPILimiter(
             limiter=Limiter(Rate(analysis_rate_limit_settings.rate_limit_analysis_keyword, Duration.HOUR)),
+            identifier=get_ip_identifier,
+            callback=analysis_rate_limit_callback
+        )
+    },
+    "resume": {
+        "user": UserRateLimiter(
+            limiter=Limiter(Rate(analysis_rate_limit_settings.rate_limit_export_resume, Duration.HOUR))
+        ),
+        "ip": FastAPILimiter(
+            limiter=Limiter(Rate(analysis_rate_limit_settings.rate_limit_export_resume, Duration.HOUR)),
             identifier=get_ip_identifier,
             callback=analysis_rate_limit_callback
         )

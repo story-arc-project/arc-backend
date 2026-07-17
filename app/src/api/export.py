@@ -13,12 +13,20 @@ from src.db.db import SessionDep
 from src.db.models import Experience, Resume, User, UserProfile
 from src.enums import ErrorResponseCode
 from src.utils.auth import check_auth
+from src.utils.ratelimit import analysis_rate_limiters
 from src.utils.token import AccessTokenPayload
 
 export_router = APIRouter()
 
 @export_router.post("/resume")
-async def post_resume(body: ResumePostRequest, session: SessionDep, response: Response, payload: Annotated[AccessTokenPayload, Depends(check_auth)]):
+async def post_resume(
+    body: ResumePostRequest,
+    session: SessionDep,
+    response: Response,
+    payload: Annotated[AccessTokenPayload, Depends(check_auth)],
+    _user_limit: Annotated[None, Depends(analysis_rate_limiters["resume"]["user"])],
+    _ip_limit: Annotated[None, Depends(analysis_rate_limiters["resume"]["ip"])]
+):
     statement = select(Experience).where(Experience.user_id == payload.sub)
     result = session.exec(statement).all()
     res = session.exec(select(UserProfile, User).join(User).where(UserProfile.user_id == payload.sub)).one_or_none()

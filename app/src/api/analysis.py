@@ -209,9 +209,7 @@ async def patch_comprehensive_analysis(
     body: ComprehensiveAnalysisPatchRequest,
     session: SessionDep,
     response: Response,
-    payload: Annotated[AccessTokenPayload, Depends(check_auth)],
-    _user_limit: Annotated[None, Depends(analysis_rate_limiters["comprehensive"]["user"])],
-    _ip_limit: Annotated[None, Depends(analysis_rate_limiters["comprehensive"]["ip"])]
+    payload: Annotated[AccessTokenPayload, Depends(check_auth)]
 ):
     title_length = len(body.title)
     if title_length <= 0 or title_length > 100:
@@ -474,9 +472,7 @@ async def patch_keyword_analysis(
     body: KeywordAnalysisPatchRequest,
     session: SessionDep,
     response: Response,
-    payload: Annotated[AccessTokenPayload, Depends(check_auth)],
-    _user_limit: Annotated[None, Depends(analysis_rate_limiters["keyword"]["user"])],
-    _ip_limit: Annotated[None, Depends(analysis_rate_limiters["keyword"]["ip"])]
+    payload: Annotated[AccessTokenPayload, Depends(check_auth)]
 ):
     title_length = len(body.title)
     if title_length <= 0 or title_length > 100:
