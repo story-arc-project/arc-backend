@@ -435,7 +435,8 @@ async def post_keyword_analysis(
         new_keyword_analysis = KeywordAnalysis(
             user_id = payload.sub,
             keywords = body.keywords,
-            title = title
+            title = title,
+            target = body.target
         )
         req = requests.post("http://ai_analyst:8001/keyword", json={
             "analysis_id": str(new_keyword_analysis.id),
@@ -491,6 +492,7 @@ async def get_keyword_analyses(session: SessionDep, response: Response, payload:
                 id = analysis.id,
                 status = analysis.status,
                 keywords = analysis.keywords,
+                target = analysis.target,
                 created_at = analysis.created_at,
                 updated_at = analysis.updated_at,
                 is_bookmarked = (bookmark is not None),
@@ -538,6 +540,7 @@ async def get_keyword_analysis(analysis_id: UUID, session: SessionDep, response:
             id = analysis.id,
             status = analysis.status,
             keywords = analysis.keywords,
+            target = analysis.target,
             result = analysis.result,
             created_at = analysis.created_at,
             updated_at = analysis.updated_at,

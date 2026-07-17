@@ -352,6 +352,7 @@ class KeywordAnalysis(SQLModel, table=True):
     keywords: list[str] = Field(sa_column=Column(ARRAY(String)))
     task_id: str | None = Field(nullable=True, index=True, default=None)
     status: AnalysisStatus = AnalysisStatus.QUEUED
+    target: str
     title: str
     result: dict[str, Any] | None = Field(
         default=None,

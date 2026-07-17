@@ -172,6 +172,7 @@ class KeywordAnalysisData(BaseModel):
     status: AnalysisStatus
     keywords: list[str]
     type: Literal["keyword"] = "keyword"
+    target: str
     created_at: datetime
     updated_at: datetime
     result: dict[str, Any] | None
@@ -183,6 +184,7 @@ class KeywordAnalysisListData(BaseModel):
     status: AnalysisStatus
     keywords: list[str]
     type: Literal["keyword"] = "keyword"
+    target: str
     created_at: datetime
     updated_at: datetime
     is_bookmarked: bool
