@@ -144,13 +144,13 @@ async def get_resume(resume_id: UUID, session: SessionDep, response: Response, p
 
 @export_router.patch("/resume/{resume_id}")
 async def patch_resume(
-    analysis_id: UUID,
+    resume_id: UUID,
     body: ResumePatchRequest,
     session: SessionDep,
     response: Response,
     payload: Annotated[AccessTokenPayload, Depends(check_auth)]
 ):
-    resume = session.get(Resume, analysis_id)
+    resume = session.get(Resume, resume_id)
     if resume is None:
         raise AppException(
             404,
