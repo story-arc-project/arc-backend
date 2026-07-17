@@ -6,10 +6,10 @@ from fastapi import APIRouter, Depends, Response
 from sqlmodel import col, select, and_
 import json
 
-from src.api.models.base import BookmarkData, ComprehensiveAnalysisData, ComprehensiveAnalysisExperienceData, ComprehensiveAnalysisList, ComprehensiveAnalysisListData, ErrorResponse, IndividualAnalysisData, IndividualAnalysisList, IndividualAnalysisListData, SuccessResponse, KeywordAnalysisList, KeywordAnalysisListData, KeywordAnalysisData
+from src.api.models.base import BookmarkData, ComprehensiveAnalysisData, ComprehensiveAnalysisExperienceData, ComprehensiveAnalysisList, ComprehensiveAnalysisListData, ErrorResponse, IndividualAnalysisData, IndividualAnalysisList, IndividualAnalysisListData, SuccessResponse, KeywordAnalysisList, KeywordAnalysisListData, KeywordAnalysisData, UUIDData
 from src.api.models.exc import AppException
 from src.api.models.request import ComprehensiveAnalysisPostRequest, KeywordAnalysisPostRequest
-from src.api.models.response import BookmarkListResponse, ComprehensiveAnalysisListResponse, ComprehensiveAnalysisResponse, DeleteSuccessResponse, IndividualAnalysisListResponse, IndividualAnalysisResponse, KeywordAnalysisListResponse, KeywordAnalysisResponse
+from src.api.models.response import BookmarkListResponse, ComprehensiveAnalysisListResponse, ComprehensiveAnalysisResponse, DeleteSuccessResponse, IndividualAnalysisListResponse, IndividualAnalysisResponse, KeywordAnalysisListResponse, KeywordAnalysisResponse, PostSuccessResponse
 from src.db.db import SessionDep
 from src.db.models import AnalysisBookmark, ComprehensiveAnalysis, Experience, IndividualAnalysis, KeywordAnalysis, UserProfile
 from src.enums import AnalysisType, ErrorResponseCode
@@ -158,8 +158,11 @@ async def post_comprehensive_analysis(
             )
         )
     response.status_code = 200
-    return SuccessResponse(
-        message = "Queued new comprehensive analysis."
+    return PostSuccessResponse(
+        message = "Queued new comprehensive analysis.",
+        data = UUIDData(
+            id = new_comprehensive_analysis.id
+        )
     )
 
 def get_experience_titles(session: SessionDep, experience_ids: set[UUID]):
@@ -380,8 +383,11 @@ async def post_keyword_analysis(
             )
         )
     response.status_code = 200
-    return SuccessResponse(
-        message = "Queued new keyword analysis."
+    return PostSuccessResponse(
+        message = "Queued new keyword analysis.",
+        data = UUIDData(
+            id = new_keyword_analysis.id
+        )
     )
 
 @analysis_router.get("/keyword")

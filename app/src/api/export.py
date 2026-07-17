@@ -4,10 +4,10 @@ from fastapi import APIRouter, Depends, Response
 from sqlmodel import select
 import requests
 
-from src.api.models.base import ErrorResponse, ResumeList, ResumeListData, SuccessResponse
+from src.api.models.base import ErrorResponse, ResumeList, ResumeListData, UUIDData
 from src.api.models.exc import AppException
 from src.api.models.request import ResumePostRequest
-from src.api.models.response import ResumeListResponse
+from src.api.models.response import PostSuccessResponse, ResumeListResponse
 from src.db.db import SessionDep
 from src.db.models import Experience, Resume, User, UserProfile
 from src.enums import ErrorResponseCode
@@ -69,8 +69,11 @@ async def post_resume(body: ResumePostRequest, session: SessionDep, response: Re
             )
         )
     response.status_code = 200
-    return SuccessResponse(
-        message = "Resume generation queued successfully."
+    return PostSuccessResponse(
+        message = "Resume generation queued successfully.",
+        data = UUIDData(
+            id = new_resume.id
+        )
     )
 
 @export_router.get("/resume")
