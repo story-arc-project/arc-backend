@@ -30,6 +30,8 @@ async def fail_individual(analysis_type: str, body: Annotated[dict[str, Any], De
         statement = select(ComprehensiveAnalysis).where(ComprehensiveAnalysis.id == UUID(analysis_id))
     elif analysis_type == "keyword":
         statement = select(KeywordAnalysis).where(KeywordAnalysis.id == UUID(analysis_id))
+    elif analysis_type == "resume":
+        statement = select(Resume).where(Resume.id == UUID(analysis_id))
     else:
         raise AppException(
             status_code = 400,

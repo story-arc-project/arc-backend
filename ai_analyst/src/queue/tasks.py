@@ -3,6 +3,7 @@ import hmac
 import importlib
 import json
 from os import getenv
+import traceback
 from typing import Any, Literal
 import requests
 from src.queue.celery_app import celery
@@ -87,8 +88,15 @@ def process_resume(
     language: str = "both",
 ):
     main = _load_main("resume")
-    result = main(sources, name_ko, name_en, email, phone, school, department, links, language)
-    return call_frontend(
-        f"/{getenv("INTERNAL_ROUTE", "internal")}/resume/success",
-        {"resume_id": resume_id, "result": result}
-    )
+    try:
+        result = main(sources, name_ko, name_en, email, phone, school, department, links, language)
+        return call_frontend(
+            f"/{getenv("INTERNAL_ROUTE", "internal")}/resume/success",
+            {"resume_id": resume_id, "result": result}
+        )
+    except:
+        traceback.print_exc()
+        return call_frontend(
+            f"/{getenv("INTERNAL_ROUTE", "internal")}/resume/failure",
+            {"analysis_id": resume_id}
+        )
