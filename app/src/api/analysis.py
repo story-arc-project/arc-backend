@@ -120,6 +120,14 @@ async def post_comprehensive_analysis(
                 message = "User profile not found"
             )
         )
+    if len(result) == 0:
+        raise AppException(
+            status_code = 400,
+            error = ErrorResponse(
+                code = ErrorResponseCode.BAD_REQUEST,
+                message = "No available experiences"
+            )
+        )
     user_input: list[str] = []
     for experience in result:
         user_input.append(str(experience.content))
