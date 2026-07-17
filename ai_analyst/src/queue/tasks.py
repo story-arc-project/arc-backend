@@ -60,9 +60,9 @@ def process_comprehensive(analysis_id: str, user_input: list[str], school: str, 
     )
 
 @celery.task
-def process_keyword(analysis_id: str, user_input: str, keywords: list[str]):
+def process_keyword(analysis_id: str, user_input: str, keywords: list[str], target: str):
     main = _load_main("keyword_analysis")
-    result = main(keywords, user_input)
+    result = main(user_input, keywords, target)
     if not isinstance(result, dict) or result.get("status") != "success":
         return call_frontend(
             f"/{getenv("INTERNAL_ROUTE", "internal")}/keyword/failure",

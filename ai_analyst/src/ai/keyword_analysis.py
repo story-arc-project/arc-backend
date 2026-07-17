@@ -134,8 +134,8 @@ _ANALYSIS_MODEL  = "gemini-2.5-flash"
 _EMBEDDING_MODEL = "gemini-embedding-001"
 
 # ── 크롤러 설정 ──────────────────────────────────────────────────
-_MAX_PAGES        = 50    # 크롤링 최대 페이지 수
-_MAX_PDFS         = 10     # 크롤링 최대 PDF 수
+_MAX_PAGES        = 30    # 크롤링 최대 페이지 수
+_MAX_PDFS         = 5     # 크롤링 최대 PDF 수
 _FETCH_TIMEOUT    = 15    # 개별 요청 타임아웃 (초)
 _MAX_CONTENT_MB   = 1     # 개별 응답 최대 크기 (MB)
 _FETCH_RETRIES    = 2     # 네트워크 실패 시 fetch 재시도 횟수
@@ -2817,21 +2817,80 @@ def print_result_summary(result: dict) -> None:
 # ▼▼▼  여기만 수정하세요  ▼▼▼
 # ══════════════════════════════════════════════════════════════════
 
-CAREER_INPUT = ""
+CAREER_INPUT = """
+여기에 경력 데이터를 입력하세요.
+URL, 텍스트, 복합 입력 모두 가능합니다.
+"""
 
-KEYWORDS = [" "]  # KEYWORD_CATEGORIES 참고
-TARGET   = ""          # 목표 직무/시나리오 (없으면 빈 문자열)
+KEYWORDS = ["키워드1", "키워드2"]  # 개수 제한 없음
+TARGET   = ""                       # 목표 직무/시나리오 (없으면 빈 문자열)
+
 
 # ══════════════════════════════════════════════════════════════════
-# ▼▼▼  실행 (수정 불필요)  ▼▼▼
+# 10. Main (엔트리포인트)
 # ══════════════════════════════════════════════════════════════════
 
-if "여기에 경력 데이터를 입력하세요" in CAREER_INPUT or "키워드1" in KEYWORDS:
-    print("=" * 60)
-    print("  ⚠️  CAREER_INPUT / KEYWORDS를 먼저 수정하세요.")
-    print("  추천 키워드 목록은 show_keywords()로 확인할 수 있습니다.")
-    print("=" * 60)
-else:
-    careers = parse_careers(CAREER_INPUT)
-    result  = analyze_keywords(KEYWORDS, careers, target=TARGET)
+def main(
+    career_input: str,
+    keywords: list[str],
+    target: str,
+) -> dict:
+    """
+    전체 파이프라인 실행 엔트리포인트.
+    경력 파싱 → 키워드 분석 → 요약 출력을 순서대로 수행합니다.
+
+    Args:
+        career_input: 경력 데이터 (URL/파일경로/텍스트/혼합).
+                      None이면 상단 CAREER_INPUT 사용.
+        keywords:     분석 키워드 목록. None이면 상단 KEYWORDS 사용.
+        target:       목표 직무/시나리오. None이면 상단 TARGET 사용.
+
+    Returns:
+        {"careers": [...], "result": {...}} — 파싱된 경력과 분석 결과.
+        입력이 placeholder 상태이거나 파싱 실패 시 {"careers": [], "result": {}}.
+
+    사용 예:
+        # 1) 상단 설정값으로 실행 (Colab 셀 실행과 동일)
+        output = main()
+
+        # 2) 인자 직접 전달
+        output = main(
+            career_input="https://my-portfolio.notion.site/...",
+            keywords=["리더십", "분석력"],
+            target="자산운용사 퀀트 애널리스트",
+        )
+        careers, result = output["careers"], output["result"]
+    """
+    career_input = CAREER_INPUT if career_input is None else career_input
+    keywords     = KEYWORDS     if keywords     is None else keywords
+    target       = TARGET       if target       is None else target
+
+    # placeholder 미수정 상태 감지 → 안내 후 종료
+    if "여기에 경력 데이터를 입력하세요" in career_input or "키워드1" in keywords:
+        print("=" * 60)
+        print("  ⚠️  CAREER_INPUT / KEYWORDS를 먼저 수정하세요.")
+        print("  추천 키워드 목록은 show_keywords()로 확인할 수 있습니다.")
+        print("  또는 main(career_input=..., keywords=[...], target=...)로")
+        print("  인자를 직접 전달해 실행할 수 있습니다.")
+        print("=" * 60)
+        return {"careers": [], "result": {}}
+
+    # 1) 경력 파싱 (+ 임베딩 사전 생성)
+    careers = parse_careers(career_input)
+    if not careers:
+        print("[main] 경력 파싱 결과가 비어 있어 분석을 중단합니다.")
+        return {"careers": [], "result": {}}
+
+    # 2) 키워드 분석 (경험 수에 따라 LLM/K-NN 자동 라우팅)
+    result = analyze_keywords(keywords, careers, target=target)
+
+    # 3) 요약 출력
     print_result_summary(result)
+
+    return {"careers": careers, "result": result, "status": "success"}
+
+
+if __name__ == "__main__":
+    output  = main()
+    careers = output["careers"]   # 이후 셀에서 재사용 가능
+    result  = output["result"]

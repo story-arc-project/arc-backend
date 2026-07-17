@@ -28,3 +28,4 @@ class KeywordRequest(BaseModel):
     analysis_id: UUID
     input: str
     keywords: list[str]
+    target: str

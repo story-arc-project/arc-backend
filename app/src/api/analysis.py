@@ -312,7 +312,8 @@ async def post_keyword_analysis(
         req = requests.post("http://ai_analyst:8001/keyword", json={
             "analysis_id": str(new_keyword_analysis.id),
             "input": json.dumps(user_input),
-            "keywords": body.keywords
+            "keywords": body.keywords,
+            "target": "" # TODO: Connect target to API
         })
         req.raise_for_status()
         new_keyword_analysis.task_id = req.json()["task_id"]
