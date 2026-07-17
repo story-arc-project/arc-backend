@@ -3,7 +3,7 @@ from uuid import UUID
 from pydantic import BaseModel, EmailStr, ConfigDict
 from typing import Any, Generic, Literal, TypeVar
 
-from src.enums import Affiliation, AnalysisStatus, AnalysisType, ErrorResponseCode, OauthProviderId
+from src.enums import Affiliation, AnalysisStatus, AnalysisType, Language, ErrorResponseCode, OauthProviderId
 
 T = TypeVar("T")
 
@@ -200,6 +200,8 @@ class KeywordAnalysisList(BaseModel):
 class ResumeListData(BaseModel):
     id: UUID
     title: str | None
+    language: Language
+    status: AnalysisStatus
     created_at: datetime
     updated_at: datetime
 

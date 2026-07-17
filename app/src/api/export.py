@@ -92,6 +92,8 @@ async def get_resumes(session: SessionDep, response: Response, payload: Annotate
             contents = [ResumeListData(
                 id = analysis.id,
                 title = analysis.title,
+                language = analysis.language,
+                status = analysis.status,
                 created_at = analysis.created_at,
                 updated_at = analysis.updated_at
             ) for analysis in result]
