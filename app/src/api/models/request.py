@@ -299,3 +299,10 @@ class InternalRequestSuccess(BaseModel):
     analysis_id: UUID
     vector: list[float] | None = None
     result: dict[str, Any]
+
+    @field_validator("result")
+    @classmethod
+    def result_must_have_schema_version(cls, v: dict[str, Any]) -> dict[str, Any]:
+        if "schema_version" not in v:
+            raise ValueError("result must contain 'schema_version' key")
+        return v
