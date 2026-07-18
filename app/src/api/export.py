@@ -4,6 +4,8 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, Response
 from sqlmodel import select
 import requests
+from datetime import datetime
+from zoneinfo import ZoneInfo
 
 from src.api.models.base import ErrorResponse, ResumeData, ResumeList, ResumeListData, UUIDDataWithTitle, UUIDDataWithTitleNone
 from src.api.models.exc import AppException
@@ -42,7 +44,11 @@ async def post_resume(
     sources: list[str] = []
     for experience in result:
         sources.append(str(experience.content))
-    new_resume = Resume(user_id = payload.sub, language = body.language, title = body.title)
+    if body.title:
+        title = body.title
+    else:
+        title = f"{datetime.now(ZoneInfo("Asia/Seoul")).strftime("%Y-%m-%d")} resume"
+    new_resume = Resume(user_id = payload.sub, language = body.language, title = title)
     for experience in result:
         if experience.user_id != payload.sub:
             raise AppException(

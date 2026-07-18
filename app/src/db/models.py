@@ -320,7 +320,7 @@ class Resume(SQLModel, table=True):
     )
     user_id: uuid.UUID = Field(foreign_key="users.id", index=True)
     language: Language
-    title: str | None = None
+    title: str
     status: AnalysisStatus = AnalysisStatus.QUEUED
     result: dict[str, Any] | None = Field(
         default=None,

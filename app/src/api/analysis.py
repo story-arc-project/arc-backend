@@ -157,7 +157,10 @@ async def post_comprehensive_analysis(
         user_input.append(str(experience.content))
     experience_ids = [experience.id for experience in result]
     titles = get_experience_titles(session, set(experience_ids))
-    title = f"{list(titles.values())[0]} 외 {len(experience_ids)-1}개"
+    if len(experience_ids) == 1:
+        title = f"{list(titles.values())[0]} 분석"
+    else:
+        title = f"{list(titles.values())[0]} 등 {len(experience_ids)}개 분석"
     new_comprehensive_analysis = ComprehensiveAnalysis(
         user_id = payload.sub,
         experience_ids = [experience.id for experience in result],
