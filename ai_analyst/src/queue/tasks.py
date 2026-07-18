@@ -1,15 +1,11 @@
 import hashlib
 import hmac
-import importlib
 import json
 from os import getenv
 import traceback
-from typing import Any, Literal
+from typing import Any
 import requests
 from src.queue.celery_app import celery
-
-def _load_main(type: Literal["individual", "comprehensive", "keyword_analysis", "resume"]):
-    return importlib.import_module(f"src.ai.{type}").main
 
 FRONTEND_API_URL = "http://app:8000"
 INTERNAL_SECRET_KEY = "INTERNAL_SECRET"
@@ -34,8 +30,10 @@ def call_frontend(endpoint: str, body: dict[str, Any]):
 
 @celery.task
 def process_individual(analysis_id: str, user_input: list[str]):
-    main = _load_main("individual")
-    result = main(user_input)
+    from src.ai.individual import main as main_func
+    result = main_func(
+        user_input=user_input
+    )
     if not isinstance(result, dict) or result.get("status") != "success":
         return call_frontend(
             f"/{getenv("INTERNAL_ROUTE", "internal")}/individual/failure",
@@ -48,8 +46,12 @@ def process_individual(analysis_id: str, user_input: list[str]):
 
 @celery.task
 def process_comprehensive(analysis_id: str, user_input: list[str], school: str, department: str):
-    main = _load_main("comprehensive")
-    result = main(user_input, school, department)
+    from src.ai.comprehensive import main as main_func
+    result = main_func(
+        user_input=user_input,
+        school=school,
+        department=department
+    )
     if not isinstance(result, dict) or result.get("status") != "success":
         return call_frontend(
             f"/{getenv("INTERNAL_ROUTE", "internal")}/comprehensive/failure",
@@ -62,8 +64,12 @@ def process_comprehensive(analysis_id: str, user_input: list[str], school: str, 
 
 @celery.task
 def process_keyword(analysis_id: str, user_input: str, keywords: list[str], target: str):
-    main = _load_main("keyword_analysis")
-    result = main(user_input, keywords, target)
+    from src.ai.keyword_analysis import main as main_func
+    result = main_func(
+        career_input=user_input,
+        keywords=keywords,
+        target=target
+    )
     if not isinstance(result, dict) or result.get("status") != "success":
         return call_frontend(
             f"/{getenv("INTERNAL_ROUTE", "internal")}/keyword/failure",
@@ -87,9 +93,19 @@ def process_resume(
     links: str = "",
     language: str = "both",
 ):
-    main = _load_main("resume")
+    from src.ai.resume import main as main_func
     try:
-        result = main(sources, name_ko, name_en, email, phone, school, department, links, language)
+        result = main_func(
+            sources=sources,
+            name_ko=name_ko,
+            name_en=name_en,
+            email=email,
+            phone=phone,
+            school=school,
+            department=department,
+            links=links,
+            language=language
+        )
         return call_frontend(
             f"/{getenv("INTERNAL_ROUTE", "internal")}/resume/success",
             {"resume_id": resume_id, "result": result}
