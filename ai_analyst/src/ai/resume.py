@@ -47,6 +47,7 @@ except ImportError:
 
 from google import genai
 from google.genai import types
+from src.ai.models import SuccessResponse, ErrorResponse
 
 
 # ══════════════════════════════════════════════
@@ -608,6 +609,9 @@ def generate(raw_content, personal, lang="ko"):
 # ══════════════════════════════════════════════
 # Entry Point
 # ══════════════════════════════════════════════
+# 반환 모델은 analysis_response.py 에서 import (성공/실패 분리):
+#   성공 → SuccessResponse(result)  /  실패 → ErrorResponse(message)
+# 레쥬메 analyzer 는 vector 필드가 없다(§3.2).
 def main(
     sources: list[str],
     name_ko: str = "",
@@ -645,7 +649,12 @@ def main(
     # 데이터 수집
     parts = [p for s in sources if (p := resolve(s, deep=deep_crawl))]
     if not parts:
-        print("ERROR: 입력 데이터 없음", flush=True); sys.exit(1)
+        # API Endpoint 계약(§2.4·§3.3): 입력이 없어도 sys.exit 로 죽지 않는다.
+        # sys.exit(1) 은 콜백조차 못 보내 result=null 로 영구 방치되는 원인이었다.
+        # 대신 실패 envelope 를 반환해 tasks.py 가 /internal/resume/failure 로
+        # status=failed 를 기록할 수 있게 한다.
+        print("ERROR: 입력 데이터 없음", flush=True)
+        return ErrorResponse(message="입력 데이터가 없습니다.")
 
     raw_content = "\n\n---\n\n".join(parts)
     print(f"\n총 입력: {len(raw_content)}자\n", flush=True)
@@ -676,4 +685,30 @@ def main(
         #     f.write(out)
         # print(f"\n저장 완료: {save_path}", flush=True)
 
-    return results if language == "both" else results[language]
+    # 공통 envelope 형식으로 통일 (API Endpoint 계약 §3.3 [1]).
+    #   - language 가 "ko"/"en"(API 경계) 이면 result = 단일 레쥬메 payload.
+    #   - "both" 는 API 경계 밖(§2.4)이라 CLI 편의용으로만 유지: {ko, en} 묶음.
+    #   - resume payload 에는 status/vector 가 없으므로 그대로 담는다 (#25·#26).
+    final_result = results if language == "both" else results[language]
+    return SuccessResponse(result=final_result)
+
+
+# ══════════════════════════════════════════════
+# 실행 예시
+# ══════════════════════════════════════════════
+if __name__ == "__main__":
+    main(
+        sources=[
+            "",
+        ],
+        name_ko="",
+        name_en="",
+        email="",
+        phone="",
+        school="",
+        department="",
+        links="",
+        language="both",        # "ko" | "en" | "both"
+        output_path="resume.json",
+        deep_crawl=True,
+    )

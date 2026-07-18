@@ -2,10 +2,11 @@ import hashlib
 import hmac
 import json
 from os import getenv
-import traceback
-from typing import Any
+from typing import Any, Literal
 import requests
 from src.queue.celery_app import celery
+
+AnalysisTypes = Literal["individual", "comprehensive", "keyword", "resume"]
 
 FRONTEND_API_URL = "http://app:8000"
 INTERNAL_SECRET_KEY = "INTERNAL_SECRET"
@@ -28,57 +29,54 @@ def call_frontend(endpoint: str, body: dict[str, Any]):
     res: dict[str, Any] = response.json()
     return res
 
+def call_failure(analysis_type: AnalysisTypes, analysis_id: str):
+    return call_frontend(
+        f"/{getenv("INTERNAL_ROUTE", "internal")}/{analysis_type}/failure",
+        {"analysis_id": analysis_id}
+    )
+
+def call_success(analysis_type: AnalysisTypes, analysis_id: str, result: dict, vector: list[float] | None):
+    body = {"analysis_id": analysis_id, "result": result}
+    if vector:
+        body["vector"] = vector
+    return call_frontend(
+        f"/{getenv("INTERNAL_ROUTE", "internal")}/{analysis_type}/success",
+        body
+    )
+
 @celery.task
 def process_individual(analysis_id: str, user_input: list[str]):
     from src.ai.individual import main as main_func
-    result = main_func(
+    analysis = main_func(
         user_input=user_input
     )
-    if not isinstance(result, dict) or result.get("status") != "success":
-        return call_frontend(
-            f"/{getenv("INTERNAL_ROUTE", "internal")}/individual/failure",
-            {"analysis_id": analysis_id}
-        )
-    return call_frontend(
-        f"/{getenv("INTERNAL_ROUTE", "internal")}/individual/success",
-        {"analysis_id": analysis_id, "result": result}
-    )
+    if analysis.status == "error":
+        return call_failure("individual", analysis_id)
+    return call_success("individual", analysis_id, analysis.result, analysis.vector)
 
 @celery.task
 def process_comprehensive(analysis_id: str, user_input: list[str], school: str, department: str):
     from src.ai.comprehensive import main as main_func
-    result = main_func(
+    analysis = main_func(
         user_input=user_input,
         school=school,
         department=department
     )
-    if not isinstance(result, dict) or result.get("status") != "success":
-        return call_frontend(
-            f"/{getenv("INTERNAL_ROUTE", "internal")}/comprehensive/failure",
-            {"analysis_id": analysis_id}
-        )
-    return call_frontend(
-        f"/{getenv("INTERNAL_ROUTE", "internal")}/comprehensive/success",
-        {"analysis_id": analysis_id, "result": result}
-    )
+    if analysis.status == "error":
+        return call_failure("comprehensive", analysis_id)
+    return call_success("comprehensive", analysis_id, analysis.result, analysis.vector)
 
 @celery.task
 def process_keyword(analysis_id: str, user_input: str, keywords: list[str], target: str):
     from src.ai.keyword_analysis import main as main_func
-    result = main_func(
+    analysis = main_func(
         career_input=user_input,
         keywords=keywords,
         target=target
     )
-    if not isinstance(result, dict) or result.get("status") != "success":
-        return call_frontend(
-            f"/{getenv("INTERNAL_ROUTE", "internal")}/keyword/failure",
-            {"analysis_id": analysis_id}
-        )
-    return call_frontend(
-        f"/{getenv("INTERNAL_ROUTE", "internal")}/keyword/success",
-        {"analysis_id": analysis_id, "result": result}
-    )
+    if analysis.status == "error":
+        return call_failure("keyword", analysis_id)
+    return call_success("keyword", analysis_id, analysis.result, None)
 
 @celery.task
 def process_resume(
@@ -94,25 +92,17 @@ def process_resume(
     language: str = "both",
 ):
     from src.ai.resume import main as main_func
-    try:
-        result = main_func(
-            sources=sources,
-            name_ko=name_ko,
-            name_en=name_en,
-            email=email,
-            phone=phone,
-            school=school,
-            department=department,
-            links=links,
-            language=language
-        )
-        return call_frontend(
-            f"/{getenv("INTERNAL_ROUTE", "internal")}/resume/success",
-            {"resume_id": resume_id, "result": result}
-        )
-    except:
-        traceback.print_exc()
-        return call_frontend(
-            f"/{getenv("INTERNAL_ROUTE", "internal")}/resume/failure",
-            {"analysis_id": resume_id}
-        )
+    resume = main_func(
+        sources=sources,
+        name_ko=name_ko,
+        name_en=name_en,
+        email=email,
+        phone=phone,
+        school=school,
+        department=department,
+        links=links,
+        language=language
+    )
+    if resume.status == "error":
+        return call_failure("resume", resume_id)
+    return call_success("resume", resume_id, resume.result, None)

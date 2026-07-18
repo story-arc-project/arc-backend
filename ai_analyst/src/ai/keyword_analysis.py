@@ -12,7 +12,7 @@ Career Keyword Analyzer v4.1 - Precision K-NN + Deep Crawler Edition
       2) 프롬프트 규칙: 2단계 이상 추론이 필요한 연결은 제외,
          개수를 채우기 위한 포함 금지, low는 직접 인용 근거 1개 이상일 때만
       3) K-NN 선별 경험이라도 근거 불충분 시 LLM이 제외 가능하도록 명시
-  - F_improvement_guide 방향성 강화: overall_direction 신설
+  - improvement_guide 방향성 강화: overall_direction 신설
       (현재 프로필 진단 → 단기 3개월 / 중기 1년 실행 방향 → 최우선 보강 키워드)
       각 개선 항목에 priority(높음/중간/낮음) 부여
   - print_result_summary: 종합 방향성 섹션 출력 추가
@@ -102,6 +102,7 @@ from typing import Optional
 
 from google import genai
 from google.genai import types
+from src.ai.models import SuccessResponse, ErrorResponse
 
 try:
     import pypdf
@@ -2155,7 +2156,7 @@ def _keyword_analysis_prompt(keywords: list[str], target_scenario: str = "") -> 
    인용할 문장조차 없는 경험은 low로도 포함하지 말고 제외하십시오.
 4. K-NN이 선별해 전달한 경험이라도 위 기준에 미달하면 제외할 수 있습니다.
    (K-NN은 의미 유사도만 봅니다 — 근거 실재 여부의 최종 판단은 당신의 몫입니다)
-5. 제외한 경험이 있으면 B_selection_criteria.summary에 "N개 경험을 근거 부족으로
+5. 제외한 경험이 있으면 selection_criteria.summary에 "N개 경험을 근거 부족으로
    제외함"을 명시하여 투명하게 남기십시오.
 
 [관련도(relevance) 3단계 기준]
@@ -2178,7 +2179,7 @@ def _keyword_analysis_prompt(keywords: list[str], target_scenario: str = "") -> 
 - related_count와 coverage_percent는 user_prompt의 실측값을 기준으로 하되,
   당신이 근거 부족으로 제외한 경험이 있으면 그만큼 차감하여 반영합니다.
 
-[스토리라인 작성 원칙 — E_storylines]
+[스토리라인 작성 원칙 — storylines]
 ★ 가장 중요한 섹션. 단순 나열이 아닌 "하나의 이야기"를 만들어야 합니다.
 
 ━━━ 시간 순서 원칙 (필수) ━━━
@@ -2209,16 +2210,17 @@ def _keyword_analysis_prompt(keywords: list[str], target_scenario: str = "") -> 
   - turning_points: 인식·행동이 실질적으로 바뀐 순간. 구체적 촉발 사건 명시.
   - connective_logic: 경험 A→B 연결 고리를 인과/심화/반성/확장으로 분류.
 
-[개선 가이드 작성 원칙 — F_improvement_guide]
+[개선 가이드 작성 원칙 — improvement_guide]
 ★ 나열식 제안 금지. 사용자가 "그래서 다음에 뭘 해야 하는가"를 즉시 알 수 있는
   명확한 방향성을 제시해야 합니다.
 
 1. overall_direction (필수, 가장 먼저 작성):
    - current_profile_summary: 현재 경험 풀의 강점과 공백을 2~3문장으로 정직하게 진단.
-     실제 분석 결과(C_coverage, D의 relevance 분포)에 근거할 것.
+     실제 분석 결과(coverage, matched_experiences의 relevance 분포)에 근거할 것.
    - short_term: 앞으로 3개월 내 실행할 가장 효과 큰 액션 1~2개.
      "~을 하세요"가 아니라 "무엇을, 왜, 어떤 순서로"까지 구체적으로.
    - mid_term: 1년 내 보강 방향. 목표 시나리오(target)가 있으면 반드시 그에 정렬.
+   - long_term: 1년 이상 장기 방향 — 이 역량을 기반으로 향후 커리어가 나아갈 큰 방향.
    - priority_keyword: 분석 키워드 중 가장 시급히 보강해야 할 키워드 1개와 이유.
      (coverage가 낮거나 high 근거가 없는 키워드가 우선 후보)
 2. 모든 개선 항목(information_enhancement, experience_expansion)에
@@ -2227,7 +2229,9 @@ def _keyword_analysis_prompt(keywords: list[str], target_scenario: str = "") -> 
    "현재 동아리 운영 경험에 정량 성과 수치를 추가 기록하세요" ✓).
 4. 진단은 근거 기반으로: 각 제안이 어떤 분석 결과에서 나왔는지 reason에 연결.
 
-[출력 형식 - A~F 순서 고정, 순수 JSON만]
+[출력 형식 - 순수 JSON만]
+(주의: 최상위 키에 A_/B_/C_ 같은 순서 접두사를 붙이지 마십시오.
+ 순서는 아래 나열 순서를 따르되, 키 이름에 인코딩하지 않습니다.)
 {{
   "status": "success",
   "analysis_date": "YYYY-MM-DD",
@@ -2235,7 +2239,7 @@ def _keyword_analysis_prompt(keywords: list[str], target_scenario: str = "") -> 
   "keywords": ["키워드1", "키워드2"],
   "target_scenario": "목표 시나리오",
 
-  "A_keyword_definitions": [
+  "keyword_definitions": [
     {{
       "keyword": "키워드명",
       "definition": "키워드 재정의 (1~2문장)",
@@ -2250,12 +2254,12 @@ def _keyword_analysis_prompt(keywords: list[str], target_scenario: str = "") -> 
     }}
   ],
 
-  "B_selection_criteria": {{
+  "selection_criteria": {{
     "summary": "AI가 어떤 규칙으로 경험을 골랐는지 3~5줄 요약",
     "criteria": ["기준 매칭", "근거 강도", "반복성", "맥락 적합성"]
   }},
 
-  "C_coverage": [
+  "coverage": [
     {{
       "keyword": "키워드명",
       "related_count": 0,
@@ -2267,7 +2271,7 @@ def _keyword_analysis_prompt(keywords: list[str], target_scenario: str = "") -> 
     }}
   ],
 
-  "D_matched_experiences": [
+  "matched_experiences": [
     {{
       "keyword": "키워드명",
       "experiences": [
@@ -2292,7 +2296,7 @@ def _keyword_analysis_prompt(keywords: list[str], target_scenario: str = "") -> 
     }}
   ],
 
-  "E_storylines": [
+  "storylines": [
     {{
       "keyword": "관련 키워드",
       "storyline_title": "스토리라인 제목 (한 줄, 이야기의 핵심 메시지)",
@@ -2345,11 +2349,12 @@ def _keyword_analysis_prompt(keywords: list[str], target_scenario: str = "") -> 
     }}
   ],
 
-  "F_improvement_guide": {{
+  "improvement_guide": {{
     "overall_direction": {{
       "current_profile_summary": "현재 경험 풀의 강점·공백 진단 (2~3문장, 분석 결과 근거)",
       "short_term": "단기(3개월 내) 실행 방향 — 가장 효과 큰 액션 1~2개, 순서 포함",
       "mid_term": "중기(1년 내) 보강 방향 — 목표 시나리오에 정렬",
+      "long_term": "장기(1년 이상) 방향 — 이 역량을 기반으로 한 향후 커리어 방향",
       "priority_keyword": "최우선 보강 키워드",
       "priority_reason": "그 키워드가 최우선인 이유 (coverage/근거 강도 기반)"
     }},
@@ -2512,7 +2517,7 @@ LLM은 선별된 경험에 대한 근거 추출과 스토리라인 구성만 담
 [목표 시나리오/직무]
 {target if target else '(없음)'}
 
-[coverage_percent 실측값 — C_coverage에 이 수치를 그대로 사용할 것]
+[coverage_percent 실측값 — coverage에 이 수치를 그대로 사용할 것]
 {coverage_note}
 
 [K-NN 선별 경험 목록 (키워드별 · 유사도 내림차순)]
@@ -2522,7 +2527,7 @@ LLM은 선별된 경험에 대한 근거 추출과 스토리라인 구성만 담
 - analysis_date는 반드시 "{today_str}"로 설정하세요.
 - analysis_mode는 반드시 "knn"으로 설정하세요.
 - source_quote는 원문에서 정확히 인용하세요 (최소 15자).
-- C_coverage의 related_count, total_count, coverage_percent는
+- coverage의 related_count, total_count, coverage_percent는
   위 [coverage_percent 실측값]의 수치를 그대로 사용하고 임의로 수정하지 마세요.
 """
     else:
@@ -2577,12 +2582,12 @@ def _enrich_and_tag_result(result: dict) -> dict:
     """
     분석 결과를 후처리합니다.
     - low 경험을 제거하지 않고 is_reference_only=True 태그를 부여
-    - C_coverage에 high/medium/low 건수 집계 추가
+    - coverage에 high/medium/low 건수 집계 추가
     - 경험을 relevance 내림차순으로 정렬 (high → medium → low)
     """
     _order = {"high": 0, "medium": 1, "low": 2}
-    matched  = result.get("D_matched_experiences", [])
-    coverage = result.get("C_coverage", [])
+    matched  = result.get("matched_experiences", [])
+    coverage = result.get("coverage", [])
 
     coverage_by_kw: dict[str, dict] = {c.get("keyword", ""): c for c in coverage}
 
@@ -2608,7 +2613,7 @@ def _enrich_and_tag_result(result: dict) -> dict:
             exps, key=lambda e: _order.get(e.get("relevance", "medium"), 1)
         )
 
-        # C_coverage 집계 업데이트
+        # coverage 집계 업데이트
         if kw in coverage_by_kw:
             c      = coverage_by_kw[kw]
             total  = c.get("total_count", 0)
@@ -2660,7 +2665,7 @@ def print_result_summary(result: dict) -> None:
     sep()
 
     # ── C. Coverage ──────────────────────────────────────────────
-    coverage = result.get("C_coverage", [])
+    coverage = result.get("coverage", [])
     if coverage:
         section("키워드 적합도")
         for c in coverage:
@@ -2673,7 +2678,7 @@ def print_result_summary(result: dict) -> None:
             print(f"  {c['keyword']:<14} {bar} {pct:5.1f}%   H:{h} M:{m} L:{lo}")
 
     # ── D. 매칭 경험 ─────────────────────────────────────────────
-    matched = result.get("D_matched_experiences", [])
+    matched = result.get("matched_experiences", [])
     if matched:
         section("매칭된 경험")
         REL_ICON  = {"high": "●", "medium": "◑", "low": "○"}
@@ -2704,7 +2709,7 @@ def print_result_summary(result: dict) -> None:
                         print(f'         "{q[:72]}{"..." if len(q) > 72 else ""}')
 
     # ── E. 스토리라인 ─────────────────────────────────────────────
-    storylines = result.get("E_storylines", [])
+    storylines = result.get("storylines", [])
     if storylines:
         section("스토리라인")
         for sl in storylines:
@@ -2776,7 +2781,7 @@ def print_result_summary(result: dict) -> None:
                 print(f"     {struct['destination'][:100]}")
 
     # ── F. 개선 방향 ─────────────────────────────────────────────
-    guide        = result.get("F_improvement_guide", {})
+    guide        = result.get("improvement_guide", {})
     direction    = guide.get("overall_direction", {})
     enhancements = guide.get("information_enhancement", [])
     expansions   = guide.get("experience_expansion", [])
@@ -2791,6 +2796,8 @@ def print_result_summary(result: dict) -> None:
             print(f"\n  ▸ 단기 (3개월): {direction['short_term']}")
         if direction.get("mid_term"):
             print(f"  ▸ 중기 (1년) : {direction['mid_term']}")
+        if direction.get("long_term"):
+            print(f"  ▸ 장기 (1년+): {direction['long_term']}")
         if direction.get("priority_keyword"):
             reason = direction.get("priority_reason", "")
             print(f"\n  ★ 최우선 보강 키워드: {direction['priority_keyword']}")
@@ -2809,7 +2816,7 @@ def print_result_summary(result: dict) -> None:
             print(f"  {icon} [경험 확장] {e.get('gap_description', '')} → {e.get('suggested_experience_type', '')}")
 
     sep()
-    print("  전체 JSON: result 변수  |  스토리라인만: result['E_storylines']")
+    print("  전체 JSON: result 변수  |  스토리라인만: result['storylines']")
     sep()
 
 
@@ -2829,12 +2836,15 @@ TARGET   = ""                       # 목표 직무/시나리오 (없으면 빈 
 # ══════════════════════════════════════════════════════════════════
 # 10. Main (엔트리포인트)
 # ══════════════════════════════════════════════════════════════════
+# 반환 모델은 analysis_response.py 에서 import (성공/실패 분리):
+#   성공 → SuccessResponse(result)  /  실패 → ErrorResponse(message)
+# 키워드 analyzer 는 vector 필드가 없다(§3.2).
 
 def main(
     career_input: str,
     keywords: list[str],
     target: str,
-) -> dict:
+):
     """
     전체 파이프라인 실행 엔트리포인트.
     경력 파싱 → 키워드 분석 → 요약 출력을 순서대로 수행합니다.
@@ -2846,8 +2856,11 @@ def main(
         target:       목표 직무/시나리오. None이면 상단 TARGET 사용.
 
     Returns:
-        {"careers": [...], "result": {...}} — 파싱된 경력과 분석 결과.
-        입력이 placeholder 상태이거나 파싱 실패 시 {"careers": [], "result": {}}.
+        공통 envelope 형식 (API Endpoint 계약 §3.3 [1]):
+          성공: {"status": "success", "result": { ...분석 payload... }}
+          실패: {"status": "error", "message": "..."}
+        payload(result) 안에는 status·vector 를 넣지 않는다 (§3.6 #25·#26).
+        result 최상위 키에는 A_/B_/C_ 순서 접두사를 붙이지 않는다 (§3.4).
 
     사용 예:
         # 1) 상단 설정값으로 실행 (Colab 셀 실행과 동일)
@@ -2873,13 +2886,13 @@ def main(
         print("  또는 main(career_input=..., keywords=[...], target=...)로")
         print("  인자를 직접 전달해 실행할 수 있습니다.")
         print("=" * 60)
-        return {"careers": [], "result": {}}
+        return ErrorResponse(message="CAREER_INPUT / KEYWORDS 가 설정되지 않았습니다.")
 
     # 1) 경력 파싱 (+ 임베딩 사전 생성)
     careers = parse_careers(career_input)
     if not careers:
         print("[main] 경력 파싱 결과가 비어 있어 분석을 중단합니다.")
-        return {"careers": [], "result": {}}
+        return ErrorResponse(message="경력 파싱 결과가 비어 있어 분석을 중단합니다.")
 
     # 2) 키워드 분석 (경험 수에 따라 LLM/K-NN 자동 라우팅)
     result = analyze_keywords(keywords, careers, target=target)
@@ -2887,10 +2900,20 @@ def main(
     # 3) 요약 출력
     print_result_summary(result)
 
-    return {"careers": careers, "result": result, "status": "success"}
+    # 4) 공통 envelope 형식으로 통일 (API Endpoint 계약 §3.3 [1] · §3.6)
+    #    - result(payload) 안의 status 는 제거하고 envelope 최상위로만 둔다 (#26)
+    #      (keyword payload 는 _call_model 이 넣은 status 를 최상위에 갖고 있음)
+    #    - keyword analyzer 는 vector 컬럼이 없으므로 vector 필드도 없다 (§3.2)
+    if not isinstance(result, dict) or result.get("status") != "success":
+        return ErrorResponse(
+            message=(result.get("message", "키워드 분석에 실패했습니다.")
+                     if isinstance(result, dict) else "키워드 분석에 실패했습니다."),
+        )
+    payload = {k: v for k, v in result.items() if k != "status"}
+    return SuccessResponse(result=payload)
 
 
 if __name__ == "__main__":
-    output  = main()
-    careers = output["careers"]   # 이후 셀에서 재사용 가능
-    result  = output["result"]
+    envelope = main()
+    # 성공(SuccessResponse)이면 result, 실패(ErrorResponse)면 result 필드가 없으므로 getattr
+    result   = getattr(envelope, "result", None) or {}   # 분석 payload (envelope 안쪽)

@@ -43,6 +43,7 @@ from collections import deque
 from google import genai
 from google.genai import types
 import pypdf
+from src.ai.models import VectorSuccessResponse, ErrorResponse
 
 # ──────────────────────────────────────────────
 # Config
@@ -1532,6 +1533,8 @@ def _log_strength_summary(result: dict) -> None:
 # ══════════════════════════════════════════════
 # 21  Main (v2.0 — 강점 로그 먼저, 냉정 진단 뒤)
 # ══════════════════════════════════════════════
+# 반환 모델은 analysis_response.py 에서 import (성공/실패 분리):
+#   성공 → VectorSuccessResponse(result, vector)  /  실패 → ErrorResponse(message)
 def main(user_input: list[str], school: str, department: str):
     import sys
     ref_date = date.today()
@@ -1548,12 +1551,11 @@ def main(user_input: list[str], school: str, department: str):
     raw_content = get_user_input(user_input)
 
     if len(raw_content.strip()) < 10:
-        error_result = {
-            "status": "error",
-            "message": "입력 데이터가 너무 짧습니다. 최소 10자 이상 입력하세요."
-        }
-        print(json.dumps(error_result, ensure_ascii=False, indent=2))
-        return
+        resp = ErrorResponse(
+            message="입력 데이터가 너무 짧습니다. 최소 10자 이상 입력하세요.",
+        )
+        print(resp.model_dump_json(indent=2, exclude_none=True))
+        return resp
 
     print("\n[1] 임베딩 벡터 생성 중...", flush=True)
     vector = get_embedding(raw_content)
@@ -1632,12 +1634,22 @@ def main(user_input: list[str], school: str, department: str):
             file=sys.stderr,
         )
 
-    # ── stdout: 최종 JSON 출력 ────────────────────────────────────────
-    return {
-        "status": "success",
-        "vector": vector,
-        "result": result
-    }
+    # ── stdout: 최종 출력을 공통 envelope 형식으로 통일 ──────────────────
+    # API Endpoint 계약(§3.3 [1]): analyzer main() 은 envelope 를 반환한다.
+    #   { "status": "success", "vector": [...], "result": { ...payload... } }
+    # 규약: result(payload) 안에는 status·vector 를 넣지 않는다 (§3.6 #25·#26).
+    #       vector 는 별도 필드로만, status 는 envelope 최상위로만 나간다.
+    if not isinstance(result, dict) or result.get("status") == "error":
+        resp = ErrorResponse(
+            message=(result.get("message", "분석에 실패했습니다.")
+                     if isinstance(result, dict) else "분석에 실패했습니다."),
+        )
+    else:
+        payload = {k: v for k, v in result.items() if k != "status"}
+        resp = VectorSuccessResponse(result=payload, vector=vector)
+
+    print(resp.model_dump_json(indent=2, exclude_none=True))
+    return resp
 
 
 if __name__ == "__main__":

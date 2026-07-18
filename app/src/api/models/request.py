@@ -291,3 +291,11 @@ class PresignUploadRequest(BaseModel):
 
 class ConfirmUploadRequest(BaseModel):
     id: UUID
+
+class InternalRequestFailure(BaseModel):
+    analysis_id: UUID
+
+class InternalRequestSuccess(BaseModel):
+    analysis_id: UUID
+    vector: list[float] | None = None
+    result: dict[str, Any]
