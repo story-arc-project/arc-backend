@@ -1,4 +1,6 @@
+from datetime import datetime
 import traceback
+from zoneinfo import ZoneInfo
 import requests
 from typing import Annotated
 from uuid import UUID
@@ -157,10 +159,13 @@ async def post_comprehensive_analysis(
         user_input.append(str(experience.content))
     experience_ids = [experience.id for experience in result]
     titles = get_experience_titles(session, set(experience_ids))
-    if len(experience_ids) == 1:
-        title = f"{list(titles.values())[0]} 분석"
+    valid_titles = [title for title in titles.values() if len(title) != 0]
+    if len(valid_titles) == 0:
+        title = f"{datetime.now(ZoneInfo("Asia/Seoul")).strftime("%Y-%m-%d")} 종합 분석"
+    elif len(experience_ids) == 1:
+        title = f"{valid_titles[0]} 분석"
     else:
-        title = f"{list(titles.values())[0]} 등 {len(experience_ids)}개 분석"
+        title = f"{valid_titles[0]} 등 {len(experience_ids)}개 분석"
     new_comprehensive_analysis = ComprehensiveAnalysis(
         user_id = payload.sub,
         experience_ids = [experience.id for experience in result],
