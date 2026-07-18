@@ -37,7 +37,7 @@ def call_failure(analysis_type: AnalysisTypes, analysis_id: str):
     )
 
 def call_success(analysis_type: AnalysisTypes, analysis_id: str, result: dict, vector: list[float] | None):
-    body = {"analysis_id": analysis_id, "result": {**result, "schema_version": SCHEMA_VERSIONS[analysis_type]}, "vector": None}
+    body = {"analysis_id": analysis_id, "result": {**result, "schema_version": f"{analysis_type}/{SCHEMA_VERSIONS[analysis_type]}"}, "vector": None}
     if vector:
         body["vector"] = vector
     return call_frontend(
