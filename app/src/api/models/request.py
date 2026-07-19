@@ -18,8 +18,12 @@ def validate_password(v: str):
         raise ValueError("WEAK_PASSWORD")
     return v
 
+def title_100_char_limit(v: str):
+    return v[:100]
+
 ValidPassword = Annotated[str, AfterValidator(validate_password)]
 StrictBool = Annotated[bool, Field(strict=True)]
+ValidTitle = Annotated[str, AfterValidator(title_100_char_limit)]
 
 class LoginRequest(BaseModel):
     email: EmailStr
@@ -227,21 +231,21 @@ class ComprehensiveAnalysisPostRequest(BaseModel):
     experiences: list[UUID]
 
 class ComprehensiveAnalysisPatchRequest(BaseModel):
-    title: str
+    title: ValidTitle
 
 class KeywordAnalysisPostRequest(BaseModel):
     keywords: list[str]
     target: str = ""
 
 class KeywordAnalysisPatchRequest(BaseModel):
-    title: str
+    title: ValidTitle
 
 class ResumePostRequest(BaseModel):
     language: Language
-    title: str | None = None
+    title: ValidTitle | None = None
 
 class ResumePatchRequest(BaseModel):
-    title: str
+    title: ValidTitle
 
 class UserDeleteByPasswordRequest(BaseModel):
     password: str
