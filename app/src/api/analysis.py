@@ -434,7 +434,10 @@ async def post_keyword_analysis(
     statement = select(Experience).where(Experience.user_id == payload.sub)
     result = session.exec(statement).all()
     user_input: list[str] = []
-    title = f"{", ".join(body.keywords)} 분석"
+    if len(body.keywords) > 3:
+        title = f"{", ".join(body.keywords[:3])} 외 {len(body.keywords) - 3}개 분석"
+    else:
+        title = f"{", ".join(body.keywords)} 분석"
     for experience in result:
         user_input.append(str(experience.content))
     try:
