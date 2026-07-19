@@ -138,6 +138,7 @@ async def success_resume(body: Annotated[dict, Depends(check_internal)], session
             )
         )
     resume.result = body_validated.result
+    resume.status = AnalysisStatus.SUCCESS
     session.add(resume)
     session.commit()
     response.status_code = 200
