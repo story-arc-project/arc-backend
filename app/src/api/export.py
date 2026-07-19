@@ -70,6 +70,7 @@ async def post_resume(
             "language": body.language
         })
         req.raise_for_status()
+        new_resume.task_id = req.json()["task_id"]
         session.add(new_resume)
         session.commit()
         session.refresh(new_resume)
