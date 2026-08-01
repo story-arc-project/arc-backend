@@ -438,6 +438,14 @@ class FileMetadata(SQLModel, table=True):
 
 class AnalysisBookmark(SQLModel, table=True):
     __tablename__: str = "analysis_bookmarks"  # pyright: ignore[reportIncompatibleVariableOverride]
+    __table_args__ = (
+        UniqueConstraint(
+            "user_id",
+            "analysis_type",
+            "analysis_id",
+            name="uq_analysis_bookmark_user_type_analysis",
+        ),
+    )
     id: uuid.UUID = Field(
         default_factory=uuid.uuid4,
         primary_key=True,
