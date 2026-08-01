@@ -247,6 +247,14 @@ class KeywordAnalysisPatchRequest(BaseModel):
 class ResumePostRequest(BaseModel):
     language: Language
     title: ValidTitle | None = None
+    experience_ids: list[UUID] | None = None
+
+    @field_validator("experience_ids", mode="after")
+    @classmethod
+    def validate_experience_ids(cls, v: list[UUID] | None):
+        if v is not None and len(v) == 0:
+            raise ValueError("experience_ids must not be empty if provided")
+        return v
 
 class UserDeleteByPasswordRequest(BaseModel):
     password: str

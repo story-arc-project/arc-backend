@@ -2,7 +2,7 @@ import traceback
 from typing import Annotated, Any
 from uuid import UUID
 from fastapi import APIRouter, Depends, Response
-from sqlmodel import select
+from sqlmodel import col, select
 import requests
 from datetime import datetime
 from zoneinfo import ZoneInfo
@@ -29,18 +29,20 @@ async def post_resume(
     _user_limit: Annotated[None, Depends(analysis_rate_limiters["resume"]["user"])],
     _ip_limit: Annotated[None, Depends(analysis_rate_limiters["resume"]["ip"])]
 ):
-    statement = select(Experience).where(Experience.user_id == payload.sub)
-    result = session.exec(statement).all()
-    res = session.exec(select(UserProfile, User).join(User).where(UserProfile.user_id == payload.sub)).one_or_none()
-    if res is None:
-        raise AppException(
-            404,
-            ErrorResponse(
-                code = ErrorResponseCode.NOT_FOUND,
-                message = "User profile not found"
+    if body.experience_ids is None:
+        statement = select(Experience).where(Experience.user_id == payload.sub)
+        result = session.exec(statement).all()
+    else:
+        statement = select(Experience).where(col(Experience.id).in_(body.experience_ids))
+        result = session.exec(statement).all()
+        if len(result) != len(set(body.experience_ids)):
+            raise AppException(
+                404,
+                ErrorResponse(
+                    code = ErrorResponseCode.NOT_FOUND,
+                    message = "One or more experiences not found"
+                )
             )
-        )
-    user_profile, user = res
     sources: list[str] = []
     for experience in result:
         if experience.user_id != payload.sub:
@@ -52,6 +54,16 @@ async def post_resume(
                 )
         )
         sources.append(str(experience.content))
+    res = session.exec(select(UserProfile, User).join(User).where(UserProfile.user_id == payload.sub)).one_or_none()
+    if res is None:
+        raise AppException(
+            404,
+            ErrorResponse(
+                code = ErrorResponseCode.NOT_FOUND,
+                message = "User profile not found"
+            )
+        )
+    user_profile, user = res
     if body.title:
         title = body.title
     else:
