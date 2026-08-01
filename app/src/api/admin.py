@@ -22,7 +22,7 @@ providers_col = cast(
     func.array_remove(
         func.array_agg(OauthAccount.provider),
         None,
-        type_=ARRAY(Enum(OauthProviderId)),
+        type_=ARRAY(Enum(OauthProviderId, name="oauthproviderid", create_type=False)),
     ).label("providers")
 )
 
@@ -66,7 +66,14 @@ def get_customer(customer_id: UUID, session: SessionDep):
             affiliation_detail = profile.affiliationDetail if profile else None,
             company = profile.company if profile else None,
             desired_role = profile.desiredRole if profile else None,
-        ) if profile else None
+        ) if profile else None,
+        # activity = AdminCustomerDetailActivity(
+        #     experiences = get_activity_stat(session, Experience, customer_id, has_status=False),
+        #     individual_analyses = get_activity_stat(session, IndividualAnalysis, customer_id, has_status=True),
+        #     comprehensive_analyses = get_activity_stat(session, ComprehensiveAnalysis, customer_id, has_status=True),
+        #     keyword_analyses = get_activity_stat(session, KeywordAnalysis, customer_id, has_status=True),
+        #     resumes = get_activity_stat(session, Resume, customer_id, has_status=True),
+        # )
     )
 
     return SuccessResponseWithData(message="found", data=customer_detail)
