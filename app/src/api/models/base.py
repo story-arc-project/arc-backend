@@ -240,3 +240,38 @@ class BookmarkData(BaseModel):
     status: AnalysisStatus
     created_at: datetime
     updated_at: datetime
+
+class AdminCustomerDetailCustomer(BaseModel):
+    id: UUID
+    email: EmailStr
+    name: str | None
+    status: str
+    onboarded: bool
+    created_at: datetime
+    withdrawn_at: datetime | None
+    auth_providers: list[OauthProviderId]
+
+class AdminCustomerDetailProfile(BaseModel):
+    school: str | None
+    department: str | None
+    affiliation: Affiliation | None
+    affiliation_detail: str | None
+    company: str | None
+    desired_role: str | None
+
+class AdminActivityStat(BaseModel):
+    total: int
+    last_at: datetime | None
+    by_status: dict[AnalysisStatus, int] | None
+
+class AdminCustomerDetailActivity(BaseModel):
+    experiences: AdminActivityStat
+    individual_analyses: AdminActivityStat
+    comprehensive_analyses: AdminActivityStat
+    keyword_analyses: AdminActivityStat
+    resumes: AdminActivityStat
+
+class AdminCustomerDetail(BaseModel):
+    customer: AdminCustomerDetailCustomer
+    profile: AdminCustomerDetailProfile | None
+    # activity: AdminCustomerDetailActivity
