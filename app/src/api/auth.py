@@ -14,7 +14,7 @@ from src.const import ACCESS_TOKEN_KEY, LOGIN_REDIRECT_ENDPOINT_PREFIX, REFRESH_
 from src.utils.verify import send_code, verify_code
 from src.api.models.base import AccountData, AuthMeData, EmailVerificationErrorResponse, ErrorResponse, LoginData, OnboardResponseData, ProfileData, RefreshData, SuccessResponse, UserInfo
 from src.api.models.consent import CONSENT_REQUIRED
-from src.api.models.request import ForgotPasswordRequest, LoginRequest, OnboardRequest, ProfilePatchRequest, ResetPasswordRequest, SignupRequest, SocialLoginRequest, UserConsentRequest, UserDeleteByPasswordRequest, VerificationRequest, VerifyCodeRequest, VersionedConsent
+from src.api.models.request import ForgotPasswordRequest, LoginRequest, NewUserConsentRequest, OnboardRequest, ProfilePatchRequest, ResetPasswordRequest, SignupRequest, SocialLoginRequest, UserConsentRequest, UserDeleteByPasswordRequest, VerificationRequest, VerifyCodeRequest, VersionedConsent
 from src.api.models.response import AuthMeResponse, LoginResponse, LogoutResponse, OnboardResponse, OnboardConsentErrorResponse, RefreshResponse, SignupResponse, VerificationSentResponse
 from src.db.db import SessionDep
 from src.db.models import DeletedUser, OauthAccount, TermsConsent, Token, User, UserProfile
@@ -736,17 +736,37 @@ async def reset_password(body: ResetPasswordRequest, session: SessionDep, respon
     return SuccessResponse(message="Password reset successful. You may now log in with your new password.")
 
 @auth_router.post("/consent")
-async def consent(request: Request, body: UserConsentRequest, session: SessionDep, response: Response, payload: Annotated[AccessTokenPayload, Depends(check_auth)]):
+async def consent(request: Request, body: UserConsentRequest | NewUserConsentRequest, session: SessionDep, response: Response, payload: Annotated[AccessTokenPayload, Depends(check_auth)]):
     ip = get_ip(request)
-    for consent_id, consent in body.agreements.iter_consents():
-        new_consent = TermsConsent(
-            user_id = payload.sub,
-            consent_id = consent_id,
-            version = (consent.version if isinstance(consent, VersionedConsent) else None),
-            granted = consent.granted,
-            ip = ip
+    if body.schema_version == "v1":
+        for consent_id, consent in body.agreements.iter_consents():
+            new_consent = TermsConsent(
+                user_id = payload.sub,
+                consent_id = consent_id,
+                version = (consent.version if isinstance(consent, VersionedConsent) else None),
+                granted = consent.granted,
+                ip = ip
+            )
+            session.add(new_consent)
+        session.commit()
+        response.status_code = 200
+        return SuccessResponse(message="Terms consent successful.")
+    elif body.schema_version == "v2":
+        for consent in body.agreements:
+            new_consent = TermsConsent(
+                user_id = payload.sub,
+                consent_id = consent.id,
+                version = consent.version,
+                granted = consent.granted,
+                ip = ip
+            )
+            session.add(new_consent)
+        session.commit()
+        response.status_code = 200
+        return SuccessResponse(message="Terms consent successful.")
+    else:
+        response.status_code = 400
+        return ErrorResponse(
+            code = ErrorResponseCode.BAD_REQUEST,
+            message = "Invalid schema version."
         )
-        session.add(new_consent)
-    session.commit()
-    response.status_code = 200
-    return SuccessResponse(message="Terms consent successful.")

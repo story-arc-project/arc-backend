@@ -1,5 +1,5 @@
 from datetime import date
-from typing import Annotated, Any
+from typing import Annotated, Any, Literal
 from uuid import UUID
 from pydantic import BaseModel, EmailStr, field_validator, model_validator, AfterValidator, Field
 import re
@@ -299,7 +299,35 @@ class Agreements(BaseModel):
         return [(name, getattr(self, name)) for name in Agreements.model_fields]
 
 class UserConsentRequest(BaseModel):
+    schema_version: Literal["v1"] = "v1"
     agreements: Agreements
+
+class NewVersionedConsent(BaseModel):
+    id: str
+    version: str
+    granted: StrictBool
+
+class NewUserConsentRequest(BaseModel):
+    schema_version: Literal["v2"] = "v2"
+    agreements: list[NewVersionedConsent]
+
+    def get_consent(self, name: str):
+        for agreement in self.agreements:
+            if agreement.id == name:
+                return agreement
+        return None
+
+    @model_validator(mode="after")
+    def validate_required_consents(self) -> "NewUserConsentRequest":
+        for field, required in CONSENT_REQUIRED.items():
+            value = self.get_consent(field)
+            if required and (value is None or not value.granted):
+                raise ValueError(f"{field} is required and must be granted")
+        for field, agreeable_version in AGREEABLE_CONSENT_VERSIONS.items():
+            value = self.get_consent(field)
+            if value is None or value.version != agreeable_version:
+                raise ValueError(f"{field} has wrong version")
+        return self
 
 class PresignUploadRequest(BaseModel):
     filename: str
