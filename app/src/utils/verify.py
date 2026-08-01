@@ -3,8 +3,9 @@ import secrets
 from pydantic import EmailStr, BaseModel, Field
 from typing import Literal, Annotated, Union
 
+from src.utils.brand import render_verification_mail_html, render_verification_mail_text
 from src.utils.mail import send_mail
-from src.const import VERIFICATION_CODE_EXPIRE, VERIFICATION_MAX_ATTEMPTS
+from src.const import SUPPORT_EMAIL, VERIFICATION_CODE_EXPIRE, VERIFICATION_MAX_ATTEMPTS
 from src.db.red import get_code, store_code, PURPOSE_SCOPE
 from src.utils.ratelimit import RateLimiter
 from src.api.models.base import ErrorResponse, ErrorResponseCode
@@ -53,5 +54,6 @@ def send_code(email: EmailStr, purpose: PURPOSE_SCOPE = "verify"):
     return send_mail(
         email,
         "ARC verification code",
-        code
+        render_verification_mail_text(code, VERIFICATION_CODE_EXPIRE, SUPPORT_EMAIL),
+        render_verification_mail_html(code, VERIFICATION_CODE_EXPIRE, SUPPORT_EMAIL)
     )

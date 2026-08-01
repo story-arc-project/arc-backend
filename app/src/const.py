@@ -29,3 +29,5 @@ REDIS_HOST = "redis"
 REDIS_PORT = 6379
 
 ADMIN_PAGE_NOT_ALLOWED = "Admin page not allowed"
+
+SUPPORT_EMAIL = "storyarc.org@gmail.com"
