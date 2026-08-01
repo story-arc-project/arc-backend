@@ -53,7 +53,7 @@ def send_code(email: EmailStr, purpose: PURPOSE_SCOPE = "verify"):
     code = _generate_code(email, purpose)
     return send_mail(
         email,
-        "ARC verification code",
+        "[ARC] 이메일 인증번호 안내",
         render_verification_mail_text(code, VERIFICATION_CODE_EXPIRE, SUPPORT_EMAIL),
         render_verification_mail_html(code, VERIFICATION_CODE_EXPIRE, SUPPORT_EMAIL)
     )
