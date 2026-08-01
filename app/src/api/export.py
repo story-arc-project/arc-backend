@@ -7,13 +7,13 @@ import requests
 from datetime import datetime
 from zoneinfo import ZoneInfo
 
-from src.api.models.base import ErrorResponse, ResumeData, ResumeList, ResumeListData, UUIDData, UUIDDataWithTitleNone
+from src.api.models.base import ErrorResponse, ResumeData, ResumeList, ResumeListData, UUIDDataWithTitleNone
 from src.api.models.exc import AppException
-from src.api.models.request import ResumePostRequest
+from src.api.models.request import ResumePatchRequest, ResumePostRequest
 from src.api.models.response import DeleteSuccessResponse, PostSuccessResponse, ResumeListResponse, ResumeResponse
 from src.db.db import SessionDep
 from src.db.models import Experience, Resume, User, UserProfile
-from src.enums import ErrorResponseCode
+from src.enums import AnalysisStatus, ErrorResponseCode
 from src.utils.auth import check_auth
 from src.utils.ratelimit import analysis_rate_limiters
 from src.utils.token import AccessTokenPayload
@@ -163,7 +163,7 @@ async def get_resume(resume_id: UUID, session: SessionDep, response: Response, p
 @export_router.patch("/resume/{resume_id}")
 async def patch_resume(
     resume_id: UUID,
-    body: dict[str, Any],
+    body: ResumePatchRequest,
     session: SessionDep,
     response: Response,
     payload: Annotated[AccessTokenPayload, Depends(check_auth)]
@@ -185,7 +185,22 @@ async def patch_resume(
                 message = "Access for the resource is not allowed"
             )
         )
-    resume.result = body
+    if resume.status != AnalysisStatus.SUCCESS or resume.result is None:
+        raise AppException(
+            400,
+            ErrorResponse(
+                code = ErrorResponseCode.BAD_REQUEST,
+                message = "Resume is not completed yet."
+            )
+        )
+    if body.title is not None:
+        resume.title = body.title
+    if body.result is not None:
+        new_result = dict(body.result)
+        schema_version = resume.result.get("schema_version")
+        if schema_version is not None:
+            new_result["schema_version"] = schema_version
+        resume.result = new_result
     try:
         session.add(resume)
         session.commit()
@@ -201,10 +216,16 @@ async def patch_resume(
             )
         )
     response.status_code = 200
-    return PostSuccessResponse(
-        message = "Keyword analysis patch success.",
-        data = UUIDData(
-            id = resume.id
+    return ResumeResponse(
+        message = "Resume patch success.",
+        data = ResumeData(
+            id = resume.id,
+            title = resume.title,
+            language = resume.language,
+            status = resume.status,
+            created_at = resume.created_at,
+            updated_at = resume.updated_at,
+            result = resume.result
         )
     )
 

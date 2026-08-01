@@ -256,6 +256,10 @@ class ResumePostRequest(BaseModel):
             raise ValueError("experience_ids must not be empty if provided")
         return v
 
+class ResumePatchRequest(BaseModel):
+    title: ValidTitle | None = None
+    result: dict[str, Any] | None = None
+
 class UserDeleteByPasswordRequest(BaseModel):
     password: str
 
