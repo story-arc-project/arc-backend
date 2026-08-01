@@ -43,13 +43,6 @@ async def post_resume(
     user_profile, user = res
     sources: list[str] = []
     for experience in result:
-        sources.append(str(experience.content))
-    if body.title:
-        title = body.title
-    else:
-        title = f"{datetime.now(ZoneInfo("Asia/Seoul")).strftime("%Y-%m-%d")} resume"
-    new_resume = Resume(user_id = payload.sub, language = body.language, title = title)
-    for experience in result:
         if experience.user_id != payload.sub:
             raise AppException(
                 403,
@@ -58,6 +51,12 @@ async def post_resume(
                     message = "Access for the resource is not allowed"
                 )
         )
+        sources.append(str(experience.content))
+    if body.title:
+        title = body.title
+    else:
+        title = f"{datetime.now(ZoneInfo("Asia/Seoul")).strftime("%Y-%m-%d")} resume"
+    new_resume = Resume(user_id = payload.sub, language = body.language, title = title)
     try:
         req = requests.post("http://ai_analyst:8001/resume", json={
             "resume_id": str(new_resume.id),
