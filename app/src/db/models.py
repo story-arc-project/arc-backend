@@ -326,6 +326,10 @@ class Resume(SQLModel, table=True):
         default=None,
         sa_column=Column(JSONB, nullable=True, default=None)
     )
+    experience_ids: list[uuid.UUID] | None = Field(
+        default=None,
+        sa_column=Column(ARRAY(SAUUID), nullable=True, default=None)
+    )
     task_id: str | None = Field(nullable=True, index=True, default=None)
     created_at: datetime = Field(
         default_factory=now,

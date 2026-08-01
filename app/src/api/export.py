@@ -1,5 +1,5 @@
 import traceback
-from typing import Annotated, Any
+from typing import Annotated
 from uuid import UUID
 from fastapi import APIRouter, Depends, Response
 from sqlmodel import col, select
@@ -68,7 +68,7 @@ async def post_resume(
         title = body.title
     else:
         title = f"{datetime.now(ZoneInfo("Asia/Seoul")).strftime("%Y-%m-%d")} resume"
-    new_resume = Resume(user_id = payload.sub, language = body.language, title = title)
+    new_resume = Resume(user_id = payload.sub, language = body.language, title = title, experience_ids = body.experience_ids)
     try:
         req = requests.post("http://ai_analyst:8001/resume", json={
             "resume_id": str(new_resume.id),
@@ -154,6 +154,7 @@ async def get_resume(resume_id: UUID, session: SessionDep, response: Response, p
             title = resume.title,
             language = resume.language,
             status = resume.status,
+            experience_ids = resume.experience_ids,
             created_at = resume.created_at,
             updated_at = resume.updated_at,
             result = resume.result
@@ -223,6 +224,7 @@ async def patch_resume(
             title = resume.title,
             language = resume.language,
             status = resume.status,
+            experience_ids = resume.experience_ids,
             created_at = resume.created_at,
             updated_at = resume.updated_at,
             result = resume.result

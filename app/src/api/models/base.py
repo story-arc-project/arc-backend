@@ -217,6 +217,7 @@ class ResumeData(BaseModel):
     created_at: datetime
     updated_at: datetime
     result: dict[str, Any] | None
+    experience_ids: list[UUID] | None
 
 class PresignUploadData(BaseModel):
     id: UUID
