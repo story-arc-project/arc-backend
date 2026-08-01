@@ -153,6 +153,7 @@ async def put_experience_by_id(
         session.commit()
         session.refresh(result)
     except:
+        traceback.print_exc()
         session.rollback()
         raise AppException(
             500,
@@ -192,6 +193,7 @@ async def patch_experience_importance(body: ExperiencePatchRequest, experience_i
         session.commit()
         session.refresh(result)
     except:
+        traceback.print_exc()
         session.rollback()
         raise AppException(
             500,
@@ -229,6 +231,7 @@ async def delete_experience_by_id(experience_id: UUID, session: SessionDep, resp
         session.delete(result)
         session.commit()
     except:
+        traceback.print_exc()
         session.rollback()
         raise AppException(
             500,
@@ -273,6 +276,7 @@ async def duplicate_experience_by_id(experience_id: UUID, session: SessionDep, r
         session.commit()
         session.refresh(new)
     except:
+        traceback.print_exc()
         session.rollback()
         raise AppException(
             500,

@@ -4,6 +4,7 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, Request, Response
 from pydantic import BaseModel, EmailStr
 from sqlmodel import select, func, and_
+import traceback
 
 from src.api.models.exc import AppException
 from src.utils.auth import check_auth
@@ -578,6 +579,7 @@ async def delete_account_by_password(request: Request, session: SessionDep, body
         session.add(deleted)
         session.commit()
     except:
+        traceback.print_exc()
         session.rollback()
         raise AppException(
             status_code = 500,
@@ -642,6 +644,7 @@ async def delete_account_by_token(request: Request, session: SessionDep, body: S
         session.add(deleted)
         session.commit()
     except:
+        traceback.print_exc()
         session.rollback()
         raise AppException(
             status_code = 500,

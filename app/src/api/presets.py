@@ -3,6 +3,7 @@ from typing import Annotated
 from uuid import UUID
 from fastapi import APIRouter, Depends, Response
 from sqlmodel import select
+import traceback
 
 from src.api.models.base import ErrorResponse, PresetResponseData, PresetsResponseData, SuccessResponseWithData, UUIDData
 from src.api.models.exc import AppException
@@ -78,6 +79,7 @@ async def delete_preset(preset_id: UUID, session: SessionDep, response: Response
         session.delete(result)
         session.commit()
     except:
+        traceback.print_exc()
         session.rollback()
         raise AppException(
             500,
@@ -123,6 +125,7 @@ async def duplicate_preset_by_id(preset_id: UUID, session: SessionDep, response:
         session.commit()
         session.refresh(new)
     except:
+        traceback.print_exc()
         session.rollback()
         raise AppException(
             500,

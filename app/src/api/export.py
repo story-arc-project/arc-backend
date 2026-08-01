@@ -254,6 +254,7 @@ async def remove_bookmark(resume_id: UUID, session: SessionDep, response: Respon
         session.delete(resume)
         session.commit()
     except:
+        traceback.print_exc()
         session.rollback()
         raise AppException(
             500,

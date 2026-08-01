@@ -392,6 +392,7 @@ async def delete_comprehensive_analysis(analysis_id: UUID, session: SessionDep, 
             session.delete(bookmark)
         session.commit()
     except:
+        traceback.print_exc()
         session.rollback()
         raise AppException(
             500,
@@ -628,6 +629,7 @@ async def delete_keyword_analysis(analysis_id: UUID, session: SessionDep, respon
             session.delete(bookmark)
         session.commit()
     except:
+        traceback.print_exc()
         session.rollback()
         raise AppException(
             500,
@@ -748,6 +750,7 @@ async def add_bookmark(analysis_id: UUID, session: SessionDep, response: Respons
         session.commit()
         session.refresh(new_bookmark)
     except:
+        traceback.print_exc()
         session.rollback()
         raise AppException(
             500,
@@ -781,6 +784,7 @@ async def remove_bookmark(analysis_id: UUID, session: SessionDep, response: Resp
         session.delete(result)
         session.commit()
     except:
+        traceback.print_exc()
         session.rollback()
         raise AppException(
             500,

@@ -2,6 +2,7 @@ from typing import Annotated
 from uuid import UUID
 from fastapi import APIRouter, Depends, Response
 from sqlmodel import select
+import traceback
 
 from src.api.models.base import ErrorResponse, ExperienceResponseData, ExperiencesResponseData, LibrariesResponseData, LibraryContentData, LibraryResponseData, SuccessResponse, SuccessResponseWithData, UUIDData
 from src.api.models.exc import AppException
@@ -30,6 +31,7 @@ async def post_library(body: LibraryPostRequest, session: SessionDep, response: 
         session.commit()
         session.refresh(new_library)
     except:
+        traceback.print_exc()
         session.rollback()
         raise AppException(
             500,
@@ -115,6 +117,7 @@ async def post_library_experience(library_id: UUID, experience_id: UUID, session
         session.add(relation)
         session.commit()
     except:
+        traceback.print_exc()
         session.rollback()
         raise AppException(
             500,
@@ -151,6 +154,7 @@ async def delete_library_experience(library_id: UUID, experience_id: UUID, sessi
         session.delete(relation)
         session.commit()
     except:
+        traceback.print_exc()
         session.rollback()
         raise AppException(
             500,
@@ -221,6 +225,7 @@ async def delete_library_by_id(library_id: UUID, session: SessionDep, response: 
         session.delete(result)
         session.commit()
     except:
+        traceback.print_exc()
         session.rollback()
         raise AppException(
             500,
@@ -272,6 +277,7 @@ async def patch_library_by_id(library_id: UUID, body: LibraryPatchRequest, sessi
         session.commit()
         session.refresh(library)
     except:
+        traceback.print_exc()
         session.rollback()
         raise AppException(
             500,
