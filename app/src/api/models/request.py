@@ -19,7 +19,11 @@ def validate_password(v: str):
     return v
 
 def title_100_char_limit(v: str):
-    return v[:100]
+    if len(v) > 100:
+        raise ValueError("Title must be at most 100 characters")
+    if len(v) == 0:
+        raise ValueError("Title must not be empty")
+    return v
 
 ValidPassword = Annotated[str, AfterValidator(validate_password)]
 StrictBool = Annotated[bool, Field(strict=True)]

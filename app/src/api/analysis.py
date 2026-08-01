@@ -211,15 +211,6 @@ async def patch_comprehensive_analysis(
     response: Response,
     payload: Annotated[AccessTokenPayload, Depends(check_auth)]
 ):
-    title_length = len(body.title)
-    if title_length <= 0 or title_length > 100:
-        raise AppException(
-            status_code = 400,
-            error = ErrorResponse(
-                code = ErrorResponseCode.BAD_REQUEST,
-                message = "Title length is invalid"
-            )
-        )
     analysis = session.get(ComprehensiveAnalysis, analysis_id)
     if analysis is None:
         raise AppException(
@@ -477,15 +468,6 @@ async def patch_keyword_analysis(
     response: Response,
     payload: Annotated[AccessTokenPayload, Depends(check_auth)]
 ):
-    title_length = len(body.title)
-    if title_length <= 0 or title_length > 100:
-        raise AppException(
-            status_code = 400,
-            error = ErrorResponse(
-                code = ErrorResponseCode.BAD_REQUEST,
-                message = "Title length is invalid"
-            )
-        )
     analysis = session.get(KeywordAnalysis, analysis_id)
     if analysis is None:
         raise AppException(
