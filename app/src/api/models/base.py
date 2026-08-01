@@ -235,5 +235,7 @@ class FileMetadataPublic(BaseModel):
 class BookmarkData(BaseModel):
     id: UUID
     type: AnalysisType
+    title: str
+    status: AnalysisStatus
     created_at: datetime
     updated_at: datetime

@@ -668,14 +668,50 @@ async def get_bookmarks(session: SessionDep, response: Response, payload: Annota
     )
     result = session.exec(statement).all()
     response.status_code = 200
+    data: list[BookmarkData] = []
+    for bookmark in result:
+        if bookmark.analysis_type == AnalysisType.comprehensive:
+            analysis = session.get(ComprehensiveAnalysis, bookmark.analysis_id)
+            if analysis is None:
+                continue
+            data.append(BookmarkData(
+                id = analysis.id,
+                type = AnalysisType.comprehensive,
+                title = analysis.title,
+                status = analysis.status,
+                created_at = bookmark.created_at,
+                updated_at = bookmark.updated_at
+            ))
+        elif bookmark.analysis_type == AnalysisType.keyword:
+            analysis = session.get(KeywordAnalysis, bookmark.analysis_id)
+            if analysis is None:
+                continue
+            data.append(BookmarkData(
+                id = analysis.id,
+                type = AnalysisType.keyword,
+                title = analysis.title,
+                status = analysis.status,
+                created_at = bookmark.created_at,
+                updated_at = bookmark.updated_at
+            ))
+        elif bookmark.analysis_type == AnalysisType.individual:
+            analysis = session.get(IndividualAnalysis, bookmark.analysis_id)
+            if analysis is None:
+                continue
+            experience = session.get(Experience, analysis.experience_id)
+            if experience is None:
+                continue
+            data.append(BookmarkData(
+                id = analysis.id,
+                type = AnalysisType.individual,
+                title = experience.content.get("title", ""),
+                status = analysis.status,
+                created_at = bookmark.created_at,
+                updated_at = bookmark.updated_at
+            ))
     return BookmarkListResponse(
         message = "Fetch success.",
-        data = [BookmarkData(
-            id = bookmark.analysis_id,
-            type = bookmark.analysis_type,
-            created_at = bookmark.created_at,
-            updated_at = bookmark.updated_at
-        ) for bookmark in result]
+        data = data
     )
 
 @analysis_router.post("/bookmarks/{analysis_id}")
