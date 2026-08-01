@@ -149,6 +149,14 @@ async def post_comprehensive_analysis(
         )
     user_input: list[str] = []
     for experience in result:
+        if experience.user_id != payload.sub:
+            raise AppException(
+                403,
+                ErrorResponse(
+                    code = ErrorResponseCode.RESOURCE_NOT_ALLOWED,
+                    message = "Access for the resource is not allowed"
+                )
+            )
         user_input.append(str(experience.content))
     experience_ids = [experience.id for experience in result]
     titles = get_experience_titles(session, set(experience_ids))
@@ -164,15 +172,6 @@ async def post_comprehensive_analysis(
         experience_ids = [experience.id for experience in result],
         title = title
     )
-    for experience in result:
-        if experience.user_id != payload.sub:
-            raise AppException(
-                403,
-                ErrorResponse(
-                    code = ErrorResponseCode.RESOURCE_NOT_ALLOWED,
-                    message = "Access for the resource is not allowed"
-                )
-            )
     req = requests.post("http://ai_analyst:8001/comprehensive", json={
         "analysis_id": str(new_comprehensive_analysis.id),
         "input": user_input,
