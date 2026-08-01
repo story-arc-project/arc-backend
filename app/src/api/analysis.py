@@ -20,16 +20,9 @@ from src.utils.ratelimit import analysis_rate_limiters
 from src.utils.token import AccessTokenPayload
 
 def get_experience_titles(session: SessionDep, experience_ids: set[UUID]):
-    if len(experience_ids) == 0:
-        print("experience_ids length is 0")
-        raise AppException(
-            500,
-            ErrorResponse(
-                code = ErrorResponseCode.SERVER_ERROR,
-                message = "Internal server error"
-            )
-        )
     experience_titles: dict[UUID, str] = {}
+    if len(experience_ids) == 0:
+        return experience_titles
     experience_rows = session.exec(
         select(Experience.id, Experience.content)
         .where(col(Experience.id).in_(experience_ids))
