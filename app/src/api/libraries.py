@@ -234,6 +234,7 @@ async def delete_library_by_id(library_id: UUID, session: SessionDep, response: 
         message = "Library deleted."
     )
 
+@libraries_router.put("/{library_id}")
 @libraries_router.patch("/{library_id}")
 async def patch_library_by_id(library_id: UUID, body: LibraryPatchRequest, session: SessionDep, response: Response, payload: Annotated[AccessTokenPayload, Depends(check_auth)]):
     library = session.exec(select(Library).where(Library.id == library_id)).one_or_none()
