@@ -248,9 +248,6 @@ class ResumePostRequest(BaseModel):
     language: Language
     title: ValidTitle | None = None
 
-class ResumePatchRequest(BaseModel):
-    title: ValidTitle
-
 class UserDeleteByPasswordRequest(BaseModel):
     password: str
 

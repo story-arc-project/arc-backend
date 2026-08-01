@@ -1,5 +1,5 @@
 import traceback
-from typing import Annotated
+from typing import Annotated, Any
 from uuid import UUID
 from fastapi import APIRouter, Depends, Response
 from sqlmodel import select
@@ -7,9 +7,9 @@ import requests
 from datetime import datetime
 from zoneinfo import ZoneInfo
 
-from src.api.models.base import ErrorResponse, ResumeData, ResumeList, ResumeListData, UUIDDataWithTitle, UUIDDataWithTitleNone
+from src.api.models.base import ErrorResponse, ResumeData, ResumeList, ResumeListData, UUIDData, UUIDDataWithTitleNone
 from src.api.models.exc import AppException
-from src.api.models.request import ResumePatchRequest, ResumePostRequest
+from src.api.models.request import ResumePostRequest
 from src.api.models.response import DeleteSuccessResponse, PostSuccessResponse, ResumeListResponse, ResumeResponse
 from src.db.db import SessionDep
 from src.db.models import Experience, Resume, User, UserProfile
@@ -152,7 +152,7 @@ async def get_resume(resume_id: UUID, session: SessionDep, response: Response, p
 @export_router.patch("/resume/{resume_id}")
 async def patch_resume(
     resume_id: UUID,
-    body: ResumePatchRequest,
+    body: dict[str, Any],
     session: SessionDep,
     response: Response,
     payload: Annotated[AccessTokenPayload, Depends(check_auth)]
@@ -174,7 +174,7 @@ async def patch_resume(
                 message = "Access for the resource is not allowed"
             )
         )
-    resume.title = body.title
+    resume.result = body
     try:
         session.add(resume)
         session.commit()
@@ -192,9 +192,8 @@ async def patch_resume(
     response.status_code = 200
     return PostSuccessResponse(
         message = "Keyword analysis patch success.",
-        data = UUIDDataWithTitle(
-            id = resume.id,
-            title = body.title
+        data = UUIDData(
+            id = resume.id
         )
     )
 
