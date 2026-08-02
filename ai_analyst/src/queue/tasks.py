@@ -7,7 +7,7 @@ import requests
 from ..const import SCHEMA_VERSIONS
 from src.queue.celery_app import celery
 
-AnalysisTypes = Literal["individual", "comprehensive", "keyword", "resume"]
+AnalysisTypes = Literal["individual", "comprehensive", "keyword", "resume", "cover_letter"]
 
 FRONTEND_API_URL = "http://app:8000"
 INTERNAL_SECRET_KEY = "INTERNAL_SECRET"
@@ -107,3 +107,54 @@ def process_resume(
     if resume.status == "error":
         return call_failure("resume", resume_id)
     return call_success("resume", resume_id, resume.result, None)
+
+@celery.task
+def process_cover_letter(
+    cover_letter_id: str,
+    experiences: list[dict],
+    name: str = "",
+    target_company: str = "",
+    target_job: str = "",
+    school: str = "",
+    department: str = "",
+    motivation: str = "",
+    career_goal: str = "",
+    extra_notes: str = "",
+    questions: list[dict] | None = None,
+    job_key: str = "",
+    region: str = "KR",
+):
+    from src.ai.cover_letter import main as main_func, UserProfile
+
+    bucketed: dict[str, list] = {}
+    for exp in experiences:
+        bucketed.setdefault(exp["type"], []).append(exp["content"])
+
+    user = UserProfile(
+        name=name,
+        target_company=target_company,
+        target_job=target_job,
+        education=[{"school": school, "major": department}] if school or department else [],
+        experiences=bucketed.get("experience", []),
+        projects=bucketed.get("project", []),
+        skills=bucketed.get("skill", []),
+        certifications=bucketed.get("certification", []),
+        awards=bucketed.get("award", []),
+        activities=bucketed.get("activity", []),
+        achievements=bucketed.get("achievement", []),
+        strengths=bucketed.get("strength", []),
+        motivation=motivation,
+        career_goal=career_goal,
+        extra_notes=extra_notes,
+    )
+
+    response = main_func(
+        user=user,
+        job_key=job_key,
+        region=region,
+        questions=questions or [],
+    )
+
+    if response.status == "error":
+        return call_failure("cover_letter", cover_letter_id)
+    return call_success("cover_letter", cover_letter_id, response.result, None)

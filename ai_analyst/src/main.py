@@ -1,9 +1,9 @@
 from typing import Annotated
-from src.queue.tasks import process_comprehensive, process_individual, process_keyword, process_resume
+from src.queue.tasks import process_comprehensive, process_individual, process_keyword, process_resume, process_cover_letter
 # from src.resume import main as resume_main
 from fastapi import Body, FastAPI, Response
 
-from src.models import ComprehensiveRequest, IndividualRequest, KeywordRequest, ResumeRequest
+from src.models import ComprehensiveRequest, IndividualRequest, KeywordRequest, ResumeRequest, CoverLetterRequest
 
 app = FastAPI()
 
@@ -34,6 +34,26 @@ async def keyword(body: Annotated[KeywordRequest, Body()], response: Response):
 @app.post("/resume")
 async def resume(body: Annotated[ResumeRequest, Body()], response: Response):
     task = process_resume.delay(str(body.resume_id), body.sources, body.name_ko, "", body.email, body.phone, body.school, body.department, "", body.language)
+    response.status_code = 200
+    return {
+        "task_id": task.id
+    }
+
+@app.post("/cover_letter")
+async def cover_letter(body: Annotated[CoverLetterRequest, Body()], response: Response):
+    task = process_cover_letter.delay(
+        str(body.cover_letter_id),
+        body.experiences,
+        body.name,
+        body.target_company,
+        body.target_job,
+        body.school,
+        body.department,
+        body.motivation,
+        body.career_goal,
+        body.extra_notes,
+        body.questions
+    )
     response.status_code = 200
     return {
         "task_id": task.id

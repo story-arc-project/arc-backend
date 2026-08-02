@@ -29,3 +29,16 @@ class KeywordRequest(BaseModel):
     input: str
     keywords: list[str]
     target: str
+
+class CoverLetterRequest(BaseModel):
+    cover_letter_id: UUID
+    experiences: list[dict]
+    name: str = ""
+    target_company: str = ""
+    target_job: str = ""
+    school: str = ""
+    department: str = ""
+    motivation: str = ""
+    career_goal: str = ""
+    extra_notes: str = ""
+    questions: list[dict] | None = None
