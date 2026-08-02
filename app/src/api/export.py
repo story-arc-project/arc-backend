@@ -301,7 +301,7 @@ async def post_cover_letter(
                     message = "Access for the resource is not allowed"
                 )
         )
-        sources.append(experience.content)
+        sources.append(experience.model_dump(mode="json"))
     user_profile = session.exec(select(UserProfile).where(UserProfile.user_id == payload.sub)).one_or_none()
     if user_profile is None:
         raise AppException(
