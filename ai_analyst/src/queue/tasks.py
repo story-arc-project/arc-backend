@@ -6,6 +6,7 @@ from typing import Any, Literal
 import requests
 from ..const import SCHEMA_VERSIONS
 from src.queue.celery_app import celery
+import traceback
 
 AnalysisTypes = Literal["individual", "comprehensive", "keyword", "resume", "cover_letter"]
 
@@ -47,37 +48,49 @@ def call_success(analysis_type: AnalysisTypes, analysis_id: str, result: dict, v
 
 @celery.task
 def process_individual(analysis_id: str, user_input: list[str]):
-    from src.ai.individual import main as main_func
-    analysis = main_func(
-        user_input=user_input
-    )
-    if analysis.status == "error":
+    try:
+        from src.ai.individual import main as main_func
+        analysis = main_func(
+            user_input=user_input
+        )
+        if analysis.status == "error":
+            return call_failure("individual", analysis_id)
+        return call_success("individual", analysis_id, analysis.result, analysis.vector)
+    except:
+        traceback.print_exc()
         return call_failure("individual", analysis_id)
-    return call_success("individual", analysis_id, analysis.result, analysis.vector)
 
 @celery.task
 def process_comprehensive(analysis_id: str, user_input: list[str], school: str, department: str):
-    from src.ai.comprehensive import main as main_func
-    analysis = main_func(
-        user_input=user_input,
-        school=school,
-        department=department
-    )
-    if analysis.status == "error":
+    try:
+        from src.ai.comprehensive import main as main_func
+        analysis = main_func(
+            user_input=user_input,
+            school=school,
+            department=department
+        )
+        if analysis.status == "error":
+            return call_failure("comprehensive", analysis_id)
+        return call_success("comprehensive", analysis_id, analysis.result, analysis.vector)
+    except:
+        traceback.print_exc()
         return call_failure("comprehensive", analysis_id)
-    return call_success("comprehensive", analysis_id, analysis.result, analysis.vector)
 
 @celery.task
 def process_keyword(analysis_id: str, user_input: str, keywords: list[str], target: str):
-    from src.ai.keyword_analysis import main as main_func
-    analysis = main_func(
-        career_input=user_input,
-        keywords=keywords,
-        target=target
-    )
-    if analysis.status == "error":
+    try:
+        from src.ai.keyword_analysis import main as main_func
+        analysis = main_func(
+            career_input=user_input,
+            keywords=keywords,
+            target=target
+        )
+        if analysis.status == "error":
+            return call_failure("keyword", analysis_id)
+        return call_success("keyword", analysis_id, analysis.result, None)
+    except:
+        traceback.print_exc()
         return call_failure("keyword", analysis_id)
-    return call_success("keyword", analysis_id, analysis.result, None)
 
 @celery.task
 def process_resume(
@@ -92,21 +105,25 @@ def process_resume(
     links: str = "",
     language: str = "both",
 ):
-    from src.ai.resume import main as main_func
-    resume = main_func(
-        sources=sources,
-        name_ko=name_ko,
-        name_en=name_en,
-        email=email,
-        phone=phone,
-        school=school,
-        department=department,
-        links=links,
-        language=language
-    )
-    if resume.status == "error":
+    try:
+        from src.ai.resume import main as main_func
+        resume = main_func(
+            sources=sources,
+            name_ko=name_ko,
+            name_en=name_en,
+            email=email,
+            phone=phone,
+            school=school,
+            department=department,
+            links=links,
+            language=language
+        )
+        if resume.status == "error":
+            return call_failure("resume", resume_id)
+        return call_success("resume", resume_id, resume.result, None)
+    except:
+        traceback.print_exc()
         return call_failure("resume", resume_id)
-    return call_success("resume", resume_id, resume.result, None)
 
 @celery.task
 def process_cover_letter(
@@ -124,37 +141,41 @@ def process_cover_letter(
     job_key: str = "",
     region: str = "KR",
 ):
-    from src.ai.cover_letter import main as main_func, UserProfile
+    try:
+        from src.ai.cover_letter import main as main_func, UserProfile
 
-    bucketed: dict[str, list] = {}
-    for exp in experiences:
-        bucketed.setdefault(exp["type"], []).append(exp["content"])
+        bucketed: dict[str, list] = {}
+        for exp in experiences:
+            bucketed.setdefault(exp["type"], []).append(exp["content"])
 
-    user = UserProfile(
-        name=name,
-        target_company=target_company,
-        target_job=target_job,
-        education=[{"school": school, "major": department}] if school or department else [],
-        experiences=bucketed.get("experience", []),
-        projects=bucketed.get("project", []),
-        skills=bucketed.get("skill", []),
-        certifications=bucketed.get("certification", []),
-        awards=bucketed.get("award", []),
-        activities=bucketed.get("activity", []),
-        achievements=bucketed.get("achievement", []),
-        strengths=bucketed.get("strength", []),
-        motivation=motivation,
-        career_goal=career_goal,
-        extra_notes=extra_notes,
-    )
+        user = UserProfile(
+            name=name,
+            target_company=target_company,
+            target_job=target_job,
+            education=[{"school": school, "major": department}] if school or department else [],
+            experiences=bucketed.get("experience", []),
+            projects=bucketed.get("project", []),
+            skills=bucketed.get("skill", []),
+            certifications=bucketed.get("certification", []),
+            awards=bucketed.get("award", []),
+            activities=bucketed.get("activity", []),
+            achievements=bucketed.get("achievement", []),
+            strengths=bucketed.get("strength", []),
+            motivation=motivation,
+            career_goal=career_goal,
+            extra_notes=extra_notes,
+        )
 
-    response = main_func(
-        user=user,
-        job_key=job_key,
-        region=region,
-        questions=questions or [],
-    )
+        response = main_func(
+            user=user,
+            job_key=job_key,
+            region=region,
+            questions=questions or [],
+        )
 
-    if response.status == "error":
+        if response.status == "error":
+            return call_failure("cover_letter", cover_letter_id)
+        return call_success("cover_letter", cover_letter_id, response.result, None)
+    except:
+        traceback.print_exc()
         return call_failure("cover_letter", cover_letter_id)
-    return call_success("cover_letter", cover_letter_id, response.result, None)
