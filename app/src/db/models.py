@@ -1,5 +1,5 @@
 from datetime import datetime, date
-from typing import Any
+from typing import Any, Optional
 import uuid
 from sqlalchemy import DateTime, func, Column, UUID as SAUUID
 from sqlalchemy.sql.functions import now
@@ -519,3 +519,24 @@ class CoverLetter(SQLModel, table=True):
             nullable=False
         )
     )
+
+class AuditLog(SQLModel, table=True):
+    __tablename__: str = "audit_logs"  # pyright: ignore[reportIncompatibleVariableOverride]
+    id: uuid.UUID = Field(
+        default_factory=uuid.uuid4,
+        primary_key=True,
+        sa_type=SAUUID
+    )
+    actor_id: uuid.UUID = Field(foreign_key="users.id", index=True)
+    action: str = Field(index=True, max_length=100)
+    target_user_id: uuid.UUID = Field(foreign_key="users.id", index=True)
+    timestamp: datetime = Field(
+        default_factory=now,
+        sa_column=Column(
+            DateTime(timezone=True),
+            server_default=func.now(),
+            nullable=False
+        )
+    )
+    ip_address: Optional[str] = Field(default=None, max_length=45)
+    user_agent: Optional[str] = Field(default=None, max_length=512)
