@@ -7,10 +7,10 @@ import requests
 from datetime import datetime
 from zoneinfo import ZoneInfo
 
-from src.api.models.base import ErrorResponse, ResumeData, ResumeList, ResumeListData, UUIDData, UUIDDataWithTitleNone
+from src.api.models.base import CoverLetterData, CoverLetterList, CoverLetterListData, ErrorResponse, ResumeData, ResumeList, ResumeListData, UUIDData, UUIDDataWithTitleNone
 from src.api.models.exc import AppException
 from src.api.models.request import CoverLetterPostRequest, ResumePatchRequest, ResumePostRequest
-from src.api.models.response import DeleteSuccessResponse, PostSuccessResponse, ResumeListResponse, ResumeResponse
+from src.api.models.response import CoverLetterListResponse, CoverLetterResponse, DeleteSuccessResponse, PostSuccessResponse, ResumeListResponse, ResumeResponse
 from src.db.db import SessionDep
 from src.db.models import CoverLetter, Experience, Resume, User, UserProfile
 from src.enums import AnalysisStatus, ErrorResponseCode
@@ -354,5 +354,63 @@ async def post_cover_letter(
         message = "Cover letter generation queued successfully.",
         data = UUIDData(
             id = new_cover_letter.id
+        )
+    )
+
+@export_router.get("/cover_letter")
+async def get_cover_letters(session: SessionDep, response: Response, payload: Annotated[AccessTokenPayload, Depends(check_auth)]):
+    statement = (
+        select(CoverLetter)
+        .where(CoverLetter.user_id == payload.sub)
+    )
+    result = session.exec(statement).all()
+    response.status_code = 200
+    return CoverLetterListResponse(
+        message = "Fetch success.",
+        data = CoverLetterList(
+            count = len(result),
+            contents = [CoverLetterListData(
+                id = analysis.id,
+                status = analysis.status,
+                created_at = analysis.created_at,
+                updated_at = analysis.updated_at
+            ) for analysis in result]
+        )
+    )
+
+@export_router.get("/cover_letter/{cover_letter_id}")
+async def get_cover_letter(cover_letter_id: UUID, session: SessionDep, response: Response, payload: Annotated[AccessTokenPayload, Depends(check_auth)]):
+    letter = session.get(CoverLetter, cover_letter_id)
+    if letter is None:
+        raise AppException(
+            404,
+            ErrorResponse(
+                code = ErrorResponseCode.NOT_FOUND,
+                message = "Cover Letter not found"
+            )
+        )
+    if letter.user_id != payload.sub:
+        raise AppException(
+            403,
+            ErrorResponse(
+                code = ErrorResponseCode.RESOURCE_NOT_ALLOWED,
+                message = "Access for the resource is not allowed"
+            )
+        )
+    response.status_code = 200
+    return CoverLetterResponse(
+        message = "Fetch success.",
+        data = CoverLetterData(
+            id = letter.id,
+            status = letter.status,
+            target_company = letter.target_company,
+            target_job = letter.target_job,
+            job_key = letter.job_key,
+            region = letter.region,
+            questions = letter.questions,
+            experience_ids = letter.experience_ids,
+            created_at = letter.created_at,
+            updated_at = letter.updated_at,
+            result = letter.result
         )
     )

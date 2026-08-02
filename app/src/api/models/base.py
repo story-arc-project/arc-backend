@@ -275,3 +275,26 @@ class AdminCustomerDetail(BaseModel):
     customer: AdminCustomerDetailCustomer
     profile: AdminCustomerDetailProfile | None
     # activity: AdminCustomerDetailActivity
+
+class CoverLetterListData(BaseModel):
+    id: UUID
+    status: AnalysisStatus
+    created_at: datetime
+    updated_at: datetime
+
+class CoverLetterList(BaseModel):
+    count: int
+    contents: list[CoverLetterListData]
+
+class CoverLetterData(BaseModel):
+    id: UUID
+    status: AnalysisStatus
+    target_company: str | None
+    target_job: str | None
+    job_key: str
+    region: str
+    questions: list[dict[str, Any]] | None
+    experience_ids: list[UUID] | None
+    result: dict[str, Any] | None
+    created_at: datetime
+    updated_at: datetime
