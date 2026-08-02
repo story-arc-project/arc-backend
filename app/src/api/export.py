@@ -7,12 +7,12 @@ import requests
 from datetime import datetime
 from zoneinfo import ZoneInfo
 
-from src.api.models.base import ErrorResponse, ResumeData, ResumeList, ResumeListData, UUIDDataWithTitleNone
+from src.api.models.base import ErrorResponse, ResumeData, ResumeList, ResumeListData, UUIDData, UUIDDataWithTitleNone
 from src.api.models.exc import AppException
-from src.api.models.request import ResumePatchRequest, ResumePostRequest
+from src.api.models.request import CoverLetterPostRequest, ResumePatchRequest, ResumePostRequest
 from src.api.models.response import DeleteSuccessResponse, PostSuccessResponse, ResumeListResponse, ResumeResponse
 from src.db.db import SessionDep
-from src.db.models import Experience, Resume, User, UserProfile
+from src.db.models import CoverLetter, Experience, Resume, User, UserProfile
 from src.enums import AnalysisStatus, ErrorResponseCode
 from src.utils.auth import check_auth
 from src.utils.ratelimit import analysis_rate_limiters
@@ -266,4 +266,93 @@ async def remove_bookmark(resume_id: UUID, session: SessionDep, response: Respon
     response.status_code = 204
     return DeleteSuccessResponse(
         message="Resume removed."
+    )
+
+@export_router.post("/cover_letter")
+async def post_cover_letter(
+    body: CoverLetterPostRequest,
+    session: SessionDep,
+    response: Response,
+    payload: Annotated[AccessTokenPayload, Depends(check_auth)],
+    _user_limit: Annotated[None, Depends(analysis_rate_limiters["cover_letter"]["user"])],
+    _ip_limit: Annotated[None, Depends(analysis_rate_limiters["cover_letter"]["ip"])]
+):
+    if body.experience_ids is None:
+        statement = select(Experience).where(Experience.user_id == payload.sub)
+        result = session.exec(statement).all()
+    else:
+        statement = select(Experience).where(col(Experience.id).in_(body.experience_ids))
+        result = session.exec(statement).all()
+        if len(result) != len(set(body.experience_ids)):
+            raise AppException(
+                404,
+                ErrorResponse(
+                    code = ErrorResponseCode.NOT_FOUND,
+                    message = "One or more experiences not found"
+                )
+            )
+    sources: list[dict] = []
+    for experience in result:
+        if experience.user_id != payload.sub:
+            raise AppException(
+                403,
+                ErrorResponse(
+                    code = ErrorResponseCode.RESOURCE_NOT_ALLOWED,
+                    message = "Access for the resource is not allowed"
+                )
+        )
+        sources.append(experience.content)
+    user_profile = session.exec(select(UserProfile).where(UserProfile.user_id == payload.sub)).one_or_none()
+    if user_profile is None:
+        raise AppException(
+            404,
+            ErrorResponse(
+                code = ErrorResponseCode.NOT_FOUND,
+                message = "User profile not found"
+            )
+        )
+    new_cover_letter = CoverLetter(
+        user_id = payload.sub,
+        target_company = body.target_company,
+        target_job = body.target_job,
+        job_key = body.job_key,
+        region = body.region,
+        questions = body.questions,
+        experience_ids = body.experience_ids
+    )
+    try:
+        req = requests.post("http://ai_analyst:8001/cover_letter", json={
+            "cover_letter_id": str(new_cover_letter.id),
+            "experiences": sources,
+            "name": user_profile.name,
+            "target_company": body.target_company,
+            "target_job": body.target_job,
+            "school": user_profile.school,
+            "department": user_profile.department,
+            "motivation": body.motivation,
+            "career_goal": body.career_goal,
+            "extra_notes": body.extra_notes,
+            "questions": body.questions,
+        })
+        req.raise_for_status()
+        new_cover_letter.task_id = req.json()["task_id"]
+        session.add(new_cover_letter)
+        session.commit()
+        session.refresh(new_cover_letter)
+    except Exception:
+        traceback.print_exc()
+        session.rollback()
+        raise AppException(
+            500,
+            ErrorResponse(
+                code = ErrorResponseCode.SERVER_ERROR,
+                message = "An error occurred while processing the request"
+            )
+        )
+    response.status_code = 200
+    return PostSuccessResponse(
+        message = "Cover letter generation queued successfully.",
+        data = UUIDData(
+            id = new_cover_letter.id
+        )
     )

@@ -6,7 +6,7 @@ from src.api.models.base import ErrorResponse
 from src.api.models.exc import AppException
 from src.api.models.request import InternalRequestFailure, InternalRequestSuccess
 from src.db.db import SessionDep
-from src.db.models import ComprehensiveAnalysis, IndividualAnalysis, KeywordAnalysis, Resume
+from src.db.models import ComprehensiveAnalysis, CoverLetter, IndividualAnalysis, KeywordAnalysis, Resume
 from src.enums import AnalysisStatus, ErrorResponseCode
 from src.utils.internal import check_internal
 
@@ -23,6 +23,8 @@ async def fail_individual(analysis_type: str, body: Annotated[dict, Depends(chec
         statement = select(KeywordAnalysis).where(KeywordAnalysis.id == body_validated.analysis_id)
     elif analysis_type == "resume":
         statement = select(Resume).where(Resume.id == body_validated.analysis_id)
+    elif analysis_type == "cover_letter":
+        statement = select(CoverLetter).where(CoverLetter.id == body_validated.analysis_id)
     else:
         raise AppException(
             status_code = 400,
@@ -128,6 +130,26 @@ async def success_keyword(body: Annotated[dict, Depends(check_internal)], sessio
 async def success_resume(body: Annotated[dict, Depends(check_internal)], session: SessionDep, response: Response):
     body_validated = InternalRequestSuccess.model_validate(body)
     statement = select(Resume).where(Resume.id == body_validated.analysis_id)
+    resume = session.exec(statement).one_or_none()
+    if resume is None:
+        raise AppException(
+            status_code = 404,
+            error = ErrorResponse(
+                code = ErrorResponseCode.NOT_FOUND,
+                message = ""
+            )
+        )
+    resume.result = body_validated.result
+    resume.status = AnalysisStatus.SUCCESS
+    session.add(resume)
+    session.commit()
+    response.status_code = 200
+    return {}
+
+@internal_router.post("/cover_letter/success")
+async def success_cover_letter(body: Annotated[dict, Depends(check_internal)], session: SessionDep, response: Response):
+    body_validated = InternalRequestSuccess.model_validate(body)
+    statement = select(CoverLetter).where(CoverLetter.id == body_validated.analysis_id)
     resume = session.exec(statement).one_or_none()
     if resume is None:
         raise AppException(

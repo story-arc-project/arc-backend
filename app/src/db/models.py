@@ -475,3 +475,47 @@ class AnalysisBookmark(SQLModel, table=True):
             nullable=False
         )
     )
+
+class CoverLetter(SQLModel, table=True):
+    __tablename__: str = "cover_letters"  # pyright: ignore[reportIncompatibleVariableOverride]
+    id: uuid.UUID = Field(
+        default_factory=uuid.uuid4,
+        primary_key=True,
+        sa_type=SAUUID
+    )
+    user_id: uuid.UUID = Field(foreign_key="users.id", index=True)
+    task_id: str | None = Field(nullable=True, index=True, default=None)
+    status: AnalysisStatus = AnalysisStatus.QUEUED
+    target_company: str | None = None
+    target_job: str | None = None
+    job_key: str = "general"
+    region: str = "KR"
+    questions: list[dict[str, Any]] | None = Field(
+        default=None,
+        sa_column=Column(JSONB, nullable=True, default=None)
+    )
+    experience_ids: list[uuid.UUID] | None = Field(
+        default=None,
+        sa_column=Column(ARRAY(SAUUID), nullable=True, default=None)
+    )
+    result: dict[str, Any] | None = Field(
+        default=None,
+        sa_column=Column(JSONB, nullable=True, default=None)
+    )
+    created_at: datetime = Field(
+        default_factory=now,
+        sa_column=Column(
+            DateTime(timezone=True),
+            server_default=func.now(),
+            nullable=False
+        )
+    )
+    updated_at: datetime = Field(
+        default_factory=now,
+        sa_column=Column(
+            DateTime(timezone=True),
+            server_default=func.now(),
+            onupdate=func.now(),
+            nullable=False
+        )
+    )

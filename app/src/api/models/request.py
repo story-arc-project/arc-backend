@@ -256,6 +256,24 @@ class ResumePostRequest(BaseModel):
             raise ValueError("experience_ids must not be empty if provided")
         return v
 
+class CoverLetterPostRequest(BaseModel):
+    experience_ids: list[UUID] | None = None
+    target_company: str = ""
+    target_job: str = ""
+    questions: list[dict[str, Any]] | None = None
+    job_key: str = ""
+    region: Literal["KR", "US"] = "KR"
+    motivation: str = ""
+    career_goal: str = ""
+    extra_notes: str = ""
+
+    @field_validator("experience_ids", mode="after")
+    @classmethod
+    def validate_experience_ids(cls, v: list[UUID] | None):
+        if v is not None and len(v) == 0:
+            raise ValueError("experience_ids must not be empty if provided")
+        return v
+
 class ResumePatchRequest(BaseModel):
     title: ValidTitle | None = None
     result: dict[str, Any] | None = None

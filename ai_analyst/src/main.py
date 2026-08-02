@@ -48,7 +48,7 @@ async def cover_letter(body: Annotated[CoverLetterRequest, Body()], response: Re
         body.target_company,
         body.target_job,
         body.school,
-        body.department,
+        body.department if body.department is not None else "",
         body.motivation,
         body.career_goal,
         body.extra_notes,

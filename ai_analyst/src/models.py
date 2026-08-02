@@ -37,7 +37,7 @@ class CoverLetterRequest(BaseModel):
     target_company: str = ""
     target_job: str = ""
     school: str = ""
-    department: str = ""
+    department: str | None = None
     motivation: str = ""
     career_goal: str = ""
     extra_notes: str = ""
