@@ -232,7 +232,7 @@ async def patch_resume(
     )
 
 @export_router.delete("/resume/{resume_id}")
-async def remove_bookmark(resume_id: UUID, session: SessionDep, response: Response, payload: Annotated[AccessTokenPayload, Depends(check_auth)]):
+async def remove_resume(resume_id: UUID, session: SessionDep, response: Response, payload: Annotated[AccessTokenPayload, Depends(check_auth)]):
     resume = session.get(Resume, resume_id)
     if resume is None:
         raise AppException(
