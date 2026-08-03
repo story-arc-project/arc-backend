@@ -119,26 +119,9 @@ async def get_individual_analysis(analysis_id: UUID, session: SessionDep, respon
         )
     )
 
-@analysis_router.post("/comprehensive")
-async def post_comprehensive_analysis(
-    body: ComprehensiveAnalysisPostRequest,
-    session: SessionDep,
-    response: Response,
-    payload: Annotated[AccessTokenPayload, Depends(check_auth)],
-    _user_limit: Annotated[None, Depends(analysis_rate_limiters["comprehensive"]["user"])],
-    _ip_limit: Annotated[None, Depends(analysis_rate_limiters["comprehensive"]["ip"])]
-):
-    statement = select(Experience).where(col(Experience.id).in_(body.experiences))
+def fetch_owned_experiences(session: SessionDep, experience_ids: list[UUID], user_id: UUID):
+    statement = select(Experience).where(col(Experience.id).in_(experience_ids))
     result = session.exec(statement).all()
-    user_profile = session.exec(select(UserProfile).where(UserProfile.user_id == payload.sub)).one_or_none()
-    if user_profile is None:
-        raise AppException(
-            404,
-            ErrorResponse(
-                code = ErrorResponseCode.NOT_FOUND,
-                message = "User profile not found"
-            )
-        )
     if len(result) == 0:
         raise AppException(
             status_code = 400,
@@ -147,9 +130,8 @@ async def post_comprehensive_analysis(
                 message = "No available experiences"
             )
         )
-    user_input: list[str] = []
     for experience in result:
-        if experience.user_id != payload.sub:
+        if experience.user_id != user_id:
             raise AppException(
                 403,
                 ErrorResponse(
@@ -157,8 +139,24 @@ async def post_comprehensive_analysis(
                     message = "Access for the resource is not allowed"
                 )
             )
-        user_input.append(str(experience.content))
-    experience_ids = [experience.id for experience in result]
+    return result
+
+def pre_process_comprehensive_analysis(session: SessionDep, experience_ids: list[UUID], user_id: UUID):
+    user_profile = session.exec(select(UserProfile).where(UserProfile.user_id == user_id)).one_or_none()
+    if user_profile is None:
+        raise AppException(
+            404,
+            ErrorResponse(
+                code = ErrorResponseCode.NOT_FOUND,
+                message = "User profile not found"
+            )
+        )
+    experiences = fetch_owned_experiences(session, experience_ids, user_id)
+    user_input: list[str] = [str(experience.content) for experience in experiences]
+    experience_ids = [experience.id for experience in experiences]
+    return user_profile, user_input, experience_ids
+
+def generate_comprehensive_analysis_title(session: SessionDep, experience_ids: list[UUID]):
     titles = get_experience_titles(session, set(experience_ids))
     valid_titles = [title for title in titles.values() if len(title) != 0]
     if len(valid_titles) == 0:
@@ -167,23 +165,21 @@ async def post_comprehensive_analysis(
         title = f"{valid_titles[0]} 분석"
     else:
         title = f"{valid_titles[0]} 등 {len(experience_ids)}개 분석"
-    new_comprehensive_analysis = ComprehensiveAnalysis(
-        user_id = payload.sub,
-        experience_ids = [experience.id for experience in result],
-        title = title
-    )
+    return title
+
+def process_comprehensive_analysis(analysis: ComprehensiveAnalysis, user_input: list[str], user_profile: UserProfile, session: SessionDep, response: Response):
     req = requests.post("http://ai_analyst:8001/comprehensive", json={
-        "analysis_id": str(new_comprehensive_analysis.id),
+        "analysis_id": str(analysis.id),
         "input": user_input,
         "school": user_profile.school,
         "department": user_profile.department
     })
     req.raise_for_status()
-    new_comprehensive_analysis.task_id = req.json()["task_id"]
+    analysis.task_id = req.json()["task_id"]
     try:
-        session.add(new_comprehensive_analysis)
+        session.add(analysis)
         session.commit()
-        session.refresh(new_comprehensive_analysis)
+        session.refresh(analysis)
     except Exception:
         traceback.print_exc()
         session.rollback()
@@ -196,12 +192,30 @@ async def post_comprehensive_analysis(
         )
     response.status_code = 200
     return PostSuccessResponse(
-        message = "Queued new comprehensive analysis.",
+        message = "Queued comprehensive analysis.",
         data = UUIDDataWithTitle(
-            id = new_comprehensive_analysis.id,
-            title = title
+            id = analysis.id,
+            title = analysis.title
         )
     )
+
+@analysis_router.post("/comprehensive")
+async def post_comprehensive_analysis(
+    body: ComprehensiveAnalysisPostRequest,
+    session: SessionDep,
+    response: Response,
+    payload: Annotated[AccessTokenPayload, Depends(check_auth)],
+    _user_limit: Annotated[None, Depends(analysis_rate_limiters["comprehensive"]["user"])],
+    _ip_limit: Annotated[None, Depends(analysis_rate_limiters["comprehensive"]["ip"])]
+):
+    user_profile, user_input, experience_ids = pre_process_comprehensive_analysis(session, body.experiences, payload.sub)
+    title = generate_comprehensive_analysis_title(session, experience_ids)
+    new_comprehensive_analysis = ComprehensiveAnalysis(
+        user_id = payload.sub,
+        experience_ids = experience_ids,
+        title = title
+    )
+    return process_comprehensive_analysis(new_comprehensive_analysis, user_input, user_profile, session, response)
 
 @analysis_router.patch("/comprehensive/{analysis_id}")
 async def patch_comprehensive_analysis(
@@ -797,3 +811,4 @@ async def remove_bookmark(analysis_id: UUID, session: SessionDep, response: Resp
     return DeleteSuccessResponse(
         message="Bookmark removed."
     )
+
