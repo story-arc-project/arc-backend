@@ -14,7 +14,7 @@ from src.api.models.request import ComprehensiveAnalysisPatchRequest, Comprehens
 from src.api.models.response import BookmarkListResponse, ComprehensiveAnalysisListResponse, ComprehensiveAnalysisResponse, DeleteSuccessResponse, IndividualAnalysisListResponse, IndividualAnalysisResponse, KeywordAnalysisListResponse, KeywordAnalysisResponse, PostSuccessResponse
 from src.db.db import SessionDep
 from src.db.models import AnalysisBookmark, ComprehensiveAnalysis, Experience, IndividualAnalysis, KeywordAnalysis, UserProfile
-from src.enums import AnalysisType, ErrorResponseCode
+from src.enums import AnalysisStatus, AnalysisType, ErrorResponseCode
 from src.utils.auth import check_auth
 from src.utils.ratelimit import analysis_rate_limiters
 from src.utils.token import AccessTokenPayload
@@ -176,6 +176,7 @@ def process_comprehensive_analysis(analysis: ComprehensiveAnalysis, user_input: 
     })
     req.raise_for_status()
     analysis.task_id = req.json()["task_id"]
+    analysis.status = AnalysisStatus.QUEUED
     try:
         session.add(analysis)
         session.commit()
@@ -216,6 +217,43 @@ async def post_comprehensive_analysis(
         title = title
     )
     return process_comprehensive_analysis(new_comprehensive_analysis, user_input, user_profile, session, response)
+
+@analysis_router.post("/comprehensive/{analysis_id}/retry")
+async def retry_comprehensive_analysis(
+    analysis_id: UUID,
+    session: SessionDep,
+    response: Response,
+    payload: Annotated[AccessTokenPayload, Depends(check_auth)],
+    _user_limit: Annotated[None, Depends(analysis_rate_limiters["comprehensive"]["user"])],
+    _ip_limit: Annotated[None, Depends(analysis_rate_limiters["comprehensive"]["ip"])]
+):
+    analysis = session.get(ComprehensiveAnalysis, analysis_id)
+    if analysis is None:
+        raise AppException(
+            404,
+            ErrorResponse(
+                code = ErrorResponseCode.NOT_FOUND,
+                message = "Comprehensive analysis not found"
+            )
+        )
+    if analysis.user_id != payload.sub:
+        raise AppException(
+            403,
+            ErrorResponse(
+                code = ErrorResponseCode.RESOURCE_NOT_ALLOWED,
+                message = "Access for the resource is not allowed"
+            )
+        )
+    if analysis.status != AnalysisStatus.FAILED:
+        raise AppException(
+            400,
+            ErrorResponse(
+                code = ErrorResponseCode.BAD_REQUEST,
+                message = "Analysis is not in failed status"
+            )
+        )
+    user_profile, user_input, _ = pre_process_comprehensive_analysis(session, analysis.experience_ids, payload.sub)
+    return process_comprehensive_analysis(analysis, user_input, user_profile, session, response)
 
 @analysis_router.patch("/comprehensive/{analysis_id}")
 async def patch_comprehensive_analysis(
