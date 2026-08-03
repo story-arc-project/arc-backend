@@ -168,16 +168,16 @@ def generate_comprehensive_analysis_title(session: SessionDep, experience_ids: l
     return title
 
 def process_comprehensive_analysis(analysis: ComprehensiveAnalysis, user_input: list[str], user_profile: UserProfile, session: SessionDep, response: Response):
-    req = requests.post("http://ai_analyst:8001/comprehensive", json={
-        "analysis_id": str(analysis.id),
-        "input": user_input,
-        "school": user_profile.school,
-        "department": user_profile.department
-    })
-    req.raise_for_status()
-    analysis.task_id = req.json()["task_id"]
-    analysis.status = AnalysisStatus.QUEUED
     try:
+        req = requests.post("http://ai_analyst:8001/comprehensive", json={
+            "analysis_id": str(analysis.id),
+            "input": user_input,
+            "school": user_profile.school,
+            "department": user_profile.department
+        })
+        req.raise_for_status()
+        analysis.task_id = req.json()["task_id"]
+        analysis.status = AnalysisStatus.QUEUED
         session.add(analysis)
         session.commit()
         session.refresh(analysis)
