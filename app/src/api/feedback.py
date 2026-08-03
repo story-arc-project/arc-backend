@@ -43,7 +43,7 @@ def record_prompt_shown(
 
 @feedback_router.post("/campaigns/{campaign_id}/responses")
 def record_response(
-    campaign_id: str,
+    campaign_id: Annotated[str, Depends(validate_campaign_id)],
     body: FeedbackResponseRequest,
     session: SessionDep,
     payload: Annotated[AccessTokenPayload, Depends(check_auth)]
