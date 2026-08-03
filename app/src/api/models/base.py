@@ -250,6 +250,10 @@ class AdminCustomerListData(BaseModel):
     created_at: datetime
     withdrawn_at: datetime | None
 
+class AdminCustomerList(BaseModel):
+    count: int
+    contents: list[AdminCustomerListData]
+
 class QueryParamsAuditLog(BaseModel):
     q: Optional[str]
     limit: Optional[int]

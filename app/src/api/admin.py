@@ -1,16 +1,18 @@
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Depends, Query, Request
 from sqlalchemy import ARRAY, Enum
 from sqlalchemy.sql.elements import Label
-from sqlmodel import and_, col, select, func
+from sqlmodel import and_, col, or_, select, func
 from typing import Annotated, cast
 from uuid import UUID
 
-from src.api.models.base import AdminActivityStat, AdminCustomerDetail, AdminCustomerDetailActivity, AdminCustomerDetailCustomer, AdminCustomerDetailProfile, AdminCustomerListData, ErrorResponse, SuccessResponseWithData
+from src.api.models.base import AdminActivityStat, AdminCustomerDetail, AdminCustomerDetailActivity, AdminCustomerDetailCustomer, AdminCustomerDetailProfile, AdminCustomerList, AdminCustomerListData, ErrorResponse, QueryParamsAuditLog, SuccessResponseWithData
 from src.api.models.exc import AppException
+from src.api.models.request import ListCustomersQueryParams
 from src.db.db import SessionDep
 from src.db.models import ComprehensiveAnalysis, CoverLetter, DeletedUser, Experience, IndividualAnalysis, KeywordAnalysis, OauthAccount, Resume, User, UserProfile
 from src.enums import AnalysisStatus, AuditAction, ErrorResponseCode, OauthProviderId
 from src.utils.admin import log_audit, require_admin
+from src.utils.db import parse_sort
 from src.utils.token import AccessTokenPayload
 
 admin_router = APIRouter()
@@ -129,8 +131,11 @@ def get_customer(customer_id: UUID, session: SessionDep, payload: Annotated[Acce
     return SuccessResponseWithData(message="found", data=customer_detail)
 
 @admin_router.get("/customers")
-def list_customers(session: SessionDep, payload: Annotated[AccessTokenPayload, Depends(require_admin)], request: Request):
-    stmt = (
+def list_customers(query: Annotated[ListCustomersQueryParams, Query()], session: SessionDep, payload: Annotated[AccessTokenPayload, Depends(require_admin)], request: Request):
+    sort_field_name, sort_is_descending = parse_sort(query.sort, ["created_at"])
+    sort_column = getattr(User, sort_field_name)
+    order_clause = sort_column.desc() if sort_is_descending else sort_column.asc()
+    base_stmt = (
         select(
             User,
             UserProfile,
@@ -141,7 +146,14 @@ def list_customers(session: SessionDep, payload: Annotated[AccessTokenPayload, D
         .outerjoin(DeletedUser, and_(DeletedUser.user_id == User.id))
         .group_by(col(User.id), col(UserProfile.id), col(DeletedUser.user_id))
     )
-    rows = session.exec(stmt).all()
+    if query.q:
+        base_stmt = base_stmt.where(
+            or_(col(User.email).ilike(f"%{query.q}%"), col(UserProfile.name).ilike(f"%{query.q}%"))
+        )
+    count_stmt = select(func.count()).select_from(base_stmt.subquery())
+    count = session.exec(count_stmt).one()
+    page_stmt = base_stmt.order_by(order_clause).offset(query.offset).limit(query.limit)
+    rows = session.exec(page_stmt).all()
 
     customers: list[AdminCustomerListData] = []
     for user, profile, withdrawn_at in rows:
@@ -155,14 +167,26 @@ def list_customers(session: SessionDep, payload: Annotated[AccessTokenPayload, D
             withdrawn_at = withdrawn_at,
         ))
 
+    query_params = QueryParamsAuditLog(
+        q = query.q,
+        limit = query.limit,
+        offset = query.offset,
+        sort = query.sort,
+        result_user_ids = [str(user.id) for user, _, _ in rows]
+    )
+
     log_audit(
         AuditAction.CUSTOMER_LIST,
         payload,
         None,
         request,
-        {
-            "result_user_ids": [str(user.id) for user, _, _ in rows]
-        }
+        query_params
     )
 
-    return SuccessResponseWithData(message="found", data=customers)
+    return SuccessResponseWithData(
+        message = "found",
+        data = AdminCustomerList(
+            count = count,
+            contents = customers
+        )
+    )

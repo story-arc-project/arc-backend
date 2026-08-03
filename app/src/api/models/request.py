@@ -371,7 +371,7 @@ class InternalRequestSuccess(BaseModel):
         return v
 
 class ListCustomersQueryParams(BaseModel):
-    q: Optional[str]
+    q: Optional[str] = None
     limit: int = 20
     offset: int = 0
     sort: str = "-created_at"
