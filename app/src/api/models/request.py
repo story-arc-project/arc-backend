@@ -1,5 +1,5 @@
 from datetime import date
-from typing import Annotated, Any, Literal
+from typing import Annotated, Any, Literal, Optional
 from uuid import UUID
 from pydantic import BaseModel, EmailStr, field_validator, model_validator, AfterValidator, Field
 import re
@@ -368,4 +368,17 @@ class InternalRequestSuccess(BaseModel):
     def result_must_have_schema_version(cls, v: dict[str, Any]) -> dict[str, Any]:
         if "schema_version" not in v:
             raise ValueError("result must contain 'schema_version' key")
+        return v
+
+class ListCustomersQueryParams(BaseModel):
+    q: Optional[str]
+    limit: int = 20
+    offset: int = 0
+    sort: str = "-created_at"
+
+    @field_validator("limit", mode="after")
+    @classmethod
+    def validate_limit(cls, v: int):
+        if v is not None and (v < 1 or v > 100):
+            raise ValueError("limit must be between 1 and 100")
         return v

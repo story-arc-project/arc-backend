@@ -3,7 +3,7 @@ from os import getenv
 from typing import Annotated, Optional
 from uuid import UUID
 
-from src.api.models.base import ErrorResponse
+from src.api.models.base import ErrorResponse, QueryParamsAuditLog
 from src.api.models.exc import AppException
 from src.const import ADMIN_PAGE_NOT_ALLOWED
 from src.db.db import SessionDep, session_scope
@@ -34,13 +34,13 @@ async def require_admin(session: SessionDep, accessToken: Annotated[str | None, 
         )
     return payload
 
-def log_audit(action: AuditAction, payload: AccessTokenPayload, target_user_id: Optional[UUID], request: Request, query_params: Optional[dict]):
+def log_audit(action: AuditAction, payload: AccessTokenPayload, target_user_id: Optional[UUID], request: Request, query_params: Optional[QueryParamsAuditLog]):
     with session_scope() as audit_session:
         new_audit_log = AuditLog(
             actor_id = payload.sub,
             action = action,
             target_user_id = target_user_id,
-            query_params = query_params,
+            query_params = query_params.model_dump(mode="json") if query_params else None,
             ip_address = get_ip(request),
             user_agent = get_user_agent(request)
         )

@@ -1,7 +1,7 @@
 from datetime import date, datetime
 from uuid import UUID
 from pydantic import BaseModel, EmailStr, ConfigDict
-from typing import Any, Generic, Literal, TypeVar
+from typing import Any, Generic, Literal, Optional, TypeVar
 
 from src.enums import Affiliation, AnalysisStatus, AnalysisType, Language, ErrorResponseCode, OauthProviderId
 
@@ -249,6 +249,13 @@ class AdminCustomerListData(BaseModel):
     onboarded: bool
     created_at: datetime
     withdrawn_at: datetime | None
+
+class QueryParamsAuditLog(BaseModel):
+    q: Optional[str]
+    limit: Optional[int]
+    offset: Optional[int]
+    sort: Optional[str]
+    result_user_ids: Optional[list[str]]
 
 class AdminCustomerDetailCustomer(BaseModel):
     id: UUID
