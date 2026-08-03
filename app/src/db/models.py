@@ -530,7 +530,11 @@ class AuditLog(SQLModel, table=True):
     )
     actor_id: uuid.UUID = Field(foreign_key="users.id", index=True)
     action: AuditAction = Field(index=True)
-    target_user_id: uuid.UUID = Field(foreign_key="users.id", index=True)
+    target_user_id: Optional[uuid.UUID] = Field(foreign_key="users.id", index=True, default=None)
+    query_params: Optional[dict] = Field(
+        default=None,
+        sa_column=Column(JSONB, nullable=True)
+    )
     timestamp: datetime = Field(
         default_factory=now,
         sa_column=Column(
