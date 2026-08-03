@@ -1,9 +1,9 @@
 from datetime import datetime, date
 from typing import Any, Optional
 import uuid
-from sqlalchemy import DateTime, func, Column, UUID as SAUUID
+from sqlalchemy import CheckConstraint, DateTime, func, Column, UUID as SAUUID
 from sqlalchemy.sql.functions import now
-from src.enums import Affiliation, AnalysisStatus, AnalysisType, AuditAction, Language, OauthProviderId, UserStatus
+from src.enums import Affiliation, AnalysisStatus, AnalysisType, AuditAction, FeedbackTriggerSource, Language, OauthProviderId, UserStatus
 from sqlmodel import ARRAY, Field, SQLModel, String, UniqueConstraint
 from sqlalchemy.dialects.postgresql import JSONB
 from pgvector.sqlalchemy import Vector
@@ -545,3 +545,49 @@ class AuditLog(SQLModel, table=True):
     )
     ip_address: Optional[str] = Field(default=None, max_length=45)
     user_agent: Optional[str] = Field(default=None, max_length=512)
+
+class FeedbackResponse(SQLModel, table=True):
+    __tablename__: str = "feedback_responses"  # pyright: ignore[reportIncompatibleVariableOverride]
+    id: uuid.UUID = Field(
+        default_factory=uuid.uuid4,
+        primary_key=True,
+        sa_type=SAUUID
+    )
+    user_id: uuid.UUID = Field(foreign_key="users.id", sa_type=SAUUID, index=True)
+    campaign_id: str
+    trigger_source: Optional[FeedbackTriggerSource] = Field(default=None, nullable=True)
+    rating: Optional[int] = Field(default=None, nullable=True)
+    comment: Optional[str] = Field(default=None, max_length=500, nullable=True)
+    responded_at: Optional[datetime] = Field(
+        default=None,
+        sa_column=Column(
+            DateTime(timezone=True),
+            nullable=True
+        )
+    )
+    context: Optional[dict[str, Any]] = Field(
+        default=None,
+        sa_column=Column(JSONB, nullable=True)
+    )
+    created_at: datetime = Field(
+        default_factory=now,
+        sa_column=Column(
+            DateTime(timezone=True),
+            server_default=func.now(),
+            nullable=False
+        )
+    )
+    updated_at: datetime = Field(
+        default_factory=now,
+        sa_column=Column(
+            DateTime(timezone=True),
+            server_default=func.now(),
+            onupdate=func.now(),
+            nullable=False
+        )
+    )
+
+    __table_args__ = (
+        UniqueConstraint("user_id", "campaign_id", name="uq_feedback_user_campaign"),
+        CheckConstraint("rating BETWEEN 1 AND 5", name="ck_feedback_rating_range"),
+    )

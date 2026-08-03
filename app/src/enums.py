@@ -64,3 +64,7 @@ class Language(str, enum.Enum):
 class AuditAction(str, enum.Enum):
     CUSTOMER_LIST = "customer.list"
     CUSTOMER_VIEW = "customer.view"
+
+class FeedbackTriggerSource(str, enum.Enum):
+    analysis_completed = "analysis_completed"
+    experience_threshold = "experience_threshold"
