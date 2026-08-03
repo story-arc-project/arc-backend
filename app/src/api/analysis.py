@@ -523,6 +523,43 @@ async def post_keyword_analysis(
     )
     return process_keyword_analysis(new_keyword_analysis, user_input, session, response)
 
+@analysis_router.post("/keyword/{analysis_id}/retry")
+async def retry_keyword_analysis(
+    analysis_id: UUID,
+    session: SessionDep,
+    response: Response,
+    payload: Annotated[AccessTokenPayload, Depends(check_auth)],
+    _user_limit: Annotated[None, Depends(analysis_rate_limiters["keyword"]["user"])],
+    _ip_limit: Annotated[None, Depends(analysis_rate_limiters["keyword"]["ip"])]
+):
+    analysis = session.get(KeywordAnalysis, analysis_id)
+    if analysis is None:
+        raise AppException(
+            404,
+            ErrorResponse(
+                code = ErrorResponseCode.NOT_FOUND,
+                message = "Keyword analysis not found"
+            )
+        )
+    if analysis.user_id != payload.sub:
+        raise AppException(
+            403,
+            ErrorResponse(
+                code = ErrorResponseCode.RESOURCE_NOT_ALLOWED,
+                message = "Access for the resource is not allowed"
+            )
+        )
+    if analysis.status != AnalysisStatus.FAILED:
+        raise AppException(
+            400,
+            ErrorResponse(
+                code = ErrorResponseCode.BAD_REQUEST,
+                message = "Analysis is not in failed status"
+            )
+        )
+    user_input = pre_process_keyword_analysis(session, payload.sub)
+    return process_keyword_analysis(analysis, user_input, session, response)
+
 @analysis_router.patch("/keyword/{analysis_id}")
 async def patch_keyword_analysis(
     analysis_id: UUID,
