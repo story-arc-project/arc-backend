@@ -6,6 +6,7 @@ from os import getenv
 from fastapi.responses import JSONResponse
 from src.api.admin import admin_router
 from src.api.analysis import analysis_router
+from src.api.docs import docs_router
 from src.api.experiences import experiences_router
 from src.api.export import export_router
 from src.api.files import files_router
@@ -18,7 +19,7 @@ from src.const import ADMIN_PAGE_NOT_ALLOWED
 from src.enums import ErrorResponseCode
 from src.utils.admin import require_admin
 
-app = FastAPI()
+app = FastAPI(docs_url=None, redoc_url=None, openapi_url=None)
 
 origins = getenv("FRONTEND_HOSTS", "").split(",")
 
@@ -104,5 +105,9 @@ app.include_router(
 app.include_router(
     admin_router,
     prefix="/admin",
+    dependencies=[Depends(require_admin)]
+)
+app.include_router(
+    docs_router,
     dependencies=[Depends(require_admin)]
 )
