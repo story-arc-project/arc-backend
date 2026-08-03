@@ -23,6 +23,7 @@ class User(SQLModel, table=True):
         sa_column=Column(
             DateTime(timezone=True),
             server_default=func.now(),
+            index=True,
             nullable=False
         )
     )
