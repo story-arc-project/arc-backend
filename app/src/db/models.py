@@ -3,7 +3,7 @@ from typing import Any, Optional
 import uuid
 from sqlalchemy import DateTime, func, Column, UUID as SAUUID
 from sqlalchemy.sql.functions import now
-from src.enums import Affiliation, AnalysisStatus, AnalysisType, Language, OauthProviderId, UserStatus
+from src.enums import Affiliation, AnalysisStatus, AnalysisType, AuditAction, Language, OauthProviderId, UserStatus
 from sqlmodel import ARRAY, Field, SQLModel, String, UniqueConstraint
 from sqlalchemy.dialects.postgresql import JSONB
 from pgvector.sqlalchemy import Vector
@@ -528,7 +528,7 @@ class AuditLog(SQLModel, table=True):
         sa_type=SAUUID
     )
     actor_id: uuid.UUID = Field(foreign_key="users.id", index=True)
-    action: str = Field(index=True, max_length=100)
+    action: AuditAction = Field(index=True)
     target_user_id: uuid.UUID = Field(foreign_key="users.id", index=True)
     timestamp: datetime = Field(
         default_factory=now,

@@ -60,3 +60,7 @@ class AnalysisType(str, enum.Enum):
 class Language(str, enum.Enum):
     ko = "ko"
     en = "en"
+
+class AuditAction(str, enum.Enum):
+    CUSTOMER_LIST = "customer.list"
+    CUSTOMER_VIEW = "customer.view"

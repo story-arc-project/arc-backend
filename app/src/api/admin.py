@@ -1,15 +1,17 @@
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends, Request
 from sqlalchemy import ARRAY, Enum
 from sqlalchemy.sql.elements import Label
 from sqlmodel import and_, col, select, func
-from typing import cast
+from typing import Annotated, cast
 from uuid import UUID
 
 from src.api.models.base import AdminCustomerDetail, AdminCustomerDetailCustomer, AdminCustomerDetailProfile, ErrorResponse, SuccessResponseWithData
 from src.api.models.exc import AppException
 from src.db.db import SessionDep
 from src.db.models import DeletedUser, OauthAccount, User, UserProfile
-from src.enums import ErrorResponseCode, OauthProviderId
+from src.enums import AuditAction, ErrorResponseCode, OauthProviderId
+from src.utils.admin import log_audit, require_admin
+from src.utils.token import AccessTokenPayload
 
 admin_router = APIRouter()
 
@@ -27,7 +29,7 @@ providers_col = cast(
 )
 
 @admin_router.get("/customers/{customer_id}")
-def get_customer(customer_id: UUID, session: SessionDep):
+def get_customer(customer_id: UUID, session: SessionDep, payload: Annotated[AccessTokenPayload, Depends(require_admin)], request: Request):
     stmt = (
         select(
             User,
@@ -74,6 +76,13 @@ def get_customer(customer_id: UUID, session: SessionDep):
         #     keyword_analyses = get_activity_stat(session, KeywordAnalysis, customer_id, has_status=True),
         #     resumes = get_activity_stat(session, Resume, customer_id, has_status=True),
         # )
+    )
+
+    log_audit(
+        AuditAction.CUSTOMER_VIEW,
+        payload,
+        user.id,
+        request
     )
 
     return SuccessResponseWithData(message="found", data=customer_detail)

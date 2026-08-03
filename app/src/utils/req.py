@@ -10,3 +10,7 @@ def get_ip(request: Request):
             return None
         client_ip = client.host
     return client_ip
+
+def get_user_agent(request: Request):
+    user_agent = request.headers.get("user-agent")
+    return user_agent
