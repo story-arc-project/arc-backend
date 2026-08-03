@@ -1,4 +1,4 @@
-from src.api.models.base import AuthMeData, BookmarkData, ComprehensiveAnalysisData, ComprehensiveAnalysisList, CoverLetterData, CoverLetterList, FileMetadataPublic, IndividualAnalysisData, IndividualAnalysisList, OnboardResponseData, PresignUploadData, RefreshData, ResumeData, ResumeList, SuccessResponseWithData, LoginData, SuccessResponse, UUIDData, KeywordAnalysisList, KeywordAnalysisData, ErrorResponse
+from src.api.models.base import AuthMeData, BookmarkData, ComprehensiveAnalysisData, ComprehensiveAnalysisList, CoverLetterData, CoverLetterList, FileMetadataPublic, IndividualAnalysisData, IndividualAnalysisList, OnboardResponseData, PresignUploadData, PromptShownData, RefreshData, ResumeData, ResumeList, SuccessResponseWithData, LoginData, SuccessResponse, UUIDData, KeywordAnalysisList, KeywordAnalysisData, ErrorResponse
 
 class LoginResponse(SuccessResponseWithData[LoginData]):
     pass
@@ -77,3 +77,6 @@ class CoverLetterListResponse(SuccessResponseWithData[CoverLetterList]):
 
 class CoverLetterResponse(SuccessResponseWithData[CoverLetterData]):
     pass
+
+class PromptShownResponse(SuccessResponseWithData):
+    data: PromptShownData

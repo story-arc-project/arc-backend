@@ -319,3 +319,6 @@ class CoverLetterData(BaseModel):
     result: dict[str, Any] | None
     created_at: datetime
     updated_at: datetime
+
+class PromptShownData(BaseModel):
+    created: bool

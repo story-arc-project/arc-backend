@@ -4,7 +4,7 @@ from uuid import UUID
 from pydantic import BaseModel, EmailStr, field_validator, model_validator, AfterValidator, Field
 import re
 
-from src.enums import Affiliation, Language, OauthProviderId
+from src.enums import Affiliation, FeedbackTriggerSource, Language, OauthProviderId
 from src.api.models.consent import AGREEABLE_CONSENT_VERSIONS, CONSENT_REQUIRED
 
 def validate_password(v: str):
@@ -382,3 +382,6 @@ class ListCustomersQueryParams(BaseModel):
         if v is not None and (v < 1 or v > 100):
             raise ValueError("limit must be between 1 and 100")
         return v
+
+class PromptShownRequest(BaseModel):
+    trigger_source: FeedbackTriggerSource

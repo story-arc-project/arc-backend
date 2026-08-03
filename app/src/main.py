@@ -9,6 +9,7 @@ from src.api.analysis import analysis_router
 from src.api.docs import docs_router
 from src.api.experiences import experiences_router
 from src.api.export import export_router
+from src.api.feedback import feedback_router
 from src.api.files import files_router
 from src.api.internal import internal_router
 from src.api.libraries import libraries_router
@@ -110,4 +111,8 @@ app.include_router(
 app.include_router(
     docs_router,
     dependencies=[Depends(require_admin)]
+)
+app.include_router(
+    feedback_router,
+    prefix="/feedback"
 )
