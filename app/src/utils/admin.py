@@ -1,6 +1,6 @@
 from fastapi import Cookie, Request, status
 from os import getenv
-from typing import Annotated
+from typing import Annotated, Optional
 from uuid import UUID
 
 from src.api.models.base import ErrorResponse
@@ -34,12 +34,13 @@ async def require_admin(session: SessionDep, accessToken: Annotated[str | None, 
         )
     return payload
 
-def log_audit(action: AuditAction, payload: AccessTokenPayload, target_user_id: UUID, request: Request):
+def log_audit(action: AuditAction, payload: AccessTokenPayload, target_user_id: Optional[UUID], request: Request, query_params: Optional[dict]):
     with session_scope() as audit_session:
         new_audit_log = AuditLog(
             actor_id = payload.sub,
             action = action,
             target_user_id = target_user_id,
+            query_params = query_params,
             ip_address = get_ip(request),
             user_agent = get_user_agent(request)
         )

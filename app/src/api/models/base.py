@@ -241,6 +241,15 @@ class BookmarkData(BaseModel):
     created_at: datetime
     updated_at: datetime
 
+class AdminCustomerListData(BaseModel):
+    id: UUID
+    email: EmailStr
+    name: str | None
+    status: str
+    onboarded: bool
+    created_at: datetime
+    withdrawn_at: datetime | None
+
 class AdminCustomerDetailCustomer(BaseModel):
     id: UUID
     email: EmailStr
