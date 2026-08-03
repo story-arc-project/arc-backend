@@ -1,7 +1,7 @@
+from contextlib import contextmanager
 from typing import Annotated
 from fastapi import Depends
-from sqlalchemy import text
-from sqlmodel import SQLModel, create_engine, Session
+from sqlmodel import create_engine, Session
 from os import getenv
 from src.db import models  # pyright: ignore[reportUnusedImport]
 
@@ -9,8 +9,13 @@ DATABASE_URL = f"postgresql://{getenv("POSTGRES_USER")}:{getenv("POSTGRES_PASSWO
 
 engine = create_engine(DATABASE_URL)
 
-def get_session():
+@contextmanager
+def session_scope():
     with Session(engine) as session:
+        yield session
+
+def get_session():
+    with session_scope() as session:
         yield session
 
 SessionDep = Annotated[Session, Depends(get_session)]
