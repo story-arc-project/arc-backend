@@ -9,6 +9,7 @@ from testcontainers.minio import MinioContainer
 from src.utils.files import S3Settings, S3Client, get_s3_client
 from testcontainers.postgres import PostgresContainer
 import os
+import re
 
 from tests.const import AUTHENTICATED_EMAIL, TESTFRONT_HOST, TESTSERVER_HOST
 os.environ["FRONTEND_HOSTS"] = f"https://{TESTFRONT_HOST}"
@@ -127,9 +128,17 @@ def authenticated_client(client: TestClient, mock_mail: MagicMock):
     email = AUTHENTICATED_EMAIL
     password = "testpassword123"
     _ = client.post("/auth/signup", json={"email": email, "password": password})
+    email_received = get_sent_mail(mock_mail)
+    email_content_type = email_received["Content-Type"]
+    assert isinstance(email_content_type, str)
+    is_email_html = email_content_type.startswith("text/html")
+    regex = r">\s*(\d{6})\s*<" if is_email_html else r"인증번호:\s*(\d{6})"
+    search_result = re.search(regex, email_received["Body"])
+    assert search_result is not None, "Verification code not found in email body"
+    code = search_result.group(1)
     response = client.post("/auth/verify-email", json={
         "email": email,
-        "code": get_sent_mail(mock_mail)["Body"]
+        "code": code
     })
     assert response.status_code == 200
     assert client.cookies.get("refreshToken") is not None
