@@ -270,11 +270,12 @@ class AdminCustomerDetailActivity(BaseModel):
     comprehensive_analyses: AdminActivityStat
     keyword_analyses: AdminActivityStat
     resumes: AdminActivityStat
+    cover_letters: AdminActivityStat
 
 class AdminCustomerDetail(BaseModel):
     customer: AdminCustomerDetailCustomer
     profile: AdminCustomerDetailProfile | None
-    # activity: AdminCustomerDetailActivity
+    activity: AdminCustomerDetailActivity
 
 class CoverLetterListData(BaseModel):
     id: UUID

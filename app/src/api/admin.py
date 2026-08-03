@@ -5,11 +5,11 @@ from sqlmodel import and_, col, select, func
 from typing import Annotated, cast
 from uuid import UUID
 
-from src.api.models.base import AdminCustomerDetail, AdminCustomerDetailCustomer, AdminCustomerDetailProfile, ErrorResponse, SuccessResponseWithData
+from src.api.models.base import AdminActivityStat, AdminCustomerDetail, AdminCustomerDetailActivity, AdminCustomerDetailCustomer, AdminCustomerDetailProfile, ErrorResponse, SuccessResponseWithData
 from src.api.models.exc import AppException
 from src.db.db import SessionDep
-from src.db.models import DeletedUser, OauthAccount, User, UserProfile
-from src.enums import AuditAction, ErrorResponseCode, OauthProviderId
+from src.db.models import ComprehensiveAnalysis, CoverLetter, DeletedUser, Experience, IndividualAnalysis, KeywordAnalysis, OauthAccount, Resume, User, UserProfile
+from src.enums import AnalysisStatus, AuditAction, ErrorResponseCode, OauthProviderId
 from src.utils.admin import log_audit, require_admin
 from src.utils.token import AccessTokenPayload
 
@@ -18,6 +18,45 @@ admin_router = APIRouter()
 @admin_router.get("/status")
 async def admin_status():
     return {"status": "ok", "message": "Admin route is accessible."}
+
+def get_activity_stat_simple(
+    session: SessionDep,
+    model: type[Experience],
+    customer_id: UUID,
+):
+    stmt = (
+        select(func.count(), func.max(model.created_at))
+        .where(model.user_id == customer_id)
+    )
+    total, last_at = session.exec(stmt).one()
+    return AdminActivityStat(total=total, last_at=last_at, by_status=None)
+
+def get_activity_stat_by_status(
+    session: SessionDep,
+    model: type[IndividualAnalysis] | type[ComprehensiveAnalysis] | type[KeywordAnalysis] | type[Resume] | type[CoverLetter],
+    customer_id: UUID,
+):
+    stmt = (
+        select(model.status, func.count(), func.max(model.created_at))
+        .where(model.user_id == customer_id)
+        .group_by(col(model.status))
+    )
+    rows = session.exec(stmt).all()
+
+    by_status = {status: 0 for status in AnalysisStatus}
+    last_at = None
+    for status, count, latest in rows:
+        if not isinstance(status, AnalysisStatus):
+            raise AppException(500, ErrorResponse(code=ErrorResponseCode.SERVER_ERROR, message="Invalid status value"))
+        by_status[status] = count
+        if latest is not None and (last_at is None or latest > last_at):
+            last_at = latest
+
+    return AdminActivityStat(
+        total=sum(by_status.values()),
+        last_at=last_at,
+        by_status=by_status,
+    )
 
 providers_col = cast(
     "Label[list[OauthProviderId]]",
@@ -69,13 +108,14 @@ def get_customer(customer_id: UUID, session: SessionDep, payload: Annotated[Acce
             company = profile.company if profile else None,
             desired_role = profile.desiredRole if profile else None,
         ) if profile else None,
-        # activity = AdminCustomerDetailActivity(
-        #     experiences = get_activity_stat(session, Experience, customer_id, has_status=False),
-        #     individual_analyses = get_activity_stat(session, IndividualAnalysis, customer_id, has_status=True),
-        #     comprehensive_analyses = get_activity_stat(session, ComprehensiveAnalysis, customer_id, has_status=True),
-        #     keyword_analyses = get_activity_stat(session, KeywordAnalysis, customer_id, has_status=True),
-        #     resumes = get_activity_stat(session, Resume, customer_id, has_status=True),
-        # )
+        activity = AdminCustomerDetailActivity(
+            experiences = get_activity_stat_simple(session, Experience, customer_id),
+            individual_analyses = get_activity_stat_by_status(session, IndividualAnalysis, customer_id),
+            comprehensive_analyses = get_activity_stat_by_status(session, ComprehensiveAnalysis, customer_id),
+            keyword_analyses = get_activity_stat_by_status(session, KeywordAnalysis, customer_id),
+            resumes = get_activity_stat_by_status(session, Resume, customer_id),
+            cover_letters = get_activity_stat_by_status(session, CoverLetter, customer_id)
+        )
     )
 
     log_audit(
