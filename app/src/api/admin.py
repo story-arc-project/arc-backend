@@ -85,7 +85,7 @@ def get_customer(customer_id: UUID, session: SessionDep, payload: Annotated[Acce
     )
     row = session.exec(stmt).one_or_none()
     if row is None:
-        raise AppException(404, ErrorResponse(code=ErrorResponseCode.NOT_FOUND, message="not found"))
+        raise AppException(404, ErrorResponse(code=ErrorResponseCode.NOT_FOUND, message="Customer not found"))
 
     user, profile, withdrawn_at, providers = row
 
