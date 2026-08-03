@@ -28,7 +28,7 @@ def test_send_mail(mock_mail: MagicMock):
     subject = "hi"
     body = "hi"
 
-    _ = send_mail(to, subject, body)
+    _ = send_mail(to, subject, body, "")
     mock_mail.send_message.assert_called_once()
 
     sent_mail = get_sent_mail(mock_mail)

@@ -68,10 +68,11 @@ def test_post_experience_user_id_matches_token(authenticated_client: TestClient,
     data = {"type": "career", "content": {"a": "b"}}
     response = authenticated_client.post("/experiences", json=data)
     experience_id = response.json()["data"]["id"]
-    record = session.get(Experience, experience_id)
     token = authenticated_client.cookies.get("accessToken")
     assert token is not None
     payload = check_auth(session, token)
+    record = session.get(Experience, experience_id)
+    assert record is not None
     assert record.user_id == payload.sub
 
 
