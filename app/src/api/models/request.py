@@ -385,3 +385,8 @@ class ListCustomersQueryParams(BaseModel):
 
 class PromptShownRequest(BaseModel):
     trigger_source: FeedbackTriggerSource
+
+class FeedbackResponseRequest(BaseModel):
+    rating: int = Field(ge=1, le=5)
+    comment: Optional[str] = Field(default=None, max_length=500)
+    context: Optional[dict[str, Any]] = None

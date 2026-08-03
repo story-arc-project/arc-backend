@@ -322,3 +322,6 @@ class CoverLetterData(BaseModel):
 
 class PromptShownData(BaseModel):
     created: bool
+
+class FeedbackResponseData(BaseModel):
+    responded_at: datetime
