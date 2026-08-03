@@ -19,7 +19,7 @@ os.environ.setdefault("RATE_LIMIT_ANALYSIS_KEYWORD", "10")
 os.environ.setdefault("RATE_LIMIT_EXPORT_RESUME", "10")
 os.environ.setdefault("RATE_LIMIT_EXPORT_COVER_LETTER", "10")
 
-from tests.test_auth import get_sent_mail
+from tests.utils import get_sent_mail
 from src.db.db import get_session
 from src.main import app
 

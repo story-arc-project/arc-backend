@@ -5,7 +5,6 @@ import pytest
 from fastapi.testclient import TestClient
 from sqlmodel import Session, select
 from unittest.mock import MagicMock, patch
-from email.mime.multipart import MIMEMultipart
 from freezegun import freeze_time
 
 from src.utils.token import hash_jti, verify_refresh_token
@@ -16,34 +15,12 @@ from src.enums import ErrorResponseCode, JWTTokenStatus
 from src.db.red import is_locked, increment_attempt, set_lockout, clear, get_attempt_count
 from src.api.models.consent import AGREEABLE_CONSENT_VERSIONS
 from tests.const import AUTHENTICATED_EMAIL
+from tests.utils import get_sent_mail
 
 
 # Test data
 email = AUTHENTICATED_EMAIL
 password = "testpassword123"
-
-
-def get_sent_mail(mock_mail: MagicMock):
-    sent_mail: MIMEMultipart = mock_mail.send_message.call_args.args[0]
-    for part in sent_mail.walk():
-        if part.is_multipart():
-            continue
-
-        if part.get_content_type() in ("text/plain", "text/html"):
-            return {
-                "To": sent_mail["To"],
-                "Subject": sent_mail["Subject"],
-                "Content-Type": part.get_content_type(),
-                "Body": part.get_payload(decode=True).decode(
-                    part.get_content_charset() or "utf-8"
-                )
-            }
-    return {
-        "To": sent_mail["To"],
-        "Subject": sent_mail["Subject"],
-        "Content-Type": None,
-        "Body": None
-    }
 
 
 def test_send_mail(mock_mail: MagicMock):
