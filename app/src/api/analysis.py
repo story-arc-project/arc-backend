@@ -152,7 +152,7 @@ def pre_process_comprehensive_analysis(session: SessionDep, experience_ids: list
             )
         )
     experiences = fetch_owned_experiences(session, experience_ids, user_id)
-    user_input: list[str] = [str(experience.content) for experience in experiences]
+    user_input = [str(experience.content) for experience in experiences]
     experience_ids = [experience.id for experience in experiences]
     return user_profile, user_input, experience_ids
 
@@ -458,42 +458,33 @@ async def delete_comprehensive_analysis(analysis_id: UUID, session: SessionDep, 
         message = "Comprehensive analysis deleted."
     )
 
-@analysis_router.post("/keyword")
-async def post_keyword_analysis(
-    body: KeywordAnalysisPostRequest,
-    session: SessionDep,
-    response: Response,
-    payload: Annotated[AccessTokenPayload, Depends(check_auth)],
-    _user_limit: Annotated[None, Depends(analysis_rate_limiters["keyword"]["user"])],
-    _ip_limit: Annotated[None, Depends(analysis_rate_limiters["keyword"]["ip"])]
-):
-    statement = select(Experience).where(Experience.user_id == payload.sub)
+def pre_process_keyword_analysis(session: SessionDep, user_id: UUID):
+    statement = select(Experience).where(Experience.user_id == user_id)
     result = session.exec(statement).all()
-    user_input: list[str] = []
-    if len(body.keywords) > 3:
-        title = f"{", ".join(body.keywords[:3])} 외 {len(body.keywords) - 3}개 분석"
+    user_input = [str(experience.content) for experience in result]
+    return user_input
+
+def generate_keyword_analysis_title(keywords: list[str]):
+    if len(keywords) > 3:
+        title = f"{", ".join(keywords[:3])} 외 {len(keywords) - 3}개 분석"
     else:
-        title = f"{", ".join(body.keywords)} 분석"
-    for experience in result:
-        user_input.append(str(experience.content))
+        title = f"{", ".join(keywords)} 분석"
+    return title
+
+def process_keyword_analysis(analysis: KeywordAnalysis, user_input: list[str], session: SessionDep, response: Response):
     try:
-        new_keyword_analysis = KeywordAnalysis(
-            user_id = payload.sub,
-            keywords = body.keywords,
-            title = title,
-            target = body.target
-        )
         req = requests.post("http://ai_analyst:8001/keyword", json={
-            "analysis_id": str(new_keyword_analysis.id),
+            "analysis_id": str(analysis.id),
             "input": json.dumps(user_input),
-            "keywords": body.keywords,
-            "target": body.target
+            "keywords": analysis.keywords,
+            "target": analysis.target
         })
         req.raise_for_status()
-        new_keyword_analysis.task_id = req.json()["task_id"]
-        session.add(new_keyword_analysis)
+        analysis.task_id = req.json()["task_id"]
+        analysis.status = AnalysisStatus.QUEUED
+        session.add(analysis)
         session.commit()
-        session.refresh(new_keyword_analysis)
+        session.refresh(analysis)
     except Exception:
         traceback.print_exc()
         session.rollback()
@@ -506,12 +497,31 @@ async def post_keyword_analysis(
         )
     response.status_code = 200
     return PostSuccessResponse(
-        message = "Queued new keyword analysis.",
+        message = "Queued keyword analysis.",
         data = UUIDDataWithTitle(
-            id = new_keyword_analysis.id,
-            title = title
+            id = analysis.id,
+            title = analysis.title
         )
     )
+
+@analysis_router.post("/keyword")
+async def post_keyword_analysis(
+    body: KeywordAnalysisPostRequest,
+    session: SessionDep,
+    response: Response,
+    payload: Annotated[AccessTokenPayload, Depends(check_auth)],
+    _user_limit: Annotated[None, Depends(analysis_rate_limiters["keyword"]["user"])],
+    _ip_limit: Annotated[None, Depends(analysis_rate_limiters["keyword"]["ip"])]
+):
+    user_input = pre_process_keyword_analysis(session, payload.sub)
+    title = generate_keyword_analysis_title(body.keywords)
+    new_keyword_analysis = KeywordAnalysis(
+        user_id = payload.sub,
+        keywords = body.keywords,
+        title = title,
+        target = body.target
+    )
+    return process_keyword_analysis(new_keyword_analysis, user_input, session, response)
 
 @analysis_router.patch("/keyword/{analysis_id}")
 async def patch_keyword_analysis(
