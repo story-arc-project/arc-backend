@@ -4,9 +4,9 @@ from typing import Annotated
 from sqlalchemy.dialects.postgresql import insert
 from sqlmodel import select
 
-from src.api.models.base import FeedbackResponseData, PromptShownData
+from src.api.models.base import FeedbackResponseData, FeedbackStatusData, PromptShownData
 from src.api.models.request import PromptShownRequest, FeedbackResponseRequest
-from src.api.models.response import FeedbackResponse as FeedbackResponseNotDBModel, PromptShownResponse
+from src.api.models.response import FeedbackResponse as FeedbackResponseNotDBModel, FeedbackStatusResponse, PromptShownResponse
 from src.db.db import SessionDep
 from src.db.models import FeedbackResponse
 from src.utils.auth import check_auth
@@ -77,4 +77,25 @@ def record_response(
     return FeedbackResponseNotDBModel(
         message="feedback response recorded",
         data=FeedbackResponseData(responded_at=responded_at),
+    )
+
+@feedback_router.get("/campaigns/{campaign_id}/status")
+def get_status(
+    campaign_id: Annotated[str, Depends(validate_campaign_id)],
+    session: SessionDep,
+    payload: Annotated[AccessTokenPayload, Depends(check_auth)]
+):
+    row = session.exec(
+        select(FeedbackResponse).where(
+            FeedbackResponse.user_id == payload.sub,
+            FeedbackResponse.campaign_id == campaign_id,
+        )
+    ).first()
+
+    has_seen = row is not None
+    has_responded = row is not None and row.rating is not None
+
+    return FeedbackStatusResponse(
+        message="feedback status retrieved",
+        data=FeedbackStatusData(has_seen=has_seen, has_responded=has_responded),
     )

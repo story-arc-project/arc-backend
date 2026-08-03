@@ -1,4 +1,4 @@
-from src.api.models.base import AuthMeData, BookmarkData, ComprehensiveAnalysisData, ComprehensiveAnalysisList, CoverLetterData, CoverLetterList, FeedbackResponseData, FileMetadataPublic, IndividualAnalysisData, IndividualAnalysisList, OnboardResponseData, PresignUploadData, PromptShownData, RefreshData, ResumeData, ResumeList, SuccessResponseWithData, LoginData, SuccessResponse, UUIDData, KeywordAnalysisList, KeywordAnalysisData, ErrorResponse
+from src.api.models.base import AuthMeData, BookmarkData, ComprehensiveAnalysisData, ComprehensiveAnalysisList, CoverLetterData, CoverLetterList, FeedbackResponseData, FeedbackStatusData, FileMetadataPublic, IndividualAnalysisData, IndividualAnalysisList, OnboardResponseData, PresignUploadData, PromptShownData, RefreshData, ResumeData, ResumeList, SuccessResponseWithData, LoginData, SuccessResponse, UUIDData, KeywordAnalysisList, KeywordAnalysisData, ErrorResponse
 
 class LoginResponse(SuccessResponseWithData[LoginData]):
     pass
@@ -83,3 +83,6 @@ class PromptShownResponse(SuccessResponseWithData):
 
 class FeedbackResponse(SuccessResponseWithData):
     data: FeedbackResponseData
+
+class FeedbackStatusResponse(SuccessResponseWithData):
+    data: FeedbackStatusData

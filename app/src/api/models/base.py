@@ -325,3 +325,7 @@ class PromptShownData(BaseModel):
 
 class FeedbackResponseData(BaseModel):
     responded_at: datetime
+
+class FeedbackStatusData(BaseModel):
+    has_seen: bool
+    has_responded: bool
