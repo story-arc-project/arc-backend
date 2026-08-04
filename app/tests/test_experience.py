@@ -153,7 +153,7 @@ class TestPutExperienceById:
         experience_id = response.json()["data"]["id"]
         update_data = {"content": {"role": "engineer"}, "importance": 6}
         response = authenticated_client.put(f"/experiences/{experience_id}", json=update_data)
-        assert response.status_code == 400
+        assert response.status_code == 422
     def test_not_found(self, authenticated_client: TestClient, mock_ai_analyst):
         update_data = {"content": {"role": "engineer"}, "importance": 4}
         response = authenticated_client.put(f"/experiences/{uuid4()}", json=update_data)
