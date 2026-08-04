@@ -672,7 +672,7 @@ class TestConsent:
             body = {"agreements": agreements}
 
         res = authenticated_client.post("/auth/consent", json=body)
-        assert res.status_code == 400
+        assert res.status_code == 422
 
 valid_onboarding_data = {
     "name": "홍길동",
@@ -704,54 +704,54 @@ def test_onboarding_valid_data(authenticated_client: TestClient):
 
 @pytest.mark.parametrize("override,expected_status", [
     # Missing required fields
-    ({"name": None}, 400),
-    ({"birth": None}, 400),
-    ({"affiliation": None}, 400),
-    ({"phone": None}, 400),
-    ({"worry": None}, 400),
-    ({"interest": None}, 400),
+    ({"name": None}, 422),
+    ({"birth": None}, 422),
+    ({"affiliation": None}, 422),
+    ({"phone": None}, 422),
+    ({"worry": None}, 422),
+    ({"interest": None}, 422),
 
     # Invalid name
-    ({"name": ""}, 400),
+    ({"name": ""}, 422),
 
     # Invalid birth formats
-    ({"birth": "01-01-2001"}, 400),    # wrong date format
-    ({"birth": "not-a-date"}, 400),
-    ({"birth": "2099-01-01"}, 400),    # future date
-    ({"birth": 20010101}, 400),        # int instead of string
+    ({"birth": "01-01-2001"}, 422),    # wrong date format
+    ({"birth": "not-a-date"}, 422),
+    ({"birth": "2099-01-01"}, 422),    # future date
+    ({"birth": 20010101}, 422),        # int instead of string
 
     # Invalid phone
-    ({"phone": "010-0000-0000"}, 400), # dashes not allowed
-    ({"phone": "0100000000"}, 400),    # too short (10 digits)
-    ({"phone": "010000000000"}, 400),  # too long (12 digits)
-    ({"phone": "abcdefghijk"}, 400),   # non-numeric
+    ({"phone": "010-0000-0000"}, 422), # dashes not allowed
+    ({"phone": "0100000000"}, 422),    # too short (10 digits)
+    ({"phone": "010000000000"}, 422),  # too long (12 digits)
+    ({"phone": "abcdefghijk"}, 422),   # non-numeric
 
     # Invalid types for lists
-    ({"worry": "진로"}, 400),           # string instead of list
-    ({"interest": 123}, 400),          # int instead of list
+    ({"worry": "진로"}, 422),           # string instead of list
+    ({"interest": 123}, 422),          # int instead of list
 
     # Affiliation validation - STUDENT can't have company/desiredRole/affiliationDetail
-    ({"affiliation": "student", "company": "SomeCompany"}, 400),
-    ({"affiliation": "student", "desiredRole": "Engineer"}, 400),
-    ({"affiliation": "student", "affiliationDetail": "Detail"}, 400),
+    ({"affiliation": "student", "company": "SomeCompany"}, 422),
+    ({"affiliation": "student", "desiredRole": "Engineer"}, 422),
+    ({"affiliation": "student", "affiliationDetail": "Detail"}, 422),
 
     # Affiliation validation - EMPLOYED can't have school/department/desiredRole/affiliationDetail
-    ({"affiliation": "employed", "school": "SomeSchool"}, 400),
-    ({"affiliation": "employed", "department": "CS"}, 400),
-    ({"affiliation": "employed", "desiredRole": "Engineer"}, 400),
-    ({"affiliation": "employed", "affiliationDetail": "Detail"}, 400),
+    ({"affiliation": "employed", "school": "SomeSchool"}, 422),
+    ({"affiliation": "employed", "department": "CS"}, 422),
+    ({"affiliation": "employed", "desiredRole": "Engineer"}, 422),
+    ({"affiliation": "employed", "affiliationDetail": "Detail"}, 422),
 
     # Affiliation validation - JOBSEEKER can't have school/department/company/affiliationDetail
-    ({"affiliation": "jobseeker", "school": "SomeSchool"}, 400),
-    ({"affiliation": "jobseeker", "department": "CS"}, 400),
-    ({"affiliation": "jobseeker", "company": "SomeCompany"}, 400),
-    ({"affiliation": "jobseeker", "affiliationDetail": "Detail"}, 400),
+    ({"affiliation": "jobseeker", "school": "SomeSchool"}, 422),
+    ({"affiliation": "jobseeker", "department": "CS"}, 422),
+    ({"affiliation": "jobseeker", "company": "SomeCompany"}, 422),
+    ({"affiliation": "jobseeker", "affiliationDetail": "Detail"}, 422),
 
     # Affiliation validation - OTHER can't have school/department/company/desiredRole
-    ({"affiliation": "other", "school": "SomeSchool"}, 400),
-    ({"affiliation": "other", "department": "CS"}, 400),
-    ({"affiliation": "other", "company": "SomeCompany"}, 400),
-    ({"affiliation": "other", "desiredRole": "Engineer"}, 400),
+    ({"affiliation": "other", "school": "SomeSchool"}, 422),
+    ({"affiliation": "other", "department": "CS"}, 422),
+    ({"affiliation": "other", "company": "SomeCompany"}, 422),
+    ({"affiliation": "other", "desiredRole": "Engineer"}, 422),
 ])
 
 

@@ -495,7 +495,7 @@ class TestGetFile:
 
     def test_get_file_invalid_uuid(self, authenticated_client: TestClient):
         response = authenticated_client.get("/files/not-a-uuid")
-        assert response.status_code == 400
+        assert response.status_code == 422
 
 class TestDownloadFile:
     def _presign_confirm_and_upload(
@@ -578,7 +578,7 @@ class TestDownloadFile:
 
     def test_download_invalid_uuid(self, authenticated_client: TestClient):
         response = authenticated_client.get("/files/not-a-uuid/download")
-        assert response.status_code == 400
+        assert response.status_code == 422
         assert response.json()["code"] == "INVALID_INPUT"
 
 class TestDeleteFile:

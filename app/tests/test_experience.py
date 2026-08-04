@@ -82,28 +82,28 @@ def test_post_experience_no_token_returns_401(client: TestClient, mock_ai_analys
     assert response.status_code == 401
 
 
-def test_post_experience_missing_type_returns_400(authenticated_client: TestClient, mock_ai_analyst):
+def test_post_experience_missing_type_returns_422(authenticated_client: TestClient, mock_ai_analyst):
     data = {"content": {"a": "b"}}
     response = authenticated_client.post("/experiences", json=data)
-    assert response.status_code == 400
+    assert response.status_code == 422
 
 
-def test_post_experience_missing_content_returns_400(authenticated_client: TestClient, mock_ai_analyst):
+def test_post_experience_missing_content_returns_422(authenticated_client: TestClient, mock_ai_analyst):
     data = {"type": "career"}
     response = authenticated_client.post("/experiences", json=data)
-    assert response.status_code == 400
+    assert response.status_code == 422
 
 
-def test_post_experience_empty_body_returns_400(authenticated_client: TestClient, mock_ai_analyst):
+def test_post_experience_empty_body_returns_422(authenticated_client: TestClient, mock_ai_analyst):
     response = authenticated_client.post("/experiences", json={})
-    assert response.status_code == 400
+    assert response.status_code == 422
 
 
 @pytest.mark.parametrize("invalid_type", ["", 123, None])
-def test_post_experience_invalid_type_returns_400(authenticated_client: TestClient, invalid_type, mock_ai_analyst):
+def test_post_experience_invalid_type_returns_422(authenticated_client: TestClient, invalid_type, mock_ai_analyst):
     data = {"type": invalid_type, "content": {"a": "b"}}
     response = authenticated_client.post("/experiences", json=data)
-    assert response.status_code == 400
+    assert response.status_code == 422
 
 
 def test_post_experience_db_commit_failure_returns_500(authenticated_client: TestClient, mock_ai_analyst):

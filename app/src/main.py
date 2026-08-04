@@ -60,7 +60,7 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
             }
         )
     return JSONResponse(
-        status_code = 400,
+        status_code = 422,
         content = {
             "status": "error",
             "code": "INVALID_INPUT",
