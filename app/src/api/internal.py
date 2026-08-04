@@ -14,7 +14,16 @@ internal_router = APIRouter()
 
 @internal_router.post("/{analysis_type}/failure")
 async def fail_individual(analysis_type: str, body: Annotated[dict, Depends(check_internal)], session: SessionDep, response: Response):
-    body_validated = InternalRequestFailure.model_validate(body)
+    try:
+        body_validated = InternalRequestFailure.model_validate(body)
+    except:
+        raise AppException(
+            status_code = 400,
+            error = ErrorResponse(
+                code = ErrorResponseCode.BAD_REQUEST,
+                message = "body validation error"
+            )
+        )
     if analysis_type == "individual":
         statement = select(IndividualAnalysis).where(IndividualAnalysis.id == body_validated.analysis_id)
     elif analysis_type == "comprehensive":
@@ -42,9 +51,19 @@ async def fail_individual(analysis_type: str, body: Annotated[dict, Depends(chec
                 message = ""
             )
         )
-    analysis.status = AnalysisStatus.FAILED
-    session.add(analysis)
-    session.commit()
+    try:
+        analysis.status = AnalysisStatus.FAILED
+        session.add(analysis)
+        session.commit()
+    except:
+        session.rollback()
+        raise AppException(
+            status_code = 500,
+            error = ErrorResponse(
+                code = ErrorResponseCode.INTERNAL_ERROR,
+                message = "Database error"
+            )
+        )
     response.status_code = 200
     return {}
 
@@ -81,11 +100,21 @@ async def success_individual(body: Annotated[dict, Depends(check_internal)], ses
                 message = ""
             )
         )
-    analysis.vector = body_validated.vector
-    analysis.result = body_validated.result
-    analysis.status = AnalysisStatus.SUCCESS
-    session.add(analysis)
-    session.commit()
+    try:
+        analysis.vector = body_validated.vector
+        analysis.result = body_validated.result
+        analysis.status = AnalysisStatus.SUCCESS
+        session.add(analysis)
+        session.commit()
+    except:
+        session.rollback()
+        raise AppException(
+            status_code = 500,
+            error = ErrorResponse(
+                code = ErrorResponseCode.INTERNAL_ERROR,
+                message = "Database error"
+            )
+        )
     response.status_code = 200
     return {}
 
@@ -110,11 +139,21 @@ async def success_comprehensive(body: Annotated[dict, Depends(check_internal)], 
                 message = ""
             )
         )
-    analysis.vector = body_validated.vector
-    analysis.result = body_validated.result
-    analysis.status = AnalysisStatus.SUCCESS
-    session.add(analysis)
-    session.commit()
+    try:
+        analysis.vector = body_validated.vector
+        analysis.result = body_validated.result
+        analysis.status = AnalysisStatus.SUCCESS
+        session.add(analysis)
+        session.commit()
+    except:
+        session.rollback()
+        raise AppException(
+            status_code = 500,
+            error = ErrorResponse(
+                code = ErrorResponseCode.INTERNAL_ERROR,
+                message = "Database error"
+            )
+        )
     response.status_code = 200
     return {}
 
@@ -131,10 +170,20 @@ async def success_keyword(body: Annotated[dict, Depends(check_internal)], sessio
                 message = ""
             )
         )
-    analysis.result = body_validated.result
-    analysis.status = AnalysisStatus.SUCCESS
-    session.add(analysis)
-    session.commit()
+    try:
+        analysis.result = body_validated.result
+        analysis.status = AnalysisStatus.SUCCESS
+        session.add(analysis)
+        session.commit()
+    except:
+        session.rollback()
+        raise AppException(
+            status_code = 500,
+            error = ErrorResponse(
+                code = ErrorResponseCode.INTERNAL_ERROR,
+                message = "Database error"
+            )
+        )
     response.status_code = 200
     return {}
 
@@ -151,10 +200,20 @@ async def success_resume(body: Annotated[dict, Depends(check_internal)], session
                 message = ""
             )
         )
-    resume.result = body_validated.result
-    resume.status = AnalysisStatus.SUCCESS
-    session.add(resume)
-    session.commit()
+    try:
+        resume.result = body_validated.result
+        resume.status = AnalysisStatus.SUCCESS
+        session.add(resume)
+        session.commit()
+    except:
+        session.rollback()
+        raise AppException(
+            status_code = 500,
+            error = ErrorResponse(
+                code = ErrorResponseCode.INTERNAL_ERROR,
+                message = "Database error"
+            )
+        )
     response.status_code = 200
     return {}
 
@@ -171,9 +230,19 @@ async def success_cover_letter(body: Annotated[dict, Depends(check_internal)], s
                 message = ""
             )
         )
-    resume.result = body_validated.result
-    resume.status = AnalysisStatus.SUCCESS
-    session.add(resume)
-    session.commit()
+    try:
+        resume.result = body_validated.result
+        resume.status = AnalysisStatus.SUCCESS
+        session.add(resume)
+        session.commit()
+    except:
+        session.rollback()
+        raise AppException(
+            status_code = 500,
+            error = ErrorResponse(
+                code = ErrorResponseCode.INTERNAL_ERROR,
+                message = "Database error"
+            )
+        )
     response.status_code = 200
     return {}
