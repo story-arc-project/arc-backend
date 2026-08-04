@@ -9,7 +9,6 @@ from testcontainers.minio import MinioContainer
 from src.utils.files import S3Settings, S3Client, get_s3_client
 from testcontainers.postgres import PostgresContainer
 import os
-import re
 
 from tests.const import AUTHENTICATED_EMAIL, TESTFRONT_HOST, TESTSERVER_HOST
 os.environ["FRONTEND_HOSTS"] = f"https://{TESTFRONT_HOST}"
@@ -19,7 +18,7 @@ os.environ.setdefault("RATE_LIMIT_ANALYSIS_KEYWORD", "10")
 os.environ.setdefault("RATE_LIMIT_EXPORT_RESUME", "10")
 os.environ.setdefault("RATE_LIMIT_EXPORT_COVER_LETTER", "10")
 
-from tests.utils import get_sent_mail
+from tests.utils import get_verification_code
 from src.db.db import get_session
 from src.main import app
 
@@ -128,14 +127,7 @@ def authenticated_client(client: TestClient, mock_mail: MagicMock):
     email = AUTHENTICATED_EMAIL
     password = "testpassword123"
     _ = client.post("/auth/signup", json={"email": email, "password": password})
-    email_received = get_sent_mail(mock_mail)
-    email_content_type = email_received["Content-Type"]
-    assert isinstance(email_content_type, str)
-    is_email_html = email_content_type.startswith("text/html")
-    regex = r">\s*(\d{6})\s*<" if is_email_html else r"인증번호:\s*(\d{6})"
-    search_result = re.search(regex, email_received["Body"])
-    assert search_result is not None, "Verification code not found in email body"
-    code = search_result.group(1)
+    code = get_verification_code(mock_mail)
     response = client.post("/auth/verify-email", json={
         "email": email,
         "code": code
