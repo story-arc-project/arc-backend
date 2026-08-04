@@ -15,7 +15,7 @@ from src.enums import ErrorResponseCode, JWTTokenStatus
 from src.db.red import is_locked, increment_attempt, set_lockout, clear, get_attempt_count
 from src.api.models.consent import AGREEABLE_CONSENT_VERSIONS
 from tests.const import AUTHENTICATED_EMAIL
-from tests.utils import get_sent_mail
+from tests.utils import get_sent_mail, get_verification_code
 
 
 # Test data
@@ -93,7 +93,7 @@ def _do_verification_flow(client: TestClient, mock_mail: MagicMock, expect_remai
         sent_mail = get_sent_mail(mock_mail)
         assert sent_mail["To"] == email
 
-        code = sent_mail["Body"] # TODO: Assume body has only code
+        code = get_verification_code(mock_mail)
 
         sleep(int(exp * 60) + 1)
     
@@ -121,7 +121,7 @@ def _do_verification_flow(client: TestClient, mock_mail: MagicMock, expect_remai
     sent_mail = get_sent_mail(mock_mail)
     assert sent_mail["To"] == email
 
-    code = sent_mail["Body"]
+    code = get_verification_code(mock_mail)
 
     # Test that remaining_attempts decrements with each wrong attempt
     prev_remaining = None
@@ -190,7 +190,7 @@ def _do_verification_flow(client: TestClient, mock_mail: MagicMock, expect_remai
     sent_mail = get_sent_mail(mock_mail)
     assert sent_mail["To"] == email
 
-    code = sent_mail["Body"]
+    code = get_verification_code(mock_mail)
 
     response = client.post(
         "/auth/verify-email",
@@ -246,7 +246,7 @@ def test_login(client: TestClient, mock_mail: MagicMock):
     assert response.cookies.get("accessToken") is None
     assert response.cookies.get("refreshToken") is None
 
-    code = get_sent_mail(mock_mail)["Body"]
+    code = get_verification_code(mock_mail)
 
     response = client.post(
         "/auth/verify-email",
@@ -377,7 +377,7 @@ class TestLockdown:
     def test_login_wrong_password_increments_attempts(self, client: TestClient, mock_mail: MagicMock, fake_redis):
         # signup and verify first
         client.post("/auth/signup", json={"email": email, "password": password})
-        code = get_sent_mail(mock_mail)["Body"]
+        code = get_verification_code(mock_mail)
         client.post("/auth/verify-email", json={"email": email, "code": code})
 
         response = client.post("/auth/login", json={"email": email, "password": "wrongpassword"})
@@ -387,7 +387,7 @@ class TestLockdown:
 
     def test_login_lockout_after_max_attempts(self, client: TestClient, mock_mail: MagicMock, fake_redis):
         client.post("/auth/signup", json={"email": email, "password": password})
-        code = get_sent_mail(mock_mail)["Body"]
+        code = get_verification_code(mock_mail)
         client.post("/auth/verify-email", json={"email": email, "code": code})
 
         for _ in range(LOGIN_MAX_RETRY_COUNT - 1):
@@ -404,7 +404,7 @@ class TestLockdown:
 
     def test_login_blocked_when_locked(self, client: TestClient, mock_mail: MagicMock, fake_redis):
         client.post("/auth/signup", json={"email": email, "password": password})
-        code = get_sent_mail(mock_mail)["Body"]
+        code = get_verification_code(mock_mail)
         client.post("/auth/verify-email", json={"email": email, "code": code})
 
         # force lockout
@@ -416,7 +416,7 @@ class TestLockdown:
 
     def test_login_clears_attempts_on_success(self, client: TestClient, mock_mail: MagicMock, fake_redis):
         client.post("/auth/signup", json={"email": email, "password": password})
-        code = get_sent_mail(mock_mail)["Body"]
+        code = get_verification_code(mock_mail)
         client.post("/auth/verify-email", json={"email": email, "code": code})
 
         # fail a couple times
@@ -433,7 +433,7 @@ class TestLockdown:
 
     def test_login_ip_lockout_blocks_request(self, client: TestClient, mock_mail: MagicMock, fake_redis):
         client.post("/auth/signup", json={"email": email, "password": password})
-        code = get_sent_mail(mock_mail)["Body"]
+        code = get_verification_code(mock_mail)
         client.post("/auth/verify-email", json={"email": email, "code": code})
 
         # simulate IP lockout directly
@@ -450,7 +450,7 @@ class TestLockdown:
     
     def test_login_allowed_after_cooldown(self, client: TestClient, mock_mail: MagicMock, fake_redis):
         client.post("/auth/signup", json={"email": email, "password": password})
-        code = get_sent_mail(mock_mail)["Body"]
+        code = get_verification_code(mock_mail)
         client.post("/auth/verify-email", json={"email": email, "code": code})
 
         for _ in range(LOGIN_MAX_RETRY_COUNT):
@@ -497,7 +497,7 @@ def test_refresh(session: Session, client: TestClient, mock_mail: MagicMock):
                 "/auth/verify-email",
                 json={
                     "email": email,
-                    "code": get_sent_mail(mock_mail)["Body"]
+                    "code": get_verification_code(mock_mail)
                 }
             )
             refreshToken = client.cookies.get("refreshToken")

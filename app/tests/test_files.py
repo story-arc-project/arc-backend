@@ -7,7 +7,7 @@ from sqlmodel import Session
 from unittest.mock import MagicMock
 from src.utils.files import S3Settings, S3Client
 from src.db.models import FileMetadata
-from tests.test_auth import get_sent_mail
+from tests.test_auth import get_verification_code
 from src.const import ALLOWED_UPLOAD_CONTENT_SIZE
 from src.enums import ErrorResponseCode
 
@@ -17,7 +17,7 @@ def _signup_second_user(client: TestClient, mock_mail: MagicMock, email: str = "
     client.post("/auth/signup", json={"email": email, "password": "testpassword123"})
     verify_response = client.post(
         "/auth/verify-email",
-        json={"email": email, "code": get_sent_mail(mock_mail)["Body"]},
+        json={"email": email, "code": get_verification_code(mock_mail)},
     )
     assert verify_response.status_code == 200
     return dict(client.cookies)
