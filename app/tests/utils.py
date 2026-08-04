@@ -33,3 +33,4 @@ def get_verification_code(mock_mail: MagicMock):
     search_result = re.search(regex, email_received["Body"])
     assert search_result is not None, "Verification code not found in email body"
     code = search_result.group(1)
+    return code
