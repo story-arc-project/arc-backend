@@ -2,5 +2,7 @@
 !.env.template
 __pycache__
 .venv
+data/log/app/
+app/logs/
 send*
 resume*.json

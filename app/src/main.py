@@ -18,9 +18,11 @@ from src.api.presets import presets_router
 from src.api.auth import auth_router, remove_tokens
 from src.const import ADMIN_PAGE_NOT_ALLOWED
 from src.enums import ErrorResponseCode
+from src.logging import setup_logging
 from src.utils.admin import require_admin
 
 app = FastAPI(docs_url=None, redoc_url=None, openapi_url=None)
+api_error_logger = setup_logging()
 
 origins = getenv("FRONTEND_HOSTS", "").split(",")
 
@@ -31,6 +33,30 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"]
 )
+
+
+@app.middleware("http")
+async def log_unsuccessful_api_responses(request: Request, call_next):
+    try:
+        response = await call_next(request)
+    except Exception:
+        api_error_logger.exception(
+            "API request failed method=%s path=%s status=500 client=%s",
+            request.method,
+            request.url.path,
+            request.client.host if request.client else "unknown",
+        )
+        raise
+
+    if response.status_code >= 500:
+        api_error_logger.error(
+            "API response method=%s path=%s status=%s client=%s",
+            request.method,
+            request.url.path,
+            response.status_code,
+            request.client.host if request.client else "unknown",
+        )
+    return response
 
 @app.exception_handler(AppException)
 async def app_exception_handler(request: Request, exc: AppException):
