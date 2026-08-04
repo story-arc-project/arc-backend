@@ -48,9 +48,21 @@ async def fail_individual(analysis_type: str, body: Annotated[dict, Depends(chec
     response.status_code = 200
     return {}
 
+def success_model_validate(body: dict):
+    try:
+        return InternalRequestSuccess.model_validate(body)
+    except:
+        raise AppException(
+            status_code = 400,
+            error = ErrorResponse(
+                code = ErrorResponseCode.BAD_REQUEST,
+                message = "body validation error"
+            )
+        )
+
 @internal_router.post("/individual/success")
 async def success_individual(body: Annotated[dict, Depends(check_internal)], session: SessionDep, response: Response):
-    body_validated = InternalRequestSuccess.model_validate(body)
+    body_validated = success_model_validate(body)
     statement = select(IndividualAnalysis).where(IndividualAnalysis.id == body_validated.analysis_id)
     analysis = session.exec(statement).one_or_none()
     if analysis is None:
@@ -79,7 +91,7 @@ async def success_individual(body: Annotated[dict, Depends(check_internal)], ses
 
 @internal_router.post("/comprehensive/success")
 async def success_comprehensive(body: Annotated[dict, Depends(check_internal)], session: SessionDep, response: Response):
-    body_validated = InternalRequestSuccess.model_validate(body)
+    body_validated = success_model_validate(body)
     statement = select(ComprehensiveAnalysis).where(ComprehensiveAnalysis.id == body_validated.analysis_id)
     analysis = session.exec(statement).one_or_none()
     if analysis is None:
@@ -108,7 +120,7 @@ async def success_comprehensive(body: Annotated[dict, Depends(check_internal)], 
 
 @internal_router.post("/keyword/success")
 async def success_keyword(body: Annotated[dict, Depends(check_internal)], session: SessionDep, response: Response):
-    body_validated = InternalRequestSuccess.model_validate(body)
+    body_validated = success_model_validate(body)
     statement = select(KeywordAnalysis).where(KeywordAnalysis.id == body_validated.analysis_id)
     analysis = session.exec(statement).one_or_none()
     if analysis is None:
@@ -128,7 +140,7 @@ async def success_keyword(body: Annotated[dict, Depends(check_internal)], sessio
 
 @internal_router.post("/resume/success")
 async def success_resume(body: Annotated[dict, Depends(check_internal)], session: SessionDep, response: Response):
-    body_validated = InternalRequestSuccess.model_validate(body)
+    body_validated = success_model_validate(body)
     statement = select(Resume).where(Resume.id == body_validated.analysis_id)
     resume = session.exec(statement).one_or_none()
     if resume is None:
@@ -148,7 +160,7 @@ async def success_resume(body: Annotated[dict, Depends(check_internal)], session
 
 @internal_router.post("/cover_letter/success")
 async def success_cover_letter(body: Annotated[dict, Depends(check_internal)], session: SessionDep, response: Response):
-    body_validated = InternalRequestSuccess.model_validate(body)
+    body_validated = success_model_validate(body)
     statement = select(CoverLetter).where(CoverLetter.id == body_validated.analysis_id)
     resume = session.exec(statement).one_or_none()
     if resume is None:
