@@ -65,13 +65,13 @@ GENERATION_CONFIG = {
     "temperature": 0.25,
     "top_p": 0.9,
     "top_k": 40,
-    "max_output_tokens": 4096,
+    "max_output_tokens": 16384,
 }
 # 근거 검증(사실 확인) 단계는 더 엄격(결정적)하게 설정합니다.
 VERIFICATION_CONFIG = {
     "temperature": 0.0,
     "top_p": 1.0,
-    "max_output_tokens": 2048,
+    "max_output_tokens": 16384,
 }
 
 
@@ -404,7 +404,7 @@ class GeminiClient:
                 from google.genai import types
                 gen_cfg = types.GenerateContentConfig(
                     temperature=0.2,
-                    max_output_tokens=cfg.get("max_output_tokens", 2048),
+                    max_output_tokens=cfg.get("max_output_tokens", 16384),
                     tools=[types.Tool(google_search=types.GoogleSearch())],
                 )
                 resp = self._client.models.generate_content(
@@ -423,7 +423,7 @@ class GeminiClient:
             temperature=cfg.get("temperature", 0.25),
             top_p=cfg.get("top_p", 0.9),
             top_k=cfg.get("top_k", 40),
-            max_output_tokens=cfg.get("max_output_tokens", 4096),
+            max_output_tokens=cfg.get("max_output_tokens", 16384),
         )
         resp = self._client.models.generate_content(
             model=self.model_name, contents=prompt, config=gen_cfg,
@@ -437,7 +437,7 @@ class GeminiClient:
                 "temperature": cfg.get("temperature", 0.25),
                 "top_p": cfg.get("top_p", 0.9),
                 "top_k": cfg.get("top_k", 40),
-                "max_output_tokens": cfg.get("max_output_tokens", 4096),
+                "max_output_tokens": cfg.get("max_output_tokens", 16384),
             },
         )
         return (getattr(resp, "text", "") or "").strip()
