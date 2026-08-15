@@ -26,14 +26,14 @@ async def presign_upload(body: PresignUploadRequest, session: SessionDep, s3: S3
                 message="File size above limit"
             )
         )
-    if body.content_type not in ALLOWED_UPLOAD_CONTENT_TYPE:
-        raise AppException(
-            status_code=400,
-            error=ErrorResponse(
-                code=ErrorResponseCode.BAD_REQUEST,
-                message="File content type not allowed"
-            )
-        )
+    # if body.content_type not in ALLOWED_UPLOAD_CONTENT_TYPE:
+    #     raise AppException(
+    #         status_code=400,
+    #         error=ErrorResponse(
+    #             code=ErrorResponseCode.BAD_REQUEST,
+    #             message="File content type not allowed"
+    #         )
+    #     )
     key = f"users/{payload.sub}/{uuid.uuid4()}"
     upload_url = s3.presign_upload(key=key)
     file_record = FileMetadata(
