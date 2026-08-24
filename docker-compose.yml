@@ -49,8 +49,6 @@ services:
         condition: service_healthy
       redis:
         condition: service_started
-      minio:
-        condition: service_healthy
     restart: unless-stopped
   redis:
     image: redis:8.6.2
@@ -61,7 +59,6 @@ services:
     environment:
       DOMAIN: ${DOMAIN}
       FASTAPI_HOST: app:8000
-      S3_HOST: minio:9000
     ports:
       - "80:80"
       - "443:443"
@@ -123,37 +120,9 @@ services:
       app:
         condition: service_started
     restart: unless-stopped
-  minio:
-    image: quay.io/minio/minio
-    command: server /data --console-address ":9001"
-    environment:
-      MINIO_ROOT_USER: ${AWS_ACCESS_KEY_ID}
-      MINIO_ROOT_PASSWORD: ${AWS_SECRET_ACCESS_KEY}
-    volumes:
-      - minio_data:/data
-    healthcheck:
-      test: ["CMD", "mc", "ready", "local"]
-      interval: 5s
-      timeout: 5s
-      retries: 5
-  minio_init:
-    image: quay.io/minio/minio
-    depends_on:
-      minio:
-        condition: service_healthy
-    environment:
-      - MINIO_ROOT_USER=${AWS_ACCESS_KEY_ID}
-      - MINIO_ROOT_PASSWORD=${AWS_SECRET_ACCESS_KEY}
-      - MINIO_BUCKET_NAME=${S3_BUCKET_NAME}
-    entrypoint: >
-      /bin/sh -c "
-        mc alias set local http://minio:9000 $$MINIO_ROOT_USER $$MINIO_ROOT_PASSWORD &&
-        mc mb --ignore-existing local/$${MINIO_BUCKET_NAME}
-      "
 
 volumes:
   db_data:
   certbot-etc:
   certbot-var:
   rabbitmq_data:
-  minio_data:
