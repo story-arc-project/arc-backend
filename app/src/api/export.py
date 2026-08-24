@@ -16,6 +16,7 @@ from src.db.models import CoverLetter, Experience, Resume, User, UserProfile
 from src.enums import AnalysisStatus, ErrorResponseCode
 from src.utils.auth import check_auth
 from src.utils.ratelimit import analysis_rate_limiters
+from src.utils.render import render_experience_content
 from src.utils.token import AccessTokenPayload
 
 export_router = APIRouter()
@@ -53,7 +54,7 @@ async def post_resume(
                     message = "Access for the resource is not allowed"
                 )
         )
-        sources.append(str(experience.content))
+        sources.append(render_experience_content(experience.content))
     res = session.exec(select(UserProfile, User).join(User).where(UserProfile.user_id == payload.sub)).one_or_none()
     if res is None:
         raise AppException(

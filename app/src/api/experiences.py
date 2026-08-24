@@ -16,6 +16,7 @@ from src.db.models import Experience, IndividualAnalysis
 from src.enums import ErrorResponseCode
 from src.utils.auth import check_auth
 from src.utils.ratelimit import analysis_rate_limiters
+from src.utils.render import render_experience_content
 from src.utils.token import AccessTokenPayload
 
 experiences_router = APIRouter()
@@ -27,7 +28,7 @@ def generate_individual_analysis(experience: Experience, payload: AccessTokenPay
     )
     req = requests.post("http://ai_analyst:8001/individual", json={
         "analysis_id": str(new_individual_analysis.id),
-        "input": [json.dumps(experience.content)]
+        "input": render_experience_content(experience.content).split("\n")
     })
     req.raise_for_status()
     new_individual_analysis.task_id = req.json()["task_id"]

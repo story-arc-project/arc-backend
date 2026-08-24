@@ -17,6 +17,7 @@ from src.db.models import AnalysisBookmark, ComprehensiveAnalysis, Experience, I
 from src.enums import AnalysisStatus, AnalysisType, ErrorResponseCode
 from src.utils.auth import check_auth
 from src.utils.ratelimit import analysis_rate_limiters
+from src.utils.render import render_experience_content
 from src.utils.token import AccessTokenPayload
 
 def get_experience_titles(session: SessionDep, experience_ids: set[UUID]):
@@ -152,7 +153,7 @@ def pre_process_comprehensive_analysis(session: SessionDep, experience_ids: list
             )
         )
     experiences = fetch_owned_experiences(session, experience_ids, user_id)
-    user_input = [str(experience.content) for experience in experiences]
+    user_input = [render_experience_content(experience.content) for experience in experiences]
     experience_ids = [experience.id for experience in experiences]
     return user_profile, user_input, experience_ids
 
@@ -461,7 +462,7 @@ async def delete_comprehensive_analysis(analysis_id: UUID, session: SessionDep, 
 def pre_process_keyword_analysis(session: SessionDep, user_id: UUID):
     statement = select(Experience).where(Experience.user_id == user_id)
     result = session.exec(statement).all()
-    user_input = [str(experience.content) for experience in result]
+    user_input = [render_experience_content(experience.content) for experience in result]
     return user_input
 
 def generate_keyword_analysis_title(keywords: list[str]):
