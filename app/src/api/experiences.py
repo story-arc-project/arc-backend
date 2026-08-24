@@ -20,6 +20,19 @@ from src.utils.token import AccessTokenPayload
 
 experiences_router = APIRouter()
 
+def generate_individual_analysis(experience: Experience, payload: AccessTokenPayload):
+    new_individual_analysis = IndividualAnalysis(
+        user_id=payload.sub,
+        experience_id = experience.id
+    )
+    req = requests.post("http://ai_analyst:8001/individual", json={
+        "analysis_id": str(new_individual_analysis.id),
+        "input": [json.dumps(experience.content)]
+    })
+    req.raise_for_status()
+    new_individual_analysis.task_id = req.json()["task_id"]
+    return new_individual_analysis
+
 @experiences_router.post("/")
 async def post_experience(
     body: ExperiencePostRequest,
@@ -36,16 +49,7 @@ async def post_experience(
             importance = body.importance,
             content = body.content
         )
-        new_individual_analysis = IndividualAnalysis(
-            user_id=payload.sub,
-            experience_id = new_experience.id
-        )
-        req = requests.post("http://ai_analyst:8001/individual", json={
-            "analysis_id": str(new_individual_analysis.id),
-            "input": [json.dumps(body.content)]
-        })
-        req.raise_for_status()
-        new_individual_analysis.task_id = req.json()["task_id"]
+        new_individual_analysis = generate_individual_analysis(new_experience, payload)
         session.add(new_experience)
         session.add(new_individual_analysis)
         session.commit()
@@ -138,16 +142,7 @@ async def put_experience_by_id(
     try:
         result.content = body.content
         result.importance = body.importance
-        new_individual_analysis = IndividualAnalysis(
-            user_id=payload.sub,
-            experience_id = result.id
-        )
-        req = requests.post("http://ai_analyst:8001/individual", json={
-            "analysis_id": str(new_individual_analysis.id),
-            "input": [json.dumps(body.content)]
-        })
-        req.raise_for_status()
-        new_individual_analysis.task_id = req.json()["task_id"]
+        new_individual_analysis = generate_individual_analysis(result, payload)
         session.add(new_individual_analysis)
         session.add(result)
         session.commit()
