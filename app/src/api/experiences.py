@@ -49,9 +49,10 @@ async def post_experience(
             importance = body.importance,
             content = body.content
         )
-        new_individual_analysis = generate_individual_analysis(new_experience, payload)
+        if body.content.get("status") != "draft":
+            new_individual_analysis = generate_individual_analysis(new_experience, payload)
+            session.add(new_individual_analysis)
         session.add(new_experience)
-        session.add(new_individual_analysis)
         session.commit()
         session.refresh(new_experience)
     except Exception:
@@ -142,8 +143,9 @@ async def put_experience_by_id(
     try:
         result.content = body.content
         result.importance = body.importance
-        new_individual_analysis = generate_individual_analysis(result, payload)
-        session.add(new_individual_analysis)
+        if body.content.get("status") != "draft":
+            new_individual_analysis = generate_individual_analysis(result, payload)
+            session.add(new_individual_analysis)
         session.add(result)
         session.commit()
         session.refresh(result)
