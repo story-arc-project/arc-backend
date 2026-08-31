@@ -22,7 +22,7 @@ import os
 # ==========================================================================
 #  Google AI Studio (https://aistudio.google.com/apikey) 에서 발급.
 #  실행 시 직접 채워 넣으세요. (공란으로 둔 상태)
-GOOGLE_AI_STUDIO_API_KEY = ""          # 예: "AIza...."
+GOOGLE_AI_STUDIO_API_KEY = os.getenv("GEMINI_API_KEY")          # 예: "AIza...."
 
 #  사용할 모델 (요청하신 gemini-2.5-flash 로 고정)
 GEMINI_MODEL_NAME = "gemini-2.5-flash"
@@ -87,4 +87,9 @@ def resolve_api_key() -> str:
       1) 환경변수 GOOGLE_AI_STUDIO_API_KEY
       2) 이 파일 상단의 GOOGLE_AI_STUDIO_API_KEY 상수
     """
-    return os.environ.get("GOOGLE_AI_STUDIO_API_KEY", "") or GOOGLE_AI_STUDIO_API_KEY
+    if GOOGLE_AI_STUDIO_API_KEY is None:
+        raise ValueError(
+            "Google AI Studio API Key is not set. "
+            "Please set the environment variable 'GEMINI_API_KEY'"
+        )
+    return GOOGLE_AI_STUDIO_API_KEY
