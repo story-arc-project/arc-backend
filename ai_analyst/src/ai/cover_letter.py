@@ -67,7 +67,7 @@ from __future__ import annotations
 from dataclasses import fields as dataclass_fields
 from typing import Any
 
-from cover_letter_ai import (
+from .cover_letter_ai import (
     GeminiClient,
     UserProfile,
     ReferenceExample,
@@ -76,6 +76,7 @@ from cover_letter_ai import (
     format_application,
     result_to_json,
 )
+from src.ai.models import ErrorResponse, SuccessResponse
 
 
 # ==========================================================================
@@ -208,8 +209,8 @@ def coerce_user_profile(user: Any, strict_fields: bool = True) -> UserProfile:
     return UserProfile(**{k: v for k, v in user.items() if k in valid})
 
 
-def _error(message: str, error_type: str) -> dict[str, Any]:
-    return {"status": "error", "message": message, "error_type": error_type}
+def _error(message: str) -> ErrorResponse:
+    return ErrorResponse(message=message)
 
 
 # ==========================================================================
@@ -239,7 +240,7 @@ def main(
     model_name: str | None = None,
     verbose: bool = True,
     strict_fields: bool = True,
-) -> dict[str, Any]:
+) -> ErrorResponse | SuccessResponse:
     """문항별 완성형 자소서를 생성해 envelope dict 로 반환한다.
 
     반환
@@ -294,7 +295,7 @@ def main(
     except Exception as exc:
         if verbose:
             print(f"[입력 오류] {type(exc).__name__}: {exc}")
-        return _error(str(exc), type(exc).__name__)
+        return _error(str(exc))
 
     if verbose:
         # 750:250 균형 점검(레퍼런스 데이터가 없으면 0건으로 표시됨)
@@ -326,7 +327,7 @@ def main(
         message = str(exc)
         if verbose:
             print(f"[생성 실패] {type(exc).__name__}: {message}")
-        return _error(message, type(exc).__name__)
+        return _error(message)
 
     # 사람이 읽는 CLI 출력 (서버에서는 verbose=False 로 끈다)
     if verbose:
@@ -335,7 +336,7 @@ def main(
     # 프론트엔드/ API 용 구조화 payload
     #   result_to_json() 은 char_count / sentences / experience_selection 등
     #   화면 구현에 필요한 파생 필드까지 포함한다(asdict 보다 상위집합).
-    return {"status": "success", "result": result_to_json(result)}
+    return SuccessResponse(result=result_to_json(result))
 
 
 if __name__ == "__main__":
