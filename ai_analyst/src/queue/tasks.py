@@ -2,13 +2,11 @@ import hashlib
 import hmac
 import json
 from os import getenv
-from typing import Any, Literal
+from typing import Any
 import requests
-from ..const import SCHEMA_VERSIONS
+from ..const import ANALYSIS_TYPES, SCHEMA_VERSIONS
 from src.queue.celery_app import celery
 import traceback
-
-AnalysisTypes = Literal["individual", "comprehensive", "keyword", "resume", "cover_letter"]
 
 FRONTEND_API_URL = "http://app:8000"
 INTERNAL_SECRET_KEY = "INTERNAL_SECRET"
@@ -31,13 +29,13 @@ def call_frontend(endpoint: str, body: dict[str, Any]):
     res: dict[str, Any] = response.json()
     return res
 
-def call_failure(analysis_type: AnalysisTypes, analysis_id: str):
+def call_failure(analysis_type: ANALYSIS_TYPES, analysis_id: str):
     return call_frontend(
         f"/{getenv("INTERNAL_ROUTE", "internal")}/{analysis_type}/failure",
         {"analysis_id": analysis_id}
     )
 
-def call_success(analysis_type: AnalysisTypes, analysis_id: str, result: dict, vector: list[float] | None):
+def call_success(analysis_type: ANALYSIS_TYPES, analysis_id: str, result: dict, vector: list[float] | None):
     body = {"analysis_id": analysis_id, "result": {**result, "schema_version": f"{analysis_type}/{SCHEMA_VERSIONS[analysis_type]}"}, "vector": None}
     if vector:
         body["vector"] = vector
