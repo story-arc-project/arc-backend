@@ -44,6 +44,7 @@ async def cover_letter(body: Annotated[CoverLetterRequest, Body()], response: Re
     task = process_cover_letter.delay(
         str(body.cover_letter_id),
         body.experiences,
+        body.industry,
         body.name,
         body.target_company,
         body.target_job,

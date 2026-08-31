@@ -129,6 +129,7 @@ def process_resume(
 def process_cover_letter(
     cover_letter_id: str,
     experiences: list[dict],
+    industry: str,
     name: str = "",
     target_company: str = "",
     target_job: str = "",
@@ -171,6 +172,7 @@ def process_cover_letter(
             job_key=job_key,
             region=region,
             questions=questions or [],
+            industry=industry,
         )
 
         if response.status == "error":

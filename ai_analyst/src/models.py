@@ -42,3 +42,4 @@ class CoverLetterRequest(BaseModel):
     career_goal: str = ""
     extra_notes: str = ""
     questions: list[dict] | None = None
+    industry: str = ""
