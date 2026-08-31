@@ -5,7 +5,7 @@ import requests
 from typing import Annotated
 from uuid import UUID
 from fastapi import APIRouter, Depends, Response
-from sqlmodel import col, select, and_
+from sqlmodel import col, select, and_, func
 import json
 
 from src.api.models.base import BookmarkData, ComprehensiveAnalysisData, ComprehensiveAnalysisExperienceData, ComprehensiveAnalysisList, ComprehensiveAnalysisListData, ErrorResponse, IndividualAnalysisData, IndividualAnalysisList, IndividualAnalysisListData, SuccessResponse, KeywordAnalysisList, KeywordAnalysisListData, KeywordAnalysisData, UUIDDataWithTitle
@@ -37,13 +37,31 @@ def get_experience_titles(session: SessionDep, experience_ids: set[UUID]):
         print(experience_titles)
     return experience_titles
 
+def latest_individual_analysis_subquery():
+    return (
+        select(
+            IndividualAnalysis.experience_id,
+            func.max(IndividualAnalysis.created_at).label("latest_created_at"),
+        )
+        .group_by(col(IndividualAnalysis.experience_id))
+        .subquery()
+    )
+
 analysis_router = APIRouter()
 
 @analysis_router.get("/individual")
 async def get_individual_analyses(session: SessionDep, response: Response, payload: Annotated[AccessTokenPayload, Depends(check_auth)]):
+    latest_analysis = latest_individual_analysis_subquery()
     statement = (
         select(IndividualAnalysis, Experience, AnalysisBookmark)
         .join(Experience)
+        .join(
+            latest_analysis,
+            and_(
+                IndividualAnalysis.experience_id == latest_analysis.c.experience_id,
+                IndividualAnalysis.created_at == latest_analysis.c.latest_created_at
+            ),
+        )
         .outerjoin(
             AnalysisBookmark,
             and_(
@@ -74,9 +92,17 @@ async def get_individual_analyses(session: SessionDep, response: Response, paylo
 
 @analysis_router.get("/individual/{analysis_id}")
 async def get_individual_analysis(analysis_id: UUID, session: SessionDep, response: Response, payload: Annotated[AccessTokenPayload, Depends(check_auth)]):
+    latest_analysis = latest_individual_analysis_subquery()
     statement = (
         select(IndividualAnalysis, Experience, AnalysisBookmark)
         .join(Experience)
+        .join(
+            latest_analysis,
+            and_(
+                IndividualAnalysis.experience_id == latest_analysis.c.experience_id,
+                IndividualAnalysis.created_at == latest_analysis.c.latest_created_at
+            ),
+        )
         .outerjoin(
             AnalysisBookmark,
             and_(
