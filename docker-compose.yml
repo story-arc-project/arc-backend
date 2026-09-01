@@ -42,6 +42,7 @@ services:
       RATE_LIMIT_EXPORT_RESUME: ${RATE_LIMIT_EXPORT_RESUME}
       RATE_LIMIT_EXPORT_COVER_LETTER: ${RATE_LIMIT_EXPORT_COVER_LETTER}
       ADMIN_EMAILS: ${ADMIN_EMAILS}
+      BASE_DOMAIN: ${BASE_DOMAIN}
     depends_on:
       ai_analyst:
         condition: service_started

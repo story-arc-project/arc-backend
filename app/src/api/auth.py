@@ -5,6 +5,7 @@ from fastapi import APIRouter, Depends, Request, Response
 from pydantic import BaseModel, EmailStr
 from sqlmodel import select, func, and_
 import traceback
+from os import getenv
 
 from src.api.models.exc import AppException
 from src.utils.auth import check_auth
@@ -28,6 +29,8 @@ auth_router = APIRouter()
 
 ACCESS_TOKEN_PATH = "/"
 REFRESH_TOKEN_PATH = "/auth/refresh"
+
+BASE_DOMAIN = getenv("BASE_DOMAIN") or None
 
 class SetTokenResult(BaseModel):
     acc_exp: datetime
@@ -55,6 +58,7 @@ def set_tokens(user_id: UUID, response: Response, session: SessionDep):
         secure=True,
         samesite="none",
         path=ACCESS_TOKEN_PATH,
+        domain=BASE_DOMAIN,
         expires=acc.exp
     )
     new_ref = Token(
@@ -79,6 +83,7 @@ def remove_tokens(response: Response):
         key=ACCESS_TOKEN_KEY,
         value="",
         max_age=0,
+        domain=BASE_DOMAIN,
         path=ACCESS_TOKEN_PATH
     )
     response.set_cookie(
