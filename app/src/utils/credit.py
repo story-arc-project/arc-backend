@@ -7,7 +7,7 @@ from uuid import UUID
 from src.api.models.base import CreditErrorResponse, ErrorResponse
 from src.api.models.exc import AppException
 from src.const import CURRENT_CREDIT_POLICY_VERSION, CREDIT_POLICY_VERSIONS, CreditFeature
-from src.db.db import SessionDep, engine
+from src.db.db import engine
 from src.db.models import CreditLedger, CreditReservation, UserCreditAccount
 from src.enums import CreditReservationStatus, ErrorResponseCode
 
@@ -96,7 +96,7 @@ def reserve(
 
 def capture(
     reservation_id: UUID,
-    session: SessionDep,
+    session: Session,
     actor_id: UUID,
 ) -> CreditReservation | None:
     reservation = session.exec(
