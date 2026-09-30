@@ -311,6 +311,12 @@ class ComprehensiveAnalysis(SQLModel, table=True):
             nullable=False
         )
     )
+    reservation_id: uuid.UUID | None = Field(
+        default=None,
+        foreign_key="credit_reservations.id",
+        nullable=True,
+        index=True,
+    )
 
 class Resume(SQLModel, table=True):
     __tablename__: str = "resume"  # pyright: ignore[reportIncompatibleVariableOverride]
@@ -349,6 +355,12 @@ class Resume(SQLModel, table=True):
             nullable=False
         )
     )
+    reservation_id: uuid.UUID | None = Field(
+        default=None,
+        foreign_key="credit_reservations.id",
+        nullable=True,
+        index=True,
+    )
 
 class KeywordAnalysis(SQLModel, table=True):
     __tablename__: str = "keyword_analyses"  # pyright: ignore[reportIncompatibleVariableOverride]
@@ -383,6 +395,12 @@ class KeywordAnalysis(SQLModel, table=True):
             onupdate=func.now(),
             nullable=False
         )
+    )
+    reservation_id: uuid.UUID | None = Field(
+        default=None,
+        foreign_key="credit_reservations.id",
+        nullable=True,
+        index=True,
     )
 
 class DeletedUser(SQLModel, table=True):
@@ -519,6 +537,12 @@ class CoverLetter(SQLModel, table=True):
             onupdate=func.now(),
             nullable=False
         )
+    )
+    reservation_id: uuid.UUID | None = Field(
+        default=None,
+        foreign_key="credit_reservations.id",
+        nullable=True,
+        index=True,
     )
 
 class AuditLog(SQLModel, table=True):
