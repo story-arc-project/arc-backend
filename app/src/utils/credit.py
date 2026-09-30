@@ -158,3 +158,38 @@ def capture(
     session.add(ledger)
     session.flush()
     return reservation
+
+def release(reservation_id: UUID) -> CreditReservation | None:
+    with Session(engine) as session:
+        reservation = session.exec(
+            select(CreditReservation)
+            .where(CreditReservation.id == reservation_id)
+            .with_for_update()
+        ).first()
+
+        if not reservation:
+            return None
+
+        if reservation.status == CreditReservationStatus.RELEASED:
+            return reservation
+
+        if reservation.status != CreditReservationStatus.RESERVED:
+            return reservation
+
+        account = session.exec(
+            select(UserCreditAccount)
+            .where(UserCreditAccount.user_id == reservation.user_id)
+            .with_for_update()
+        ).first()
+
+        if account:
+            account.reserved -= reservation.amount
+            session.add(account)
+
+        reservation.status = CreditReservationStatus.RELEASED
+        reservation.finished_at = datetime.now(timezone.utc)
+        session.add(reservation)
+
+        session.commit()
+        session.refresh(reservation)
+        return reservation
