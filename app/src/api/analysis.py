@@ -4,7 +4,7 @@ from zoneinfo import ZoneInfo
 import requests
 from typing import Annotated
 from uuid import UUID
-from fastapi import APIRouter, Depends, Response
+from fastapi import APIRouter, Depends, Header, Response
 from sqlmodel import col, select, and_, func
 import json
 
@@ -13,9 +13,10 @@ from src.api.models.exc import AppException
 from src.api.models.request import ComprehensiveAnalysisPatchRequest, ComprehensiveAnalysisPostRequest, KeywordAnalysisPatchRequest, KeywordAnalysisPostRequest
 from src.api.models.response import BookmarkListResponse, ComprehensiveAnalysisListResponse, ComprehensiveAnalysisResponse, DeleteSuccessResponse, IndividualAnalysisListResponse, IndividualAnalysisResponse, KeywordAnalysisListResponse, KeywordAnalysisResponse, PostSuccessResponse
 from src.db.db import SessionDep
-from src.db.models import AnalysisBookmark, ComprehensiveAnalysis, Experience, IndividualAnalysis, KeywordAnalysis, UserProfile
-from src.enums import AnalysisStatus, AnalysisType, ErrorResponseCode
+from src.db.models import AnalysisBookmark, ComprehensiveAnalysis, CreditReservation, Experience, IndividualAnalysis, KeywordAnalysis, UserProfile
+from src.enums import AnalysisStatus, AnalysisType, CreditReservationStatus, ErrorResponseCode
 from src.utils.auth import check_auth
+from src.utils import credit
 from src.utils.ratelimit import analysis_rate_limiters
 from src.utils.render import render_experience_content
 from src.utils.token import AccessTokenPayload
@@ -194,7 +195,18 @@ def generate_comprehensive_analysis_title(session: SessionDep, experience_ids: l
         title = f"{valid_titles[0]} 등 {len(experience_ids)}개 분석"
     return title
 
-def process_comprehensive_analysis(analysis: ComprehensiveAnalysis, user_input: list[str], user_profile: UserProfile, session: SessionDep, response: Response):
+def process_comprehensive_analysis(analysis: ComprehensiveAnalysis, user_input: list[str], user_profile: UserProfile, session: SessionDep, response: Response, idempotency_key: str):
+    reservation = credit.reserve(
+        user_id=analysis.user_id,
+        feature="comprehensive",
+        idempotency_key=f"reserve:comprehensive:{idempotency_key}",
+    )
+    if reservation:
+        analysis.reservation_id = reservation.id
+    analysis.status = AnalysisStatus.PENDING
+    session.add(analysis)
+    session.commit()
+    session.refresh(analysis)
     try:
         req = requests.post("http://ai_analyst:8001/comprehensive", json={
             "analysis_id": str(analysis.id),
@@ -209,8 +221,12 @@ def process_comprehensive_analysis(analysis: ComprehensiveAnalysis, user_input: 
         session.commit()
         session.refresh(analysis)
     except Exception:
+        if reservation:
+            credit.release(reservation.id)
         traceback.print_exc()
-        session.rollback()
+        analysis.status = AnalysisStatus.FAILED
+        session.add(analysis)
+        session.commit()
         raise AppException(
             500,
             ErrorResponse(
@@ -234,16 +250,38 @@ async def post_comprehensive_analysis(
     response: Response,
     payload: Annotated[AccessTokenPayload, Depends(check_auth)],
     _user_limit: Annotated[None, Depends(analysis_rate_limiters["comprehensive"]["user"])],
-    _ip_limit: Annotated[None, Depends(analysis_rate_limiters["comprehensive"]["ip"])]
+    _ip_limit: Annotated[None, Depends(analysis_rate_limiters["comprehensive"]["ip"])],
+    idempotency_key: Annotated[str, Header(alias="Idempotency-Key")],
 ):
+    existing_reservation = session.exec(
+        select(CreditReservation).where(
+            CreditReservation.idempotency_key == f"reserve:comprehensive:{idempotency_key}",
+            col(CreditReservation.status).in_([CreditReservationStatus.RESERVED, CreditReservationStatus.CAPTURED]),
+        )
+    ).first()
+    if existing_reservation:
+        existing_analysis = session.exec(
+            select(ComprehensiveAnalysis).where(
+                ComprehensiveAnalysis.reservation_id == existing_reservation.id
+            )
+        ).first()
+        if existing_analysis:
+            return PostSuccessResponse(
+                message="Queued comprehensive analysis.",
+                data=UUIDDataWithTitle(
+                    id=existing_analysis.id,
+                    title=existing_analysis.title,
+                )
+            )
     user_profile, user_input, experience_ids = pre_process_comprehensive_analysis(session, body.experiences, payload.sub)
     title = generate_comprehensive_analysis_title(session, experience_ids)
     new_comprehensive_analysis = ComprehensiveAnalysis(
         user_id = payload.sub,
         experience_ids = experience_ids,
-        title = title
+        title = title,
+        reservation_id = None,
     )
-    return process_comprehensive_analysis(new_comprehensive_analysis, user_input, user_profile, session, response)
+    return process_comprehensive_analysis(new_comprehensive_analysis, user_input, user_profile, session, response, idempotency_key)
 
 @analysis_router.post("/comprehensive/{analysis_id}/retry")
 async def retry_comprehensive_analysis(
