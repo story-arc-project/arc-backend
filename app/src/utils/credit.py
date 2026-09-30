@@ -10,7 +10,11 @@ from src.db.db import engine
 from src.db.models import CreditReservation, UserCreditAccount
 from src.enums import CreditReservationStatus, ErrorResponseCode
 
-def reserve(user_id: UUID, feature: CreditFeature, idempotency_key: str):
+def reserve(
+    user_id: UUID,
+    feature: CreditFeature,
+    idempotency_key: str,
+) -> CreditReservation | None:
     with Session(engine) as session:
         decrease_amount = CREDIT_POLICY_VERSIONS[CURRENT_CREDIT_POLICY_VERSION][feature]
         if decrease_amount <= 0:
