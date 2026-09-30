@@ -1,3 +1,6 @@
+from collections.abc import Mapping
+from typing import Final, Literal, ReadOnly, TypedDict
+
 ACCESS_TOKEN_EXPIRE  = 15 # minutes
 REFRESH_TOKEN_EXPIRE = 14 # days
 JWT_ALG = "HS256"
@@ -31,3 +34,24 @@ REDIS_PORT = 6379
 ADMIN_PAGE_NOT_ALLOWED = "Admin page not allowed"
 
 SUPPORT_EMAIL = "storyarc.org@gmail.com"
+
+# Credit policies
+type CreditPolicyVersion = Literal[
+    "2026-09-26-v1",
+]
+class CreditPolicy(TypedDict):
+    individual: ReadOnly[int]
+    comprehensive: ReadOnly[int]
+    keyword: ReadOnly[int]
+    resume: ReadOnly[int]
+    cover_letter: ReadOnly[int]
+CURRENT_CREDIT_POLICY_VERSION: Final[CreditPolicyVersion] = "2026-09-26-v1"
+CREDIT_POLICY_VERSIONS: Final[Mapping[CreditPolicyVersion, CreditPolicy]] = {
+    "2026-09-26-v1": {
+        "individual": 0,
+        "comprehensive": 2,
+        "keyword": 2,
+        "resume": 3,
+        "cover_letter": 3,
+    },
+}
