@@ -193,3 +193,84 @@ def release(reservation_id: UUID) -> CreditReservation | None:
         session.commit()
         session.refresh(reservation)
         return reservation
+
+def grant(
+    user_id: UUID,
+    amount: int,
+    reason: str,
+    idempotency_key: str,
+    actor_id: UUID,
+) -> CreditLedger:
+    if amount <= 0:
+        raise AppException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            error=ErrorResponse(
+                code=ErrorResponseCode.BAD_REQUEST,
+                message="Grant amount must be greater than zero",
+            ),
+        )
+
+    with Session(engine) as session:
+        existing_ledger = session.exec(
+            select(CreditLedger).where(CreditLedger.idempotency_key == idempotency_key)
+        ).first()
+        if existing_ledger:
+            if existing_ledger.user_id != user_id or existing_ledger.amount != amount:
+                raise AppException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    error=ErrorResponse(
+                        code=ErrorResponseCode.IDEMPOTENCY_KEY_MISMATCH,
+                        message="Idempotency key payload mismatch",
+                    ),
+                )
+            return existing_ledger
+
+        account = session.exec(
+            select(UserCreditAccount)
+            .where(UserCreditAccount.user_id == user_id)
+            .with_for_update()
+        ).first()
+
+        if not account:
+            account = UserCreditAccount(user_id=user_id, balance=0, reserved=0)
+            session.add(account)
+            session.flush()
+
+        account.balance += amount
+
+        ledger = CreditLedger(
+            user_id=user_id,
+            amount=amount,
+            balance_after=account.balance,
+            reason=reason,
+            feature=None,
+            policy_version=CURRENT_CREDIT_POLICY_VERSION,
+            idempotency_key=idempotency_key,
+            reference_type="GRANT",
+            reference_id=None,
+            actor_id=actor_id,
+        )
+
+        session.add(account)
+        session.add(ledger)
+
+        try:
+            session.commit()
+            session.refresh(ledger)
+            return ledger
+        except IntegrityError:
+            session.rollback()
+            concurrent_ledger = session.exec(
+                select(CreditLedger).where(CreditLedger.idempotency_key == idempotency_key)
+            ).first()
+            if concurrent_ledger:
+                if concurrent_ledger.user_id != user_id or concurrent_ledger.amount != amount:
+                    raise AppException(
+                        status_code=status.HTTP_409_CONFLICT,
+                        error=ErrorResponse(
+                            code=ErrorResponseCode.IDEMPOTENCY_KEY_MISMATCH,
+                            message="Idempotency key payload mismatch",
+                        ),
+                    )
+                return concurrent_ledger
+            raise
