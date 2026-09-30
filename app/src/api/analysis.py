@@ -206,27 +206,33 @@ def process_comprehensive_analysis(analysis: ComprehensiveAnalysis, user_input: 
     analysis.status = AnalysisStatus.PENDING
     session.add(analysis)
     session.commit()
-    session.refresh(analysis)
     try:
         req = requests.post("http://ai_analyst:8001/comprehensive", json={
             "analysis_id": str(analysis.id),
             "input": user_input,
             "school": user_profile.school,
             "department": user_profile.department
-        })
+        }, timeout=10)
         req.raise_for_status()
         analysis.task_id = req.json()["task_id"]
         analysis.status = AnalysisStatus.QUEUED
         session.add(analysis)
         session.commit()
-        session.refresh(analysis)
     except Exception:
-        if reservation:
-            credit.release(reservation.id)
         traceback.print_exc()
-        analysis.status = AnalysisStatus.FAILED
-        session.add(analysis)
-        session.commit()
+        session.rollback()
+        if reservation:
+            try:
+                credit.release(reservation.id)
+            except Exception:
+                traceback.print_exc()
+        try:
+            analysis.status = AnalysisStatus.FAILED
+            session.add(analysis)
+            session.commit()
+        except Exception:
+            traceback.print_exc()
+            session.rollback()
         raise AppException(
             500,
             ErrorResponse(
