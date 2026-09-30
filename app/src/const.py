@@ -39,12 +39,14 @@ SUPPORT_EMAIL = "storyarc.org@gmail.com"
 type CreditPolicyVersion = Literal[
     "2026-09-26-v1",
 ]
-class CreditPolicy(TypedDict):
-    individual: ReadOnly[int]
-    comprehensive: ReadOnly[int]
-    keyword: ReadOnly[int]
-    resume: ReadOnly[int]
-    cover_letter: ReadOnly[int]
+type CreditFeature = Literal[
+    "individual",
+    "comprehensive",
+    "keyword",
+    "resume",
+    "cover_letter",
+]
+type CreditPolicy = Mapping[CreditFeature, int]
 CURRENT_CREDIT_POLICY_VERSION: Final[CreditPolicyVersion] = "2026-09-26-v1"
 CREDIT_POLICY_VERSIONS: Final[Mapping[CreditPolicyVersion, CreditPolicy]] = {
     "2026-09-26-v1": {
