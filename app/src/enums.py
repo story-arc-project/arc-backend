@@ -68,3 +68,8 @@ class AuditAction(str, enum.Enum):
 class FeedbackTriggerSource(str, enum.Enum):
     analysis_completed = "analysis_completed"
     experience_threshold = "experience_threshold"
+
+class CreditReservationStatus(str, enum.Enum):
+    RESERVED = "RESERVED"
+    CAPTURED = "CAPTURED"
+    RELEASED = "RELEASED"

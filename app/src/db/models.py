@@ -3,7 +3,7 @@ from typing import Any, Optional
 import uuid
 from sqlalchemy import CheckConstraint, DateTime, func, Column, UUID as SAUUID
 from sqlalchemy.sql.functions import now
-from src.enums import Affiliation, AnalysisStatus, AnalysisType, AuditAction, FeedbackTriggerSource, Language, OauthProviderId, UserStatus
+from src.enums import Affiliation, AnalysisStatus, AnalysisType, AuditAction, CreditReservationStatus, FeedbackTriggerSource, Language, OauthProviderId, UserStatus
 from sqlmodel import ARRAY, Field, SQLModel, String, UniqueConstraint
 from sqlalchemy.dialects.postgresql import JSONB
 from pgvector.sqlalchemy import Vector
@@ -590,4 +590,97 @@ class FeedbackResponse(SQLModel, table=True):
     __table_args__ = (
         UniqueConstraint("user_id", "campaign_id", name="uq_feedback_user_campaign"),
         CheckConstraint("rating BETWEEN 1 AND 5", name="ck_feedback_rating_range"),
+    )
+
+class UserCreditAccount(SQLModel, table=True):
+    __tablename__: str = "user_credit_accounts"  # pyright: ignore[reportIncompatibleVariableOverride]
+    __table_args__ = (
+        CheckConstraint("reserved >= 0", name="chk_positive_reserved"),
+        CheckConstraint("balance - reserved >= 0", name="chk_available_balance"),
+    )
+
+    user_id: uuid.UUID = Field(
+        foreign_key="users.id",
+        primary_key=True,
+        sa_type=SAUUID
+    )
+    balance: int = Field(default=0)
+    reserved: int = Field(default=0)
+    created_at: datetime = Field(
+        default_factory=now,
+        sa_column=Column(
+            DateTime(timezone=True),
+            server_default=func.now(),
+            nullable=False
+        )
+    )
+    updated_at: datetime = Field(
+        default_factory=now,
+        sa_column=Column(
+            DateTime(timezone=True),
+            server_default=func.now(),
+            onupdate=func.now(),
+            nullable=False
+        )
+    )
+
+class CreditLedger(SQLModel, table=True):
+    __tablename__: str = "credit_ledgers"  # pyright: ignore[reportIncompatibleVariableOverride]
+    id: uuid.UUID = Field(
+        default_factory=uuid.uuid4,
+        primary_key=True,
+        sa_type=SAUUID
+    )
+    user_id: uuid.UUID = Field(foreign_key="users.id", sa_type=SAUUID, index=True)
+    amount: int
+    balance_after: int
+    reason: str
+    feature: str | None = None
+    policy_version: str
+    idempotency_key: str = Field(unique=True, index=True)
+    reference_type: str | None = Field(default=None, index=True)
+    reference_id: str | None = Field(default=None, index=True)
+    actor_id: uuid.UUID = Field(foreign_key="users.id", sa_type=SAUUID)
+    created_at: datetime = Field(
+        default_factory=now,
+        sa_column=Column(
+            DateTime(timezone=True),
+            server_default=func.now(),
+            index=True,
+            nullable=False
+        )
+    )
+
+class CreditReservation(SQLModel, table=True):
+    __tablename__: str = "credit_reservations"  # pyright: ignore[reportIncompatibleVariableOverride]
+    __table_args__ = (
+        CheckConstraint("amount > 0", name="chk_positive_reservation_amount"),
+    )
+
+    id: uuid.UUID = Field(
+        default_factory=uuid.uuid4,
+        primary_key=True,
+        sa_type=SAUUID
+    )
+    user_id: uuid.UUID = Field(foreign_key="users.id", sa_type=SAUUID, index=True)
+    amount: int
+    status: CreditReservationStatus = Field(default=CreditReservationStatus.RESERVED, index=True)
+    feature: str
+    policy_version: str
+    attempt_count: int = Field(default=1)
+    idempotency_key: str = Field(unique=True, index=True)
+    created_at: datetime = Field(
+        default_factory=now,
+        sa_column=Column(
+            DateTime(timezone=True),
+            server_default=func.now(),
+            nullable=False
+        )
+    )
+    finished_at: datetime | None = Field(
+        default=None,
+        sa_column=Column(
+            DateTime(timezone=True),
+            nullable=True
+        )
     )
