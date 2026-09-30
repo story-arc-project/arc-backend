@@ -98,7 +98,7 @@ def capture(
     reservation_id: UUID,
     session: Session,
     actor_id: UUID,
-) -> CreditReservation | None:
+) -> CreditReservation:
     reservation = session.exec(
         select(CreditReservation)
         .where(CreditReservation.id == reservation_id)
@@ -106,7 +106,13 @@ def capture(
     ).first()
 
     if not reservation:
-        return None
+        raise AppException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            error=ErrorResponse(
+                code=ErrorResponseCode.NOT_FOUND,
+                message="Credit reservation not found",
+            ),
+        )
 
     if reservation.status == CreditReservationStatus.CAPTURED:
         return reservation
