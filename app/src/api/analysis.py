@@ -4,7 +4,7 @@ from zoneinfo import ZoneInfo
 import requests
 from typing import Annotated
 from uuid import UUID
-from fastapi import APIRouter, Depends, Header, Response
+from fastapi import APIRouter, Depends, Header, Response, status
 from sqlmodel import col, select, and_, func
 import json
 
@@ -279,6 +279,13 @@ async def post_comprehensive_analysis(
                     title=existing_analysis.title,
                 )
             )
+        raise AppException(
+            status_code=status.HTTP_409_CONFLICT,
+            error=ErrorResponse(
+                code=ErrorResponseCode.IDEMPOTENCY_KEY_MISMATCH,
+                message="A request with this idempotency key is currently being processed. Please wait.",
+            ),
+        )
     user_profile, user_input, experience_ids = pre_process_comprehensive_analysis(session, body.experiences, payload.sub)
     title = generate_comprehensive_analysis_title(session, experience_ids)
     new_comprehensive_analysis = ComprehensiveAnalysis(
