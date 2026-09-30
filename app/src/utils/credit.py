@@ -19,7 +19,7 @@ def reserve(
     with Session(engine) as session:
         decrease_amount = CREDIT_POLICY_VERSIONS[CURRENT_CREDIT_POLICY_VERSION][feature]
         if decrease_amount <= 0:
-            return
+            return None
 
         existing_reservation = session.exec(
             select(CreditReservation).where(CreditReservation.idempotency_key == idempotency_key)
