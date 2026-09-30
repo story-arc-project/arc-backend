@@ -1,3 +1,4 @@
+from datetime import datetime, timezone
 from fastapi import status
 from sqlalchemy.exc import IntegrityError
 from sqlmodel import select, Session
@@ -7,7 +8,7 @@ from src.api.models.base import CreditErrorResponse, ErrorResponse
 from src.api.models.exc import AppException
 from src.const import CURRENT_CREDIT_POLICY_VERSION, CREDIT_POLICY_VERSIONS, CreditFeature
 from src.db.db import engine
-from src.db.models import CreditReservation, UserCreditAccount
+from src.db.models import CreditLedger, CreditReservation, UserCreditAccount
 from src.enums import CreditReservationStatus, ErrorResponseCode
 
 def reserve(
@@ -92,3 +93,68 @@ def reserve(
                     )
                 return concurrent_reservation
             raise
+
+def capture(
+    reservation_id: UUID,
+    actor_id: UUID,
+) -> CreditReservation | None:
+    with Session(engine) as session:
+        reservation = session.exec(
+            select(CreditReservation)
+            .where(CreditReservation.id == reservation_id)
+            .with_for_update()
+        ).first()
+
+        if not reservation:
+            return None
+
+        if reservation.status == CreditReservationStatus.CAPTURED:
+            return reservation
+
+        if reservation.status != CreditReservationStatus.RESERVED:
+            raise AppException(
+                status_code=status.HTTP_409_CONFLICT,
+                error=ErrorResponse(
+                    code=ErrorResponseCode.INVALID_OPERATION,
+                    message=f"Cannot capture reservation in status {reservation.status}",
+                ),
+            )
+
+        account = session.exec(
+            select(UserCreditAccount)
+            .where(UserCreditAccount.user_id == reservation.user_id)
+            .with_for_update()
+        ).first()
+        if not account:
+            raise AppException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                error=ErrorResponse(
+                    code=ErrorResponseCode.NOT_FOUND,
+                    message="User credit account not found",
+                ),
+            )
+
+        account.reserved -= reservation.amount
+        account.balance -= reservation.amount
+
+        reservation.status = CreditReservationStatus.CAPTURED
+        reservation.finished_at = datetime.now(timezone.utc)
+
+        ledger = CreditLedger(
+            user_id=reservation.user_id,
+            amount=-reservation.amount,
+            balance_after=account.balance,
+            reason=f"Capture reservation {reservation.id}",
+            feature=reservation.feature,
+            policy_version=reservation.policy_version,
+            idempotency_key=f"capture:{reservation.id}",
+            reference_type="RESERVATION",
+            reference_id=str(reservation.id),
+            actor_id=actor_id,
+        )
+
+        session.add(account)
+        session.add(reservation)
+        session.add(ledger)
+        session.flush()
+        return reservation
