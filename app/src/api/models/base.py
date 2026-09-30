@@ -19,6 +19,12 @@ class ErrorResponse(BaseModel):
     code: ErrorResponseCode
     message: str
 
+class CreditErrorResponse(ErrorResponse):
+    feature: str
+    required: int
+    available: int
+    policy_version: str
+
 class EmailVerificationErrorResponse(ErrorResponse):
     remaining_attempts: int
 
