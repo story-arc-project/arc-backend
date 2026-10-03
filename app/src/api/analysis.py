@@ -7,6 +7,7 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, Header, Response, status
 from sqlmodel import col, select, and_, func
 import json
+import httpx
 
 from src.api.models.base import BookmarkData, ComprehensiveAnalysisData, ComprehensiveAnalysisExperienceData, ComprehensiveAnalysisList, ComprehensiveAnalysisListData, ErrorResponse, IndividualAnalysisData, IndividualAnalysisList, IndividualAnalysisListData, SuccessResponse, KeywordAnalysisList, KeywordAnalysisListData, KeywordAnalysisData, UUIDDataWithTitle
 from src.api.models.exc import AppException
@@ -195,7 +196,7 @@ def generate_comprehensive_analysis_title(session: SessionDep, experience_ids: l
         title = f"{valid_titles[0]} 등 {len(experience_ids)}개 분석"
     return title
 
-def process_comprehensive_analysis(analysis: ComprehensiveAnalysis, user_input: list[str], user_profile: UserProfile, session: SessionDep, response: Response, idempotency_key: str):
+async def process_comprehensive_analysis(analysis: ComprehensiveAnalysis, user_input: list[str], user_profile: UserProfile, session: SessionDep, response: Response, idempotency_key: str):
     reservation = credit.reserve(
         user_id=analysis.user_id,
         feature="comprehensive",
@@ -207,17 +208,18 @@ def process_comprehensive_analysis(analysis: ComprehensiveAnalysis, user_input: 
     session.add(analysis)
     session.commit()
     try:
-        req = requests.post("http://ai_analyst:8001/comprehensive", json={
-            "analysis_id": str(analysis.id),
-            "input": user_input,
-            "school": user_profile.school,
-            "department": user_profile.department
-        }, timeout=10)
-        req.raise_for_status()
-        analysis.task_id = req.json()["task_id"]
-        analysis.status = AnalysisStatus.QUEUED
-        session.add(analysis)
-        session.commit()
+        async with httpx.AsyncClient(timeout=10) as client:
+            req = await client.post("http://ai_analyst:8001/comprehensive", json={
+                "analysis_id": str(analysis.id),
+                "input": user_input,
+                "school": user_profile.school,
+                "department": user_profile.department
+            })
+            req.raise_for_status()
+            analysis.task_id = req.json()["task_id"]
+            analysis.status = AnalysisStatus.QUEUED
+            session.add(analysis)
+            session.commit()
     except Exception:
         traceback.print_exc()
         session.rollback()
@@ -295,7 +297,7 @@ async def post_comprehensive_analysis(
         title = title,
         reservation_id = None,
     )
-    return process_comprehensive_analysis(new_comprehensive_analysis, user_input, user_profile, session, response, idempotency_key)
+    return await process_comprehensive_analysis(new_comprehensive_analysis, user_input, user_profile, session, response, idempotency_key)
 
 @analysis_router.post("/comprehensive/{analysis_id}/retry")
 async def retry_comprehensive_analysis(
