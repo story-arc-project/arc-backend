@@ -328,8 +328,12 @@ async def retry_comprehensive_analysis(
     response: Response,
     payload: Annotated[AccessTokenPayload, Depends(check_auth)],
     _user_limit: Annotated[None, Depends(analysis_rate_limiters["comprehensive"]["user"])],
-    _ip_limit: Annotated[None, Depends(analysis_rate_limiters["comprehensive"]["ip"])]
+    _ip_limit: Annotated[None, Depends(analysis_rate_limiters["comprehensive"]["ip"])],
+    idempotency_key: Annotated[str, Header(alias="Idempotency-Key")],
 ):
+    idempotency_response = check_idempotency(session, payload.sub, idempotency_key)
+    if idempotency_response:
+        return idempotency_response
     analysis = session.get(ComprehensiveAnalysis, analysis_id)
     if analysis is None:
         raise AppException(
@@ -356,7 +360,7 @@ async def retry_comprehensive_analysis(
             )
         )
     user_profile, user_input, _ = pre_process_comprehensive_analysis(session, analysis.experience_ids, payload.sub)
-    return process_comprehensive_analysis(analysis, user_input, user_profile, session, response)
+    return await process_comprehensive_analysis(analysis, user_input, user_profile, session, response, idempotency_key)
 
 @analysis_router.patch("/comprehensive/{analysis_id}")
 async def patch_comprehensive_analysis(
