@@ -61,6 +61,7 @@ dependencies = [
     { name = "cryptography" },
     { name = "fastapi" },
     { name = "fastapi-limiter" },
+    { name = "httpx" },
     { name = "pgvector" },
     { name = "psycopg2-binary" },
     { name = "pwdlib", extra = ["argon2"] },
@@ -77,7 +78,6 @@ dependencies = [
 dev = [
     { name = "fakeredis" },
     { name = "freezegun" },
-    { name = "httpx" },
     { name = "pytest" },
     { name = "testcontainers", extra = ["minio"] },
 ]
@@ -90,6 +90,7 @@ requires-dist = [
     { name = "cryptography", specifier = ">=46.0.6" },
     { name = "fastapi", specifier = ">=0.135.2" },
     { name = "fastapi-limiter", specifier = ">=0.2.0" },
+    { name = "httpx", specifier = ">=0.28.1" },
     { name = "pgvector", specifier = ">=0.4.2" },
     { name = "psycopg2-binary", specifier = ">=2.9.11" },
     { name = "pwdlib", extras = ["argon2"], specifier = ">=0.3.0" },
@@ -106,7 +107,6 @@ requires-dist = [
 dev = [
     { name = "fakeredis", specifier = ">=2.34.1" },
     { name = "freezegun", specifier = ">=1.5.5" },
-    { name = "httpx", specifier = ">=0.28.1" },
     { name = "pytest", specifier = ">=9.0.2" },
     { name = "testcontainers", extras = ["minio", "postgres"], specifier = ">=4.14.2" },
 ]
