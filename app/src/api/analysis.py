@@ -206,7 +206,22 @@ async def process_comprehensive_analysis(analysis: ComprehensiveAnalysis, user_i
         analysis.reservation_id = reservation.id
     analysis.status = AnalysisStatus.PENDING
     session.add(analysis)
-    session.commit()
+    try:
+        session.commit()
+    except Exception:
+        session.rollback()
+        if reservation:
+            try:
+                credit.release(reservation.id)
+            except Exception:
+                traceback.print_exc()
+        raise AppException(
+            500,
+            ErrorResponse(
+                code=ErrorResponseCode.SERVER_ERROR,
+                message="Server side error."
+            )
+        )
     try:
         async with httpx.AsyncClient(timeout=10) as client:
             req = await client.post("http://ai_analyst:8001/comprehensive", json={
