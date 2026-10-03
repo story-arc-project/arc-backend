@@ -229,10 +229,14 @@ def generate_comprehensive_analysis_title(session: SessionDep, experience_ids: l
     return title
 
 async def process_comprehensive_analysis(analysis: ComprehensiveAnalysis, user_input: list[str], user_profile: UserProfile, session: SessionDep, response: Response, idempotency_key: str):
+    analysis.reservation_id = None
     reservation = credit.reserve(
         user_id=analysis.user_id,
         feature="comprehensive",
         idempotency_key=get_reserve_idempotency_key(idempotency_key, AnalysisType.comprehensive),
+        metadata={
+            "analysis_id": str(analysis.id),
+        },
     )
     if reservation:
         analysis.reservation_id = reservation.id
@@ -331,9 +335,6 @@ async def retry_comprehensive_analysis(
     _ip_limit: Annotated[None, Depends(analysis_rate_limiters["comprehensive"]["ip"])],
     idempotency_key: Annotated[str, Header(alias="Idempotency-Key")],
 ):
-    idempotency_response = check_idempotency(session, payload.sub, idempotency_key)
-    if idempotency_response:
-        return idempotency_response
     analysis = session.get(ComprehensiveAnalysis, analysis_id)
     if analysis is None:
         raise AppException(
@@ -359,6 +360,9 @@ async def retry_comprehensive_analysis(
                 message = "Analysis is not in failed status"
             )
         )
+    idempotency_response = check_idempotency(session, payload.sub, idempotency_key)
+    if idempotency_response:
+        return idempotency_response
     user_profile, user_input, _ = pre_process_comprehensive_analysis(session, analysis.experience_ids, payload.sub)
     return await process_comprehensive_analysis(analysis, user_input, user_profile, session, response, idempotency_key)
 

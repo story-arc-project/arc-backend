@@ -15,6 +15,7 @@ def reserve(
     user_id: UUID,
     feature: CreditFeature,
     idempotency_key: str,
+    metadata: dict[str, str] | None = None,
 ) -> CreditReservation | None:
     with Session(engine) as session:
         decrease_amount = CREDIT_POLICY_VERSIONS[CURRENT_CREDIT_POLICY_VERSION][feature]
@@ -66,6 +67,7 @@ def reserve(
             feature=feature,
             policy_version=CURRENT_CREDIT_POLICY_VERSION,
             idempotency_key=idempotency_key,
+            meta_data=metadata,
         )
         session.add(account)
         session.add(reservation)
