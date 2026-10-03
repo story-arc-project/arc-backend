@@ -93,6 +93,14 @@ def reserve(
                             message="Idempotency key payload mismatch",
                         ),
                     )
+                if concurrent_reservation.status == CreditReservationStatus.RELEASED:
+                    raise AppException(
+                        status_code=status.HTTP_409_CONFLICT,
+                        error=ErrorResponse(
+                            code=ErrorResponseCode.INVALID_OPERATION,
+                            message="Cannot reuse an idempotency key from a failed/released attempt. Please generate a new key.",
+                        ),
+                    )
                 return concurrent_reservation
             raise
 
