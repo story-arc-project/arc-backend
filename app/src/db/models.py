@@ -708,3 +708,7 @@ class CreditReservation(SQLModel, table=True):
             nullable=True
         )
     )
+    meta_data: Optional[dict[str, Any]] = Field(
+        default=None,
+        sa_column=Column(JSONB, nullable=True)
+    )
