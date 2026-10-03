@@ -18,6 +18,7 @@ from src.db.models import AnalysisBookmark, ComprehensiveAnalysis, CreditReserva
 from src.enums import AnalysisStatus, AnalysisType, CreditReservationStatus, ErrorResponseCode
 from src.utils.auth import check_auth
 from src.utils import credit
+from src.utils.idempotency import get_reserve_idempotency_key
 from src.utils.ratelimit import analysis_rate_limiters
 from src.utils.render import render_experience_content
 from src.utils.token import AccessTokenPayload
@@ -174,7 +175,7 @@ def check_idempotency(session: SessionDep, user_id: UUID, idempotency_key: str):
     existing_reservation = session.exec(
         select(CreditReservation).where(
             CreditReservation.user_id == user_id,
-            CreditReservation.idempotency_key == f"reserve:comprehensive:{idempotency_key}",
+            CreditReservation.idempotency_key == get_reserve_idempotency_key(idempotency_key, AnalysisType.comprehensive),
             col(CreditReservation.status).in_([CreditReservationStatus.RESERVED, CreditReservationStatus.CAPTURED]),
         )
     ).first()
@@ -231,7 +232,7 @@ async def process_comprehensive_analysis(analysis: ComprehensiveAnalysis, user_i
     reservation = credit.reserve(
         user_id=analysis.user_id,
         feature="comprehensive",
-        idempotency_key=f"reserve:comprehensive:{idempotency_key}",
+        idempotency_key=get_reserve_idempotency_key(idempotency_key, AnalysisType.comprehensive),
     )
     if reservation:
         analysis.reservation_id = reservation.id
