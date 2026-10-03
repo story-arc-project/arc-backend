@@ -362,6 +362,14 @@ async def retry_comprehensive_analysis(
         )
     idempotency_response = check_idempotency(session, payload.sub, idempotency_key)
     if idempotency_response:
+        if idempotency_response.data.id != analysis_id:
+            raise AppException(
+                status_code=409,
+                error=ErrorResponse(
+                    code=ErrorResponseCode.IDEMPOTENCY_KEY_MISMATCH,
+                    message="Idempotency key is being used by a different analysis."
+                )
+            )
         return idempotency_response
     user_profile, user_input, _ = pre_process_comprehensive_analysis(session, analysis.experience_ids, payload.sub)
     return await process_comprehensive_analysis(analysis, user_input, user_profile, session, response, idempotency_key)
