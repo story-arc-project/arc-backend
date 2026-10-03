@@ -170,6 +170,37 @@ def fetch_owned_experiences(session: SessionDep, experience_ids: list[UUID], use
             )
     return result
 
+def check_idempotency(session: SessionDep, user_id: UUID, idempotency_key: str):
+    existing_reservation = session.exec(
+        select(CreditReservation).where(
+            CreditReservation.user_id == user_id,
+            CreditReservation.idempotency_key == f"reserve:comprehensive:{idempotency_key}",
+            col(CreditReservation.status).in_([CreditReservationStatus.RESERVED, CreditReservationStatus.CAPTURED]),
+        )
+    ).first()
+    if existing_reservation:
+        existing_analysis = session.exec(
+            select(ComprehensiveAnalysis).where(
+                ComprehensiveAnalysis.reservation_id == existing_reservation.id
+            )
+        ).first()
+        if existing_analysis:
+            return PostSuccessResponse(
+                message="Queued comprehensive analysis.",
+                data=UUIDDataWithTitle(
+                    id=existing_analysis.id,
+                    title=existing_analysis.title,
+                )
+            )
+        raise AppException(
+            status_code=status.HTTP_409_CONFLICT,
+            error=ErrorResponse(
+                code=ErrorResponseCode.IDEMPOTENCY_KEY_MISMATCH,
+                message="A request with this idempotency key is currently being processed. Please wait.",
+            ),
+        )
+    return None
+
 def pre_process_comprehensive_analysis(session: SessionDep, experience_ids: list[UUID], user_id: UUID):
     user_profile = session.exec(select(UserProfile).where(UserProfile.user_id == user_id)).one_or_none()
     if user_profile is None:
@@ -276,34 +307,9 @@ async def post_comprehensive_analysis(
     _ip_limit: Annotated[None, Depends(analysis_rate_limiters["comprehensive"]["ip"])],
     idempotency_key: Annotated[str, Header(alias="Idempotency-Key")],
 ):
-    existing_reservation = session.exec(
-        select(CreditReservation).where(
-            CreditReservation.user_id == payload.sub,
-            CreditReservation.idempotency_key == f"reserve:comprehensive:{idempotency_key}",
-            col(CreditReservation.status).in_([CreditReservationStatus.RESERVED, CreditReservationStatus.CAPTURED]),
-        )
-    ).first()
-    if existing_reservation:
-        existing_analysis = session.exec(
-            select(ComprehensiveAnalysis).where(
-                ComprehensiveAnalysis.reservation_id == existing_reservation.id
-            )
-        ).first()
-        if existing_analysis:
-            return PostSuccessResponse(
-                message="Queued comprehensive analysis.",
-                data=UUIDDataWithTitle(
-                    id=existing_analysis.id,
-                    title=existing_analysis.title,
-                )
-            )
-        raise AppException(
-            status_code=status.HTTP_409_CONFLICT,
-            error=ErrorResponse(
-                code=ErrorResponseCode.IDEMPOTENCY_KEY_MISMATCH,
-                message="A request with this idempotency key is currently being processed. Please wait.",
-            ),
-        )
+    idempotency_response = check_idempotency(session, payload.sub, idempotency_key)
+    if idempotency_response:
+        return idempotency_response
     user_profile, user_input, experience_ids = pre_process_comprehensive_analysis(session, body.experiences, payload.sub)
     title = generate_comprehensive_analysis_title(session, experience_ids)
     new_comprehensive_analysis = ComprehensiveAnalysis(
