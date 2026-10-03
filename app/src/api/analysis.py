@@ -261,6 +261,7 @@ async def post_comprehensive_analysis(
 ):
     existing_reservation = session.exec(
         select(CreditReservation).where(
+            CreditReservation.user_id == payload.sub,
             CreditReservation.idempotency_key == f"reserve:comprehensive:{idempotency_key}",
             col(CreditReservation.status).in_([CreditReservationStatus.RESERVED, CreditReservationStatus.CAPTURED]),
         )
