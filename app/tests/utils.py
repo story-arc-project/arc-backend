@@ -5,6 +5,8 @@ import re
 from fastapi.testclient import TestClient
 from pydantic import EmailStr
 
+from src.api.models.consent import AGREEABLE_CONSENT_VERSIONS
+
 def get_sent_mail(mock_mail: MagicMock):
     sent_mail: MIMEMultipart = mock_mail.send_message.call_args.args[0]
     for part in sent_mail.walk():
@@ -48,3 +50,29 @@ def generate_authenticated_user(client: TestClient, mock_mail: MagicMock, email:
     assert response.status_code == 200
     assert client.cookies.get("refreshToken") is not None
     assert client.cookies.get("accessToken") is not None
+
+def onboard_user(authenticated_client: TestClient):
+    response = authenticated_client.post("/auth/consent", json={
+        "agreements": {
+            "termsOfService": {"version": AGREEABLE_CONSENT_VERSIONS["termsOfService"], "granted": True},
+            "privacyRequired": {"version": AGREEABLE_CONSENT_VERSIONS["privacyRequired"], "granted": True},
+            "age14": {"granted": True},
+            "personalizedService": {"version": AGREEABLE_CONSENT_VERSIONS["personalizedService"], "granted": True},
+            "marketing": {"version": AGREEABLE_CONSENT_VERSIONS["marketing"], "granted": True},
+        }
+    })
+    assert response.status_code == 200
+    response = authenticated_client.post("/auth/onboarding", json={
+        "name": "홍길동",
+        "birth": "2001-01-01",
+        "affiliation": "student",
+        "school": "서울대학교",
+        "department": "컴퓨터공학부",
+        "company": None,
+        "desiredRole": None,
+        "affiliationDetail": None,
+        "phone": "01000000000",
+        "worry": ["진로", "이력"],
+        "interest": ["컴퓨터", "AI"]
+    })
+    assert response.status_code == 200
