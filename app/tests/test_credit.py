@@ -35,11 +35,24 @@ def setup_user(session: Session, authenticated_client: TestClient):
 
 @pytest.fixture(name="admin_id")
 def setup_admin(session: Session, client: TestClient, mock_mail: MagicMock):
+    # 1. Back up the original user's auth state
+    original_headers = dict(client.headers)
+    original_cookies = dict(client.cookies)
+    
     admin_email = "admin@gmail.com"
     admin_password = "adminpassword123"
+    
+    # This alters the client state to become the admin
     generate_authenticated_user(client, mock_mail, admin_email, admin_password)
     admin_user = session.exec(select(User).where(User.email == admin_email)).one_or_none()
     assert admin_user is not None, "Admin user not found in test database"
+    
+    # 2. Restore the original user's auth state
+    client.headers.clear()
+    client.headers.update(original_headers)
+    client.cookies.clear()
+    client.cookies.update(original_cookies)
+    
     return admin_user.id
 
 class TestCreditModels:
