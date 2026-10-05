@@ -28,3 +28,6 @@ logs:
 psql:
 	@set -a; . ./.env; set +a; \
 	docker exec -it $(PROJECT_NAME)-db-1 psql -U "$$DB_USER" -d "$$DB_NAME"
+
+local-run: build stop
+	$(COMPOSE) up -d app
