@@ -54,6 +54,8 @@ async def fail_individual(analysis_type: str, body: Annotated[dict, Depends(chec
                 message = ""
             )
         )
+    if analysis.reservation_id is not None:
+        credit.release(analysis.reservation_id)
     try:
         analysis.status = AnalysisStatus.FAILED
         session.add(analysis)
