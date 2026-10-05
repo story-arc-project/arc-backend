@@ -2,7 +2,7 @@ from uuid import uuid4
 from fastapi.testclient import TestClient
 import pytest
 from fakeredis import FakeRedis
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 from sqlalchemy import text
 from sqlalchemy.pool import NullPool
 from sqlmodel import SQLModel, Session, create_engine
@@ -136,5 +136,6 @@ def mock_ai_analyst():
     mock_response = MagicMock()
     mock_response.json.return_value = {"task_id": str(uuid4())}
     mock_response.raise_for_status.return_value = None
-    with patch("src.api.experiences.requests.post", return_value=mock_response) as mock_post:
+    with patch("src.api.experiences.requests.post", return_value=mock_response) as mock_post, \
+         patch("src.api.analysis.httpx.AsyncClient.post", new_callable=AsyncMock, return_value=mock_response):
         yield mock_post
