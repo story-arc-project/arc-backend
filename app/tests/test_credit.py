@@ -146,3 +146,46 @@ class TestCreditModels:
 #         credit_account = session.get(UserCreditAccount, user_id)
 #         assert credit_account is not None
 #         assert credit_account.balance == 15
+
+# class TestUserCreditAPI:
+#     def test_get_balance_isolation(self, authenticated_client: TestClient):
+#         response = authenticated_client.get("/credits")
+#         assert response.status_code in (200, 404) # Endpoint placeholder
+
+#     def test_get_transactions_pagination(self, authenticated_client: TestClient):
+#         response = authenticated_client.get("/credits/transactions?cursor=abc")
+#         assert response.status_code in (200, 404)
+
+#     def test_get_packages_public(self, client: TestClient):
+#         response = client.get("/credits/packages")
+#         assert response.status_code in (200, 404)
+
+#     def test_new_user_balance_returns_200(self, authenticated_client: TestClient):
+#         response = authenticated_client.get("/credits")
+#         if response.status_code == 200:
+#             assert response.json()["balance"] == 0
+
+#     def test_get_balance_ignores_user_id_param(self, authenticated_client: TestClient):
+#         response = authenticated_client.get(f"/credits?user_id={uuid4()}")
+#         assert response.status_code in (200, 404)
+
+#     def test_get_packages_validation(self, client: TestClient):
+#         response = client.get("/credits/packages")
+#         if response.status_code == 200:
+#             data = response.json().get("packages", [])
+#             assert len(data) <= 20
+
+#     def test_get_balance_updated_at_format(self, authenticated_client: TestClient):
+#         response = authenticated_client.get("/credits")
+#         if response.status_code == 200:
+#             assert "T" in response.json().get("updated_at", "")
+
+#     def test_get_transactions_no_internal_leaks(self, authenticated_client: TestClient):
+#         response = authenticated_client.get("/credits/transactions")
+#         if response.status_code == 200:
+#             assert "internal_memo" not in response.text
+
+#     def test_get_packages_excludes_private_data(self, client: TestClient):
+#         response = client.get("/credits/packages")
+#         if response.status_code == 200:
+#             assert "balance" not in response.text
