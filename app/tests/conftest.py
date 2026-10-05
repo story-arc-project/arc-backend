@@ -131,7 +131,7 @@ def authenticated_client(client: TestClient, mock_mail: MagicMock):
     generate_authenticated_user(client, mock_mail, email, password)
     return client
 
-@pytest.fixture
+@pytest.fixture(autouse=True)
 def mock_ai_analyst():
     mock_response = MagicMock()
     mock_response.json.return_value = {"task_id": str(uuid4())}
