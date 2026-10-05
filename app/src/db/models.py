@@ -271,6 +271,12 @@ class IndividualAnalysis(SQLModel, table=True):
             nullable=False
         )
     )
+    reservation_id: uuid.UUID | None = Field(
+        default=None,
+        foreign_key="credit_reservations.id",
+        nullable=True,
+        index=True,
+    )
 
 class ComprehensiveAnalysis(SQLModel, table=True):
     __tablename__: str = "comprehensive_analyses"  # pyright: ignore[reportIncompatibleVariableOverride]
