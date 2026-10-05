@@ -132,7 +132,8 @@ def authenticated_client(client: TestClient, mock_mail: MagicMock):
     return client
 
 @pytest.fixture(autouse=True)
-def mock_ai_analyst():
+def mock_ai_analyst(monkeypatch: pytest.MonkeyPatch):
+    monkeypatch.setenv("INTERNAL_SECRET", "default_secret")
     mock_response = MagicMock()
     mock_response.json.return_value = {"task_id": str(uuid4())}
     mock_response.raise_for_status.return_value = None

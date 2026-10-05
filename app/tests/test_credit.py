@@ -1,3 +1,7 @@
+import hashlib
+import hmac
+import json
+
 import pytest
 from uuid import uuid4, UUID
 from unittest.mock import MagicMock, patch
@@ -17,6 +21,14 @@ from src.utils.idempotency import get_reserve_idempotency_key
 
 from tests.const import AUTHENTICATED_EMAIL
 from tests.utils import generate_authenticated_user, onboard_user
+
+def trigger_internal_callback(client: TestClient, payload: dict, endpoint: str):
+    """Helper to mock the internal API callback with proper HMAC signature."""
+    body_bytes = json.dumps(payload, separators=(",", ":"), sort_keys=True, default=str).encode()
+    secret = "default_secret"
+    signature = hmac.new(secret.encode(), body_bytes, hashlib.sha256).hexdigest()
+    
+    return client.post(endpoint, json=payload, headers={"X-Signature": signature})
 
 @pytest.fixture(autouse=True)
 def override_credit_engine(session: Session):
