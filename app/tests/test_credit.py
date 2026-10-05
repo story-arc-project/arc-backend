@@ -57,6 +57,11 @@ class TestCreditModels:
         account = session.get(UserCreditAccount, user_id)
         assert account is not None
         assert account.reserved == res.amount
+        before = res.amount
+        res = credit.reserve(user_id, "comprehensive", "res_key2", {})
+        assert res is not None
+        session.refresh(account)
+        assert account.reserved == res.amount + before
 
     def test_available_balance_never_negative(self, session: Session, user_id: UUID):
         account = UserCreditAccount(user_id=user_id, balance=10, reserved=20)
