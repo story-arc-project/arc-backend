@@ -1,4 +1,4 @@
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
 from uuid import uuid4
 import pytest
 from fastapi.testclient import TestClient
@@ -8,14 +8,6 @@ from pyrate_limiter import Limiter, Rate, Duration
 from src.utils.auth import check_auth
 from src.utils.ratelimit import analysis_rate_limiters
 
-
-@pytest.fixture
-def mock_ai_analyst():
-    mock_response = MagicMock()
-    mock_response.json.return_value = {"task_id": str(uuid4())}
-    mock_response.raise_for_status.return_value = None
-    with patch("src.api.experiences.requests.post", return_value=mock_response) as mock_post:
-        yield mock_post
 
 @pytest.fixture(autouse=True)
 def reset_analysis_limiters():

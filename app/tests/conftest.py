@@ -1,3 +1,4 @@
+from uuid import uuid4
 from fastapi.testclient import TestClient
 import pytest
 from fakeredis import FakeRedis
@@ -136,3 +137,11 @@ def authenticated_client(client: TestClient, mock_mail: MagicMock):
     assert client.cookies.get("refreshToken") is not None
     assert client.cookies.get("accessToken") is not None
     return client
+
+@pytest.fixture
+def mock_ai_analyst():
+    mock_response = MagicMock()
+    mock_response.json.return_value = {"task_id": str(uuid4())}
+    mock_response.raise_for_status.return_value = None
+    with patch("src.api.experiences.requests.post", return_value=mock_response) as mock_post:
+        yield mock_post
