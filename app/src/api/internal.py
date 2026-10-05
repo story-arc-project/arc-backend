@@ -1,3 +1,5 @@
+import traceback
+
 from sqlmodel import select
 from typing import Annotated
 from fastapi import APIRouter, Depends, Response
@@ -8,6 +10,7 @@ from src.api.models.request import InternalRequestFailure, InternalRequestSucces
 from src.db.db import SessionDep
 from src.db.models import ComprehensiveAnalysis, CoverLetter, IndividualAnalysis, KeywordAnalysis, Resume
 from src.enums import AnalysisStatus, ErrorResponseCode
+from src.utils import credit
 from src.utils.internal import check_internal
 
 internal_router = APIRouter()
@@ -144,8 +147,11 @@ async def success_comprehensive(body: Annotated[dict, Depends(check_internal)], 
         analysis.result = body_validated.result
         analysis.status = AnalysisStatus.SUCCESS
         session.add(analysis)
+        if analysis.reservation_id is not None:
+            credit.capture(analysis.reservation_id, session, analysis.user_id)
         session.commit()
-    except:
+    except Exception:
+        traceback.print_exc()
         session.rollback()
         raise AppException(
             status_code = 500,
