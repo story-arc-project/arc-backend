@@ -1,6 +1,6 @@
 import pytest
 from uuid import uuid4, UUID
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 from fastapi.testclient import TestClient
 from sqlmodel import Session, select
 from sqlalchemy.exc import IntegrityError
@@ -16,6 +16,7 @@ from src.api.models.exc import AppException
 from src.utils.idempotency import get_reserve_idempotency_key
 
 from tests.const import AUTHENTICATED_EMAIL
+from tests.utils import generate_authenticated_user
 
 @pytest.fixture(autouse=True)
 def override_credit_engine(session: Session):
@@ -32,16 +33,25 @@ def setup_user(session: Session, authenticated_client: TestClient):
     assert user is not None, "Authenticated user not found in test database"
     return user.id
 
+@pytest.fixture(name="admin_id")
+def setup_admin(session: Session, client: TestClient, mock_mail: MagicMock):
+    admin_email = "admin@gmail.com"
+    admin_password = "adminpassword123"
+    generate_authenticated_user(client, mock_mail, admin_email, admin_password)
+    admin_user = session.exec(select(User).where(User.email == admin_email)).one_or_none()
+    assert admin_user is not None, "Admin user not found in test database"
+    return admin_user.id
+
 class TestCreditModels:
-    def test_ledger_sum_matches_balance(self, session: Session, user_id: UUID):
-        credit.grant(user_id, 10, "grant 1", "key1", user_id)
-        credit.grant(user_id, 20, "grant 2", "key2", user_id)
+    def test_ledger_sum_matches_balance(self, session: Session, user_id: UUID, admin_id: UUID):
+        credit.grant(user_id, 10, "grant 1", "key1", admin_id)
+        credit.grant(user_id, 20, "grant 2", "key2", admin_id)
         account = session.get(UserCreditAccount, user_id)
         assert account is not None
         assert account.balance == 30
 
-    def test_active_reservations_match_reserved(self, session: Session, user_id: UUID):
-        credit.grant(user_id, 10, "grant", "key1", user_id)
+    def test_active_reservations_match_reserved(self, session: Session, user_id: UUID, admin_id: UUID):
+        credit.grant(user_id, 10, "grant", "key1", admin_id)
         res = credit.reserve(user_id, "comprehensive", "res_key", {})
         assert res is not None
         account = session.get(UserCreditAccount, user_id)
@@ -54,16 +64,16 @@ class TestCreditModels:
         with pytest.raises(IntegrityError):
             session.commit()
 
-    def test_concurrent_ledger_inserts(self, session: Session, user_id: UUID):
-        credit.grant(user_id, 10, "g", "key1", user_id)
+    def test_concurrent_ledger_inserts(self, session: Session, user_id: UUID, admin_id: UUID):
+        credit.grant(user_id, 10, "g", "key1", admin_id)
         # Duplicate idempotency key via low level insert
-        ledger = CreditLedger(user_id=user_id, amount=10, balance_after=20, reason="g", policy_version="v1", idempotency_key="key1", actor_id=user_id)
+        ledger = CreditLedger(user_id=user_id, amount=10, balance_after=20, reason="g", policy_version="v1", idempotency_key="key1", actor_id=admin_id)
         session.add(ledger)
         with pytest.raises(IntegrityError):
             session.commit()
 
-    def test_ledger_immutability(self, session: Session, user_id: UUID):
-        ledger = credit.grant(user_id, 10, "g", "k1", user_id)
+    def test_ledger_immutability(self, session: Session, user_id: UUID, admin_id: UUID):
+        ledger = credit.grant(user_id, 10, "g", "k1", admin_id)
         ledger.amount = 20
         session.add(ledger)
         # Assuming triggers or ORM events block this in production; basic test to verify intent
@@ -72,8 +82,8 @@ class TestCreditModels:
         assert ledger is not None
         assert ledger.amount == 20 # Replace with block assertion if implemented
 
-    def test_ledger_reference_retention(self, session: Session, user_id: UUID):
-        ledger = credit.grant(user_id, 10, "g", "k1", user_id)
+    def test_ledger_reference_retention(self, session: Session, user_id: UUID, admin_id: UUID):
+        ledger = credit.grant(user_id, 10, "g", "k1", admin_id)
         session.delete(ledger)
         with pytest.raises(Exception): # Ledger shouldn't be casually deleted
             session.commit()
