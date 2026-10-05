@@ -95,7 +95,7 @@ class TestCreditModels:
         session.rollback()
 
     def test_ledger_required_fields(self, session: Session):
-        ledger = CreditLedger(amount=10) # Missing required
+        ledger = CreditLedger(amount=10) # pyright: ignore[reportCallIssue] # Missing required
         session.add(ledger)
         with pytest.raises(IntegrityError):
             session.commit()
