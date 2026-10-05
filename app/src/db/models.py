@@ -1,7 +1,7 @@
 from datetime import datetime, date
 from typing import Any, Optional
 import uuid
-from sqlalchemy import CheckConstraint, DateTime, func, Column, UUID as SAUUID
+from sqlalchemy import CheckConstraint, DateTime, func, Column, UUID as SAUUID, event
 from sqlalchemy.sql.functions import now
 from src.enums import Affiliation, AnalysisStatus, AnalysisType, AuditAction, CreditReservationStatus, FeedbackTriggerSource, Language, OauthProviderId, UserStatus
 from sqlmodel import ARRAY, Field, SQLModel, String, UniqueConstraint
@@ -674,6 +674,10 @@ class CreditLedger(SQLModel, table=True):
             nullable=False
         )
     )
+
+@event.listens_for(CreditLedger, "before_delete")
+def prevent_ledger_deletion(mapper, connection, target):
+    raise Exception("CreditLedger records cannot be deleted.")
 
 class CreditReservation(SQLModel, table=True):
     __tablename__: str = "credit_reservations"  # pyright: ignore[reportIncompatibleVariableOverride]
