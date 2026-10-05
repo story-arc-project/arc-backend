@@ -19,7 +19,7 @@ os.environ.setdefault("RATE_LIMIT_ANALYSIS_KEYWORD", "10")
 os.environ.setdefault("RATE_LIMIT_EXPORT_RESUME", "10")
 os.environ.setdefault("RATE_LIMIT_EXPORT_COVER_LETTER", "10")
 
-from tests.utils import get_verification_code
+from tests.utils import generate_authenticated_user
 from src.db.db import get_session
 from src.main import app
 
@@ -128,15 +128,7 @@ def authenticated_client(client: TestClient, mock_mail: MagicMock):
     # Test data
     email = AUTHENTICATED_EMAIL
     password = "testpassword123"
-    _ = client.post("/auth/signup", json={"email": email, "password": password})
-    code = get_verification_code(mock_mail)
-    response = client.post("/auth/verify-email", json={
-        "email": email,
-        "code": code
-    })
-    assert response.status_code == 200
-    assert client.cookies.get("refreshToken") is not None
-    assert client.cookies.get("accessToken") is not None
+    generate_authenticated_user(client, mock_mail, email, password)
     return client
 
 @pytest.fixture
