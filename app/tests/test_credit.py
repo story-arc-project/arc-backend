@@ -16,7 +16,7 @@ from src.api.models.exc import AppException
 from src.utils.idempotency import get_reserve_idempotency_key
 
 from tests.const import AUTHENTICATED_EMAIL
-from tests.utils import generate_authenticated_user
+from tests.utils import generate_authenticated_user, onboard_user
 
 @pytest.fixture(autouse=True)
 def override_credit_engine(session: Session):
@@ -31,6 +31,9 @@ def override_credit_engine(session: Session):
 def setup_user(session: Session, authenticated_client: TestClient):
     user = session.exec(select(User).where(User.email == AUTHENTICATED_EMAIL)).one_or_none()
     assert user is not None, "Authenticated user not found in test database"
+    onboard_user(authenticated_client)
+    profile = session.exec(select(UserProfile).where(UserProfile.user_id == user.id)).one_or_none()
+    assert profile is not None, "User profile not found after onboarding"
     return user.id
 
 @pytest.fixture(name="admin_id")
