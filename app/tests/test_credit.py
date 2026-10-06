@@ -14,10 +14,10 @@ from pyrate_limiter import Limiter, Rate, Duration
 
 from src.const import CREDIT_POLICY_VERSIONS, CURRENT_CREDIT_POLICY_VERSION
 from src.db.models import (
-    User, UserCreditAccount, CreditLedger, CreditReservation, 
+    Resume, User, UserCreditAccount, CreditLedger, CreditReservation, 
     ComprehensiveAnalysis, KeywordAnalysis, Experience, UserProfile
 )
-from src.enums import Affiliation, CreditReservationStatus, AnalysisStatus
+from src.enums import Affiliation, CreditReservationStatus, AnalysisStatus, Language
 from src.utils import credit
 from src.api.models.exc import AppException
 from src.utils.idempotency import get_reserve_idempotency_key
@@ -238,19 +238,34 @@ class TestCreditModels:
 DEFAULT_CREDIT_GRANT = 100
 POLICY = CREDIT_POLICY_VERSIONS[CURRENT_CREDIT_POLICY_VERSION]
 
-AnalysisType = Literal["comprehensive", "keyword"]
-ANALYSIS_MODELS: dict[AnalysisType, type[ComprehensiveAnalysis | KeywordAnalysis]] = {
+AnalysisType = Literal["comprehensive", "keyword", "resume"]
+ANALYSIS_MODELS: dict[AnalysisType, type[ComprehensiveAnalysis | KeywordAnalysis | Resume]] = {
     "comprehensive": ComprehensiveAnalysis,
     "keyword": KeywordAnalysis,
+    "resume": Resume,
 }
+
+def get_analysis_endpoint(analysis_type: AnalysisType):
+    if analysis_type == "comprehensive":
+        return "/analysis/comprehensive"
+    elif analysis_type == "keyword":
+        return "/analysis/keyword"
+    elif analysis_type == "resume":
+        return "/export/resume"
+    else:
+        raise ValueError(f"Unsupported analysis type: {analysis_type}")
 
 def get_analysis_test_data(exp_id: str, analysis_type: AnalysisType) -> dict:
     if analysis_type == "comprehensive":
         return {"experiences": [exp_id]}
-    else:
+    elif analysis_type == "keyword":
         return {"keywords": ["test"], "target": "test"}
+    elif analysis_type == "resume":
+        return {"language": "ko", "title": "Test Resume", "experience_ids": [exp_id]}
+    else:
+        raise ValueError(f"Unsupported analysis type: {analysis_type}")
 
-@pytest.mark.parametrize("analysis_type", ["comprehensive", "keyword"])
+@pytest.mark.parametrize("analysis_type", ["comprehensive", "keyword", "resume"])
 class TestAnalysisGenerationAPI:
     @pytest.fixture(name="exp_id")
     def setup_credit(self, session: Session, authenticated_client: TestClient, user_id: UUID, admin_id: UUID) -> str:
@@ -264,7 +279,7 @@ class TestAnalysisGenerationAPI:
 
     def test_analysis_success_capture_atomicity(self, session: Session, authenticated_client: TestClient, user_id: UUID, exp_id: str, analysis_type: AnalysisType):
         model = ANALYSIS_MODELS[analysis_type]
-        response = authenticated_client.post(f"/analysis/{analysis_type}", headers={"Idempotency-Key": "cap_test"}, json=get_analysis_test_data(exp_id, analysis_type))
+        response = authenticated_client.post(get_analysis_endpoint(analysis_type), headers={"Idempotency-Key": "cap_test"}, json=get_analysis_test_data(exp_id, analysis_type))
         assert response.status_code == 200
         analysis_id = response.json()["data"]["id"]
         analysis = session.get(model, analysis_id)
@@ -290,7 +305,7 @@ class TestAnalysisGenerationAPI:
     def test_analysis_async_failure_release(self, authenticated_client: TestClient, session: Session, user_id: UUID, exp_id: str, analysis_type: AnalysisType):
         with patch("src.api.analysis.httpx.AsyncClient.post") as mock_post:
             mock_post.side_effect = Exception("AI Timeout")
-            response = authenticated_client.post(f"/analysis/{analysis_type}", headers={"Idempotency-Key": "fail_test"}, json=get_analysis_test_data(exp_id, analysis_type))
+            response = authenticated_client.post(get_analysis_endpoint(analysis_type), headers={"Idempotency-Key": "fail_test"}, json=get_analysis_test_data(exp_id, analysis_type))
             assert response.status_code == 500
             account = session.get(UserCreditAccount, user_id)
             assert account is not None
@@ -301,19 +316,25 @@ class TestAnalysisGenerationAPI:
         assert account is not None
         account.balance = 0
         session.commit()
-        response = authenticated_client.post(f"/analysis/{analysis_type}", headers={"Idempotency-Key": "insuf_test"}, json=get_analysis_test_data(exp_id, analysis_type))
+        response = authenticated_client.post(get_analysis_endpoint(analysis_type), headers={"Idempotency-Key": "insuf_test"}, json=get_analysis_test_data(exp_id, analysis_type))
         assert response.status_code == 402
         assert response.json()["code"] == "INSUFFICIENT_CREDITS"
 
     def test_analysis_retry_requires_idempotency_key(self, authenticated_client: TestClient, user_id: UUID, exp_id: str, analysis_type: AnalysisType):
+        if analysis_type in ["resume", "cover_letter"]:
+            pytest.skip("Retry not applicable for resume or cover letter")
         response = authenticated_client.post(f"/analysis/{analysis_type}/{uuid4()}/retry", json=get_analysis_test_data(exp_id, analysis_type))
         assert response.status_code == 422
 
     def test_analysis_retry_creates_new_reservation(self, authenticated_client: TestClient, session: Session, user_id: UUID, exp_id: str, analysis_type: AnalysisType):
+        if analysis_type in ["resume", "cover_letter"]:
+            pytest.skip("Retry not applicable for resume or cover letter")
         if analysis_type == "comprehensive":
             analysis = ComprehensiveAnalysis(user_id=user_id, experience_ids=[UUID(exp_id)], title="T", status=AnalysisStatus.FAILED)
-        else:
+        elif analysis_type == "keyword":
             analysis = KeywordAnalysis(user_id=user_id, keywords=["test"], target="test", title="T", status=AnalysisStatus.FAILED)
+        else:
+            raise ValueError(f"Unsupported analysis type: {analysis_type}")
         session.add(analysis)
         session.commit()
         response = authenticated_client.post(f"/analysis/{analysis_type}/{analysis.id}/retry", headers={"Idempotency-Key": "retry_k1"})
@@ -322,8 +343,8 @@ class TestAnalysisGenerationAPI:
         assert analysis.reservation_id is not None
 
     def test_analysis_duplicate_success_callback(self, authenticated_client: TestClient, session: Session, user_id: UUID, exp_id: str, analysis_type: AnalysisType):
-        res1 = authenticated_client.post(f"/analysis/{analysis_type}", headers={"Idempotency-Key": "dup_k1"}, json=get_analysis_test_data(exp_id, analysis_type))
-        res2 = authenticated_client.post(f"/analysis/{analysis_type}", headers={"Idempotency-Key": "dup_k1"}, json=get_analysis_test_data(exp_id, analysis_type))
+        res1 = authenticated_client.post(get_analysis_endpoint(analysis_type), headers={"Idempotency-Key": "dup_k1"}, json=get_analysis_test_data(exp_id, analysis_type))
+        res2 = authenticated_client.post(get_analysis_endpoint(analysis_type), headers={"Idempotency-Key": "dup_k1"}, json=get_analysis_test_data(exp_id, analysis_type))
         assert res1.status_code == 200
         assert res2.status_code == 200
         assert res1.json()["data"]["id"] == res2.json()["data"]["id"]
@@ -348,5 +369,5 @@ class TestAnalysisGenerationAPI:
     def test_queue_delivery_failure(self, authenticated_client: TestClient, user_id: UUID, exp_id: str, analysis_type: AnalysisType):
         with patch("src.api.analysis.httpx.AsyncClient.post") as mock_post:
             mock_post.side_effect = Exception("Queue Error")
-            response = authenticated_client.post(f"/analysis/{analysis_type}", headers={"Idempotency-Key": "q_test"}, json=get_analysis_test_data(exp_id, analysis_type))
+            response = authenticated_client.post(get_analysis_endpoint(analysis_type), headers={"Idempotency-Key": "q_test"}, json=get_analysis_test_data(exp_id, analysis_type))
             assert response.status_code == 500
