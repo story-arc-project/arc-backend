@@ -1,7 +1,8 @@
 import traceback
 from typing import Annotated
 from uuid import UUID
-from fastapi import APIRouter, Depends, Response
+from fastapi import APIRouter, Depends, Header, Response
+import httpx
 from sqlmodel import col, select
 import requests
 from datetime import datetime
@@ -13,8 +14,10 @@ from src.api.models.request import CoverLetterPostRequest, ResumePatchRequest, R
 from src.api.models.response import CoverLetterListResponse, CoverLetterResponse, DeleteSuccessResponse, PostSuccessResponse, ResumeListResponse, ResumeResponse
 from src.db.db import SessionDep
 from src.db.models import CoverLetter, Experience, Resume, User, UserProfile
-from src.enums import AnalysisStatus, ErrorResponseCode
+from src.enums import AnalysisStatus, AnalysisType, ErrorResponseCode
+from src.utils import credit
 from src.utils.auth import check_auth
+from src.utils.idempotency import check_idempotency, get_reserve_idempotency_key
 from src.utils.ratelimit import analysis_rate_limiters
 from src.utils.render import render_experience_content
 from src.utils.token import AccessTokenPayload
@@ -28,8 +31,12 @@ async def post_resume(
     response: Response,
     payload: Annotated[AccessTokenPayload, Depends(check_auth)],
     _user_limit: Annotated[None, Depends(analysis_rate_limiters["resume"]["user"])],
-    _ip_limit: Annotated[None, Depends(analysis_rate_limiters["resume"]["ip"])]
+    _ip_limit: Annotated[None, Depends(analysis_rate_limiters["resume"]["ip"])],
+    idempotency_key: Annotated[str, Header(alias="Idempotency-Key")],
 ):
+    idempotency_response = check_idempotency(session, payload.sub, idempotency_key, "resume")
+    if idempotency_response:
+        return idempotency_response
     if body.experience_ids is None:
         statement = select(Experience).where(Experience.user_id == payload.sub)
         result = session.exec(statement).all()
@@ -70,25 +77,65 @@ async def post_resume(
     else:
         title = f"{datetime.now(ZoneInfo("Asia/Seoul")).strftime("%Y-%m-%d")} resume"
     new_resume = Resume(user_id = payload.sub, language = body.language, title = title, experience_ids = body.experience_ids)
+    reservation = credit.reserve(
+        user_id=payload.sub,
+        feature="resume",
+        idempotency_key=get_reserve_idempotency_key(idempotency_key, "resume"),
+        metadata={
+            "resume_id": str(new_resume.id)
+        },
+    )
+    if reservation:
+        new_resume.reservation_id = reservation.id
+    new_resume.status = AnalysisStatus.PENDING
+    session.add(new_resume)
     try:
-        req = requests.post("http://ai_analyst:8001/resume", json={
-            "resume_id": str(new_resume.id),
-            "sources": sources,
-            "name_ko": user_profile.name,
-            "email": user.email,
-            "phone": user_profile.phone,
-            "school": user_profile.school,
-            "department": user_profile.department,
-            "language": body.language
-        })
-        req.raise_for_status()
-        new_resume.task_id = req.json()["task_id"]
-        session.add(new_resume)
         session.commit()
-        session.refresh(new_resume)
+    except Exception:
+        session.rollback()
+        if reservation:
+            try:
+                credit.release(reservation.id)
+            except Exception:
+                traceback.print_exc()
+        raise AppException(
+            500,
+            ErrorResponse(
+                code = ErrorResponseCode.SERVER_ERROR,
+                message = "Server side error."
+            )
+        )
+    try:
+        async with httpx.AsyncClient(timeout=10) as client:
+            req = await client.post("http://ai_analyst:8001/resume", json={
+                "resume_id": str(new_resume.id),
+                "sources": sources,
+                "name_ko": user_profile.name,
+                "email": user.email,
+                "phone": user_profile.phone,
+                "school": user_profile.school,
+                "department": user_profile.department,
+                "language": body.language
+            })
+            req.raise_for_status()
+            new_resume.task_id = req.json()["task_id"]
+            session.add(new_resume)
+            session.commit()
     except Exception:
         traceback.print_exc()
         session.rollback()
+        if reservation:
+            try:
+                credit.release(reservation.id)
+            except Exception:
+                traceback.print_exc()
+        try:
+            new_resume.status = AnalysisStatus.FAILED
+            session.add(new_resume)
+            session.commit()
+        except Exception:
+            traceback.print_exc()
+            session.rollback()
         raise AppException(
             500,
             ErrorResponse(
