@@ -153,38 +153,41 @@ class TestCreditModels:
         assert account.balance == 0
         assert account.reserved == 0
 
-# class TestAdminCreditAPI:
-#     def test_grant_credits_idempotency(self, session: Session, user_id: UUID, admin_id: UUID):
-#         res1 = credit.grant(user_id, 50, "test", "idem1", admin_id)
-#         res2 = credit.grant(user_id, 50, "test", "idem1", admin_id)
-#         assert res1.id == res2.id
+class TestAdminCreditAPI:
+    def test_grant_credits_idempotency(self, session: Session, user_id: UUID, admin_id: UUID):
+        res1 = credit.grant(user_id, 50, "test", "idem1", admin_id)
+        res2 = credit.grant(user_id, 50, "test", "idem1", admin_id)
+        assert res1.id == res2.id
+        account = session.get(UserCreditAccount, user_id)
+        assert account is not None
+        assert account.balance == 50
 
-#     def test_grant_credits_unauthorized(self, authenticated_client: TestClient):
-#         response = authenticated_client.post("/admin/credits/grant", json={"amount": 10})
-#         assert response.status_code in (403, 404) # Assuming non-admin gets blocked or 404
+    def test_grant_credits_unauthorized(self, authenticated_client: TestClient):
+        response = authenticated_client.post("/admin/credits/grant", json={"amount": 10})
+        assert response.status_code == 404
 
 #     def test_grant_dry_run(self, authenticated_client: TestClient):
 #         response = authenticated_client.post("/admin/credits/grant/dry-run", json={"amount": 10})
 #         assert response.status_code in (403, 404) # Route placeholder
 
-#     def test_initial_grant_unique_key(self, session: Session, user_id: UUID, admin_id: UUID):
-#         credit.grant(user_id, 30, "Signup", f"signup:{user_id}", admin_id)
-#         res2 = credit.grant(user_id, 30, "Signup", f"signup:{user_id}", admin_id)
-#         credit_account = session.get(UserCreditAccount, user_id)
-#         assert res2.id == session.exec(select(CreditLedger).where(CreditLedger.idempotency_key == f"signup:{user_id}")).one().id
-#         assert credit_account is not None
-#         assert credit_account.balance == 30
+    def test_initial_grant_unique_key(self, session: Session, user_id: UUID, admin_id: UUID):
+        credit.grant(user_id, 30, "Signup", f"signup:{user_id}", admin_id)
+        res2 = credit.grant(user_id, 30, "Signup", f"signup:{user_id}", admin_id)
+        credit_account = session.get(UserCreditAccount, user_id)
+        assert res2.id == session.exec(select(CreditLedger).where(CreditLedger.idempotency_key == f"signup:{user_id}")).one().id
+        assert credit_account is not None
+        assert credit_account.balance == 30
 
-#     def test_grant_positive_integer_only(self, session: Session, user_id: UUID, admin_id: UUID):
-#         with pytest.raises(AppException) as exc:
-#             credit.grant(user_id, -10, "test", "k1", admin_id)
-#         assert exc.value.status_code == 400
+    def test_grant_positive_integer_only(self, session: Session, user_id: UUID, admin_id: UUID):
+        with pytest.raises(AppException) as exc:
+            credit.grant(user_id, -10, "test", "k1", admin_id)
+        assert exc.value.status_code == 400
 
-#     def test_grant_mismatch_reporting(self, session: Session, user_id: UUID, admin_id: UUID):
-#         credit.grant(user_id, 10, "test", "k1", admin_id)
-#         with pytest.raises(AppException) as exc:
-#             credit.grant(user_id, 20, "test", "k1", admin_id)
-#         assert exc.value.status_code == 409
+    def test_grant_mismatch_reporting(self, session: Session, user_id: UUID, admin_id: UUID):
+        credit.grant(user_id, 10, "test", "k1", admin_id)
+        with pytest.raises(AppException) as exc:
+            credit.grant(user_id, 20, "test", "k1", admin_id)
+        assert exc.value.status_code == 409
 
 #     def test_initial_grant_ignores_frontend_defaults(self, session: Session, user_id: UUID, admin_id: UUID):
 #         # Enforces server config over any frontend default
