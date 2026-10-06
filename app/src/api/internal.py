@@ -246,6 +246,8 @@ async def success_cover_letter(body: Annotated[dict, Depends(check_internal)], s
         resume.result = body_validated.result
         resume.status = AnalysisStatus.SUCCESS
         session.add(resume)
+        if resume.reservation_id is not None:
+            credit.capture(resume.reservation_id, session, resume.user_id)
         session.commit()
     except:
         session.rollback()

@@ -323,8 +323,12 @@ async def post_cover_letter(
     response: Response,
     payload: Annotated[AccessTokenPayload, Depends(check_auth)],
     _user_limit: Annotated[None, Depends(analysis_rate_limiters["cover_letter"]["user"])],
-    _ip_limit: Annotated[None, Depends(analysis_rate_limiters["cover_letter"]["ip"])]
+    _ip_limit: Annotated[None, Depends(analysis_rate_limiters["cover_letter"]["ip"])],
+    idempotency_key: Annotated[str, Header(alias="Idempotency-Key")],
 ):
+    idempotency_response = check_idempotency(session, payload.sub, idempotency_key, "cover_letter")
+    if idempotency_response:
+        return idempotency_response
     if body.experience_ids is None:
         statement = select(Experience).where(Experience.user_id == payload.sub)
         result = session.exec(statement).all()
@@ -368,28 +372,68 @@ async def post_cover_letter(
         questions = body.questions,
         experience_ids = body.experience_ids
     )
+    reservation = credit.reserve(
+        user_id=payload.sub,
+        feature="cover_letter",
+        idempotency_key=get_reserve_idempotency_key(idempotency_key, "cover_letter"),
+        metadata={
+            "cover_letter_id": str(new_cover_letter.id)
+        },
+    )
+    if reservation:
+        new_cover_letter.reservation_id = reservation.id
+    new_cover_letter.status = AnalysisStatus.PENDING
+    session.add(new_cover_letter)
     try:
-        req = requests.post("http://ai_analyst:8001/cover_letter", json={
-            "cover_letter_id": str(new_cover_letter.id),
-            "experiences": sources,
-            "name": user_profile.name,
-            "target_company": body.target_company,
-            "target_job": body.target_job,
-            "school": user_profile.school,
-            "department": user_profile.department,
-            "motivation": body.motivation,
-            "career_goal": body.career_goal,
-            "extra_notes": body.extra_notes,
-            "questions": body.questions,
-        })
-        req.raise_for_status()
-        new_cover_letter.task_id = req.json()["task_id"]
-        session.add(new_cover_letter)
         session.commit()
-        session.refresh(new_cover_letter)
+    except Exception:
+        session.rollback()
+        if reservation:
+            try:
+                credit.release(reservation.id)
+            except Exception:
+                traceback.print_exc()
+        raise AppException(
+            500,
+            ErrorResponse(
+                code = ErrorResponseCode.SERVER_ERROR,
+                message = "Server side error."
+            )
+        )
+    try:
+        async with httpx.AsyncClient(timeout=10) as client:
+            req = await client.post("http://ai_analyst:8001/cover_letter", json={
+                "cover_letter_id": str(new_cover_letter.id),
+                "experiences": sources,
+                "name": user_profile.name,
+                "target_company": body.target_company,
+                "target_job": body.target_job,
+                "school": user_profile.school,
+                "department": user_profile.department,
+                "motivation": body.motivation,
+                "career_goal": body.career_goal,
+                "extra_notes": body.extra_notes,
+                "questions": body.questions,
+            })
+            req.raise_for_status()
+            new_cover_letter.task_id = req.json()["task_id"]
+            session.add(new_cover_letter)
+            session.commit()
     except Exception:
         traceback.print_exc()
         session.rollback()
+        if reservation:
+            try:
+                credit.release(reservation.id)
+            except Exception:
+                traceback.print_exc()
+        try:
+            new_cover_letter.status = AnalysisStatus.FAILED
+            session.add(new_cover_letter)
+            session.commit()
+        except Exception:
+            traceback.print_exc()
+            session.rollback()
         raise AppException(
             500,
             ErrorResponse(
