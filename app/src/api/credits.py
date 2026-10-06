@@ -1,6 +1,6 @@
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Response
 from sqlmodel import select
 from typing import Annotated
 
@@ -15,14 +15,19 @@ from src.utils.token import AccessTokenPayload
 credits_router = APIRouter()
 
 @credits_router.get("/packages")
-def get_credit_packages():
+def get_credit_packages(
+    response: Response,
+):
+    response.headers["Cache-Control"] = "no-store"
     return {"packages": PACKAGES}
 
 @credits_router.get("")
 def get_credit_account(
     session: SessionDep,
+    response: Response,
     payload: Annotated[AccessTokenPayload, Depends(check_auth)],
 ):
+    response.headers["Cache-Control"] = "private, no-store"
     account = session.exec(
         select(UserCreditAccount).where(UserCreditAccount.user_id == payload.sub)
     ).one_or_none()
