@@ -1,6 +1,6 @@
 from datetime import date, datetime
 from uuid import UUID
-from pydantic import BaseModel, EmailStr, ConfigDict
+from pydantic import BaseModel, EmailStr, ConfigDict, model_validator
 from typing import Any, Generic, Literal, Optional, TypeVar
 
 from src.enums import Affiliation, AnalysisStatus, AnalysisType, Language, ErrorResponseCode, OauthProviderId
@@ -335,3 +335,21 @@ class FeedbackResponseData(BaseModel):
 class FeedbackStatusData(BaseModel):
     has_seen: bool
     has_responded: bool
+
+class CreditData(BaseModel):
+    balance: int
+    reserved: int
+    available: int
+    updated_at: datetime
+
+    @model_validator(mode="after")
+    def validate_credit_data(self):
+        if self.balance < 0:
+            raise ValueError("Balance cannot be negative")
+        if self.reserved < 0:
+            raise ValueError("Reserved credits cannot be negative")
+        if self.available < 0:
+            raise ValueError("Available credits cannot be negative")
+        if self.balance != self.reserved + self.available:
+            raise ValueError("Balance must equal reserved + available")
+        return self
