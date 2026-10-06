@@ -1,14 +1,14 @@
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, Response
-from sqlmodel import select
+from sqlmodel import col, select
 from typing import Annotated
 
-from src.api.models.base import CreditData
-from src.api.models.response import CreditAccountResponse
+from src.api.models.base import CreditData, CreditTransactionData
+from src.api.models.response import CreditAccountResponse, CreditTransactionListResponse
 from src.const import PACKAGES
 from src.db.db import SessionDep
-from src.db.models import UserCreditAccount
+from src.db.models import CreditLedger, UserCreditAccount
 from src.utils.auth import check_auth
 from src.utils.token import AccessTokenPayload
 
@@ -49,4 +49,32 @@ def get_credit_account(
             available=account.balance - account.reserved,
             updated_at=account.updated_at
         )
+    )
+
+@credits_router.get("/transactions")
+def get_credit_transactions(
+    session: SessionDep,
+    response: Response,
+    payload: Annotated[AccessTokenPayload, Depends(check_auth)],
+):
+    response.headers["Cache-Control"] = "private, no-store"
+    result = session.exec(
+        select(CreditLedger)
+        .where(CreditLedger.id == payload.sub)
+        .order_by(col(CreditLedger.created_at).desc())
+    ).all()
+    return CreditTransactionListResponse(
+        message="User credit transactions fetched successfully",
+        data=[
+            CreditTransactionData(
+                id=transaction.id,
+                amount=transaction.amount,
+                reason=transaction.reason,
+                feature=transaction.feature,
+                reference_type=transaction.reference_type,
+                reference_id=transaction.reference_id,
+                balance_after=transaction.balance_after,
+                created_at=transaction.created_at
+            ) for transaction in result
+        ]
     )

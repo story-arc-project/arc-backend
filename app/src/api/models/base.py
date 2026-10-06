@@ -353,3 +353,13 @@ class CreditData(BaseModel):
         if self.balance != self.reserved + self.available:
             raise ValueError("Balance must equal reserved + available")
         return self
+
+class CreditTransactionData(BaseModel):
+    id: UUID
+    amount: int
+    reason: str
+    feature: str | None
+    reference_type: str | None
+    reference_id: str | None
+    balance_after: int
+    created_at: datetime
