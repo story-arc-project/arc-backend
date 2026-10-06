@@ -256,3 +256,62 @@ class TestAnalysisGenerationAPI:
         assert account is not None
         assert account.reserved == 0
         assert account.balance == DEFAULT_CREDIT_GRANT - POLICY["comprehensive"]
+
+    def test_analysis_async_failure_release(self, authenticated_client: TestClient, session: Session, user_id: UUID, exp_id: str):
+        with patch("src.api.analysis.httpx.AsyncClient.post") as mock_post:
+            mock_post.side_effect = Exception("AI Timeout")
+            response = authenticated_client.post("/analysis/comprehensive", headers={"Idempotency-Key": "fail_test"}, json={"experiences": [exp_id]})
+            assert response.status_code == 500
+            account = session.get(UserCreditAccount, user_id)
+            assert account is not None
+            assert account.reserved == 0
+
+    def test_analysis_insufficient_balance(self, authenticated_client: TestClient, session: Session, user_id: UUID, exp_id: str):
+        account = session.get(UserCreditAccount, user_id)
+        assert account is not None
+        account.balance = 0
+        session.commit()
+        response = authenticated_client.post("/analysis/comprehensive", headers={"Idempotency-Key": "insuf_test"}, json={"experiences": [exp_id]})
+        assert response.status_code == 402
+        print(response.text)
+        assert response.json()["code"] == "INSUFFICIENT_CREDITS"
+
+    def test_analysis_retry_requires_idempotency_key(self, authenticated_client: TestClient, user_id: UUID, exp_id: str):
+        response = authenticated_client.post(f"/analysis/comprehensive/{uuid4()}/retry", json={"experiences": [exp_id]})
+        assert response.status_code == 422
+
+    def test_analysis_retry_creates_new_reservation(self, authenticated_client: TestClient, session: Session, user_id: UUID, exp_id: str):
+        analysis = ComprehensiveAnalysis(user_id=user_id, experience_ids=[UUID(exp_id)], title="T", status=AnalysisStatus.FAILED)
+        session.add(analysis)
+        session.commit()
+        response = authenticated_client.post(f"/analysis/comprehensive/{analysis.id}/retry", headers={"Idempotency-Key": "retry_k1"})
+        assert response.status_code == 200
+        session.refresh(analysis)
+        assert analysis.reservation_id is not None
+
+    def test_analysis_duplicate_success_callback(self, authenticated_client: TestClient, user_id: UUID, exp_id: str):
+        res1 = authenticated_client.post("/analysis/comprehensive", headers={"Idempotency-Key": "dup_k1"}, json={"experiences": [exp_id]})
+        res2 = authenticated_client.post("/analysis/comprehensive", headers={"Idempotency-Key": "dup_k1"}, json={"experiences": [exp_id]})
+        assert res1.status_code == 200
+        assert res2.status_code == 200
+        assert res1.json()["data"]["id"] == res2.json()["data"]["id"]
+
+    def test_analysis_free_feature_bypass(self, authenticated_client: TestClient, session: Session, user_id: UUID, exp_id: str):
+        response = authenticated_client.post("/experiences", json={"type": "career", "content": {"title": "T"}})
+        assert response.status_code == 201
+        account = session.get(UserCreditAccount, user_id)
+        assert account is not None
+        assert account.balance == DEFAULT_CREDIT_GRANT
+        reservations = session.exec(select(CreditReservation)).all()
+        assert len(reservations) == 0
+
+    # def test_idempotency_payload_mismatch(self, authenticated_client: TestClient, user_id: UUID, exp_id: str):
+    #     authenticated_client.post("/analysis/comprehensive", headers={"Idempotency-Key": "k1"}, json={"experiences": [exp_id]})
+    #     response = authenticated_client.post("/analysis/comprehensive", headers={"Idempotency-Key": "k1"}, json={"experiences": [str(uuid4())]})
+    #     assert response.status_code == 409
+
+    def test_queue_delivery_failure(self, authenticated_client: TestClient, user_id: UUID, exp_id: str):
+        with patch("src.api.analysis.httpx.AsyncClient.post") as mock_post:
+            mock_post.side_effect = Exception("Queue Error")
+            response = authenticated_client.post("/analysis/comprehensive", headers={"Idempotency-Key": "q_test"}, json={"experiences": [exp_id]})
+            assert response.status_code == 500
