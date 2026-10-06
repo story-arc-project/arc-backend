@@ -14,7 +14,7 @@ from pyrate_limiter import Limiter, Rate, Duration
 
 from src.const import CREDIT_POLICY_VERSIONS, CURRENT_CREDIT_POLICY_VERSION
 from src.db.models import (
-    Resume, User, UserCreditAccount, CreditLedger, CreditReservation, 
+    CoverLetter, Resume, User, UserCreditAccount, CreditLedger, CreditReservation, 
     ComprehensiveAnalysis, KeywordAnalysis, Experience, UserProfile
 )
 from src.enums import Affiliation, CreditReservationStatus, AnalysisStatus, Language
@@ -238,11 +238,12 @@ class TestCreditModels:
 DEFAULT_CREDIT_GRANT = 100
 POLICY = CREDIT_POLICY_VERSIONS[CURRENT_CREDIT_POLICY_VERSION]
 
-AnalysisType = Literal["comprehensive", "keyword", "resume"]
-ANALYSIS_MODELS: dict[AnalysisType, type[ComprehensiveAnalysis | KeywordAnalysis | Resume]] = {
+AnalysisType = Literal["comprehensive", "keyword", "resume", "cover_letter"]
+ANALYSIS_MODELS: dict[AnalysisType, type[ComprehensiveAnalysis | KeywordAnalysis | Resume | CoverLetter]] = {
     "comprehensive": ComprehensiveAnalysis,
     "keyword": KeywordAnalysis,
     "resume": Resume,
+    "cover_letter": CoverLetter,
 }
 
 def get_analysis_endpoint(analysis_type: AnalysisType):
@@ -252,6 +253,8 @@ def get_analysis_endpoint(analysis_type: AnalysisType):
         return "/analysis/keyword"
     elif analysis_type == "resume":
         return "/export/resume"
+    elif analysis_type == "cover_letter":
+        return "/export/cover_letter"
     else:
         raise ValueError(f"Unsupported analysis type: {analysis_type}")
 
@@ -262,10 +265,12 @@ def get_analysis_test_data(exp_id: str, analysis_type: AnalysisType) -> dict:
         return {"keywords": ["test"], "target": "test"}
     elif analysis_type == "resume":
         return {"language": "ko", "title": "Test Resume", "experience_ids": [exp_id]}
+    elif analysis_type == "cover_letter":
+        return {"experience_ids": [exp_id]}
     else:
         raise ValueError(f"Unsupported analysis type: {analysis_type}")
 
-@pytest.mark.parametrize("analysis_type", ["comprehensive", "keyword", "resume"])
+@pytest.mark.parametrize("analysis_type", ["comprehensive", "keyword", "resume", "cover_letter"])
 class TestAnalysisGenerationAPI:
     @pytest.fixture(name="exp_id")
     def setup_credit(self, session: Session, authenticated_client: TestClient, user_id: UUID, admin_id: UUID) -> str:
