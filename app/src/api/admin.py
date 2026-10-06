@@ -206,7 +206,7 @@ def grant_credit(
         user_id=user.id,
         amount=body.amount,
         reason=body.reason,
-        idempotency_key=idempotency_key,
+        idempotency_key=f"grant:{idempotency_key}",
         actor_id=payload.sub,
     )
     return SuccessResponseWithData(
