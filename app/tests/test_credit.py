@@ -1,6 +1,7 @@
 import hashlib
 import hmac
 import json
+from typing import Literal
 
 import pytest
 from uuid import uuid4, UUID
@@ -9,16 +10,18 @@ from fastapi.testclient import TestClient
 from sqlmodel import Session, select
 from sqlalchemy.exc import IntegrityError
 from datetime import date
+from pyrate_limiter import Limiter, Rate, Duration
 
 from src.const import CREDIT_POLICY_VERSIONS, CURRENT_CREDIT_POLICY_VERSION
 from src.db.models import (
     User, UserCreditAccount, CreditLedger, CreditReservation, 
-    ComprehensiveAnalysis, Experience, UserProfile
+    ComprehensiveAnalysis, KeywordAnalysis, Experience, UserProfile
 )
 from src.enums import Affiliation, CreditReservationStatus, AnalysisStatus
 from src.utils import credit
 from src.api.models.exc import AppException
 from src.utils.idempotency import get_reserve_idempotency_key
+from src.utils.ratelimit import analysis_rate_limiters
 
 from tests.const import AUTHENTICATED_EMAIL
 from tests.utils import generate_authenticated_user, onboard_user
@@ -30,6 +33,19 @@ def trigger_internal_callback(client: TestClient, payload: dict, endpoint: str):
     signature = hmac.new(secret.encode(), body_bytes, hashlib.sha256).hexdigest()
     
     return client.post(endpoint, json=payload, headers={"X-Signature": signature})
+
+@pytest.fixture(autouse=True)
+def reset_analysis_limiters():
+    for limiters in analysis_rate_limiters.values():
+        for limiter in limiters.values():
+            limiter.limiter = Limiter(Rate(100, Duration.HOUR))
+            for bucket in limiter.limiter.buckets():
+                bucket.flush()
+    yield
+    for limiters in analysis_rate_limiters.values():
+        for limiter in limiters.values():
+            for bucket in limiter.limiter.buckets():
+                bucket.flush()
 
 @pytest.fixture(autouse=True)
 def override_credit_engine(session: Session):
@@ -222,6 +238,19 @@ class TestCreditModels:
 DEFAULT_CREDIT_GRANT = 100
 POLICY = CREDIT_POLICY_VERSIONS[CURRENT_CREDIT_POLICY_VERSION]
 
+AnalysisType = Literal["comprehensive", "keyword"]
+ANALYSIS_MODELS: dict[AnalysisType, type[ComprehensiveAnalysis | KeywordAnalysis]] = {
+    "comprehensive": ComprehensiveAnalysis,
+    "keyword": KeywordAnalysis,
+}
+
+def get_analysis_test_data(exp_id: str, analysis_type: AnalysisType) -> dict:
+    if analysis_type == "comprehensive":
+        return {"experiences": [exp_id]}
+    else:
+        return {"keywords": ["test"], "target": "test"}
+
+@pytest.mark.parametrize("analysis_type", ["comprehensive", "keyword"])
 class TestAnalysisGenerationAPI:
     @pytest.fixture(name="exp_id")
     def setup_credit(self, session: Session, authenticated_client: TestClient, user_id: UUID, admin_id: UUID) -> str:
@@ -233,21 +262,22 @@ class TestAnalysisGenerationAPI:
         credit.grant(user_id, DEFAULT_CREDIT_GRANT, "test", "setup_key", admin_id)
         return response.json()["data"]["id"]
 
-    def test_analysis_success_capture_atomicity(self, session: Session, authenticated_client: TestClient, user_id: UUID, exp_id: str):
-        response = authenticated_client.post("/analysis/comprehensive", headers={"Idempotency-Key": "cap_test"}, json={"experiences": [exp_id]})
+    def test_analysis_success_capture_atomicity(self, session: Session, authenticated_client: TestClient, user_id: UUID, exp_id: str, analysis_type: AnalysisType):
+        model = ANALYSIS_MODELS[analysis_type]
+        response = authenticated_client.post(f"/analysis/{analysis_type}", headers={"Idempotency-Key": "cap_test"}, json=get_analysis_test_data(exp_id, analysis_type))
         assert response.status_code == 200
         analysis_id = response.json()["data"]["id"]
-        analysis = session.get(ComprehensiveAnalysis, analysis_id)
+        analysis = session.get(model, analysis_id)
         assert analysis is not None
         reservation = session.get(CreditReservation, analysis.reservation_id)
         assert reservation is not None
         assert reservation.status == CreditReservationStatus.RESERVED
         callback_payload = {"analysis_id": analysis_id, "vector": [0] * 3072, "result": {"schema_version": "default_schema"}}
-        callback_endpoint = "/internal/comprehensive/success"
+        callback_endpoint = f"/internal/{analysis_type}/success"
         internal_callback = trigger_internal_callback(authenticated_client, callback_payload, callback_endpoint)
         assert internal_callback.status_code == 200
         session.expire_all()
-        analysis = session.get(ComprehensiveAnalysis, analysis_id)
+        analysis = session.get(model, analysis_id)
         assert analysis is not None
         reservation = session.get(CreditReservation, analysis.reservation_id)
         assert reservation is not None
@@ -255,51 +285,53 @@ class TestAnalysisGenerationAPI:
         account = session.get(UserCreditAccount, user_id)
         assert account is not None
         assert account.reserved == 0
-        assert account.balance == DEFAULT_CREDIT_GRANT - POLICY["comprehensive"]
+        assert account.balance == DEFAULT_CREDIT_GRANT - POLICY[analysis_type]
 
-    def test_analysis_async_failure_release(self, authenticated_client: TestClient, session: Session, user_id: UUID, exp_id: str):
+    def test_analysis_async_failure_release(self, authenticated_client: TestClient, session: Session, user_id: UUID, exp_id: str, analysis_type: AnalysisType):
         with patch("src.api.analysis.httpx.AsyncClient.post") as mock_post:
             mock_post.side_effect = Exception("AI Timeout")
-            response = authenticated_client.post("/analysis/comprehensive", headers={"Idempotency-Key": "fail_test"}, json={"experiences": [exp_id]})
+            response = authenticated_client.post(f"/analysis/{analysis_type}", headers={"Idempotency-Key": "fail_test"}, json=get_analysis_test_data(exp_id, analysis_type))
             assert response.status_code == 500
             account = session.get(UserCreditAccount, user_id)
             assert account is not None
             assert account.reserved == 0
 
-    def test_analysis_insufficient_balance(self, authenticated_client: TestClient, session: Session, user_id: UUID, exp_id: str):
+    def test_analysis_insufficient_balance(self, authenticated_client: TestClient, session: Session, user_id: UUID, exp_id: str, analysis_type: AnalysisType):
         account = session.get(UserCreditAccount, user_id)
         assert account is not None
         account.balance = 0
         session.commit()
-        response = authenticated_client.post("/analysis/comprehensive", headers={"Idempotency-Key": "insuf_test"}, json={"experiences": [exp_id]})
+        response = authenticated_client.post(f"/analysis/{analysis_type}", headers={"Idempotency-Key": "insuf_test"}, json=get_analysis_test_data(exp_id, analysis_type))
         assert response.status_code == 402
-        print(response.text)
         assert response.json()["code"] == "INSUFFICIENT_CREDITS"
 
-    def test_analysis_retry_requires_idempotency_key(self, authenticated_client: TestClient, user_id: UUID, exp_id: str):
-        response = authenticated_client.post(f"/analysis/comprehensive/{uuid4()}/retry", json={"experiences": [exp_id]})
+    def test_analysis_retry_requires_idempotency_key(self, authenticated_client: TestClient, user_id: UUID, exp_id: str, analysis_type: AnalysisType):
+        response = authenticated_client.post(f"/analysis/{analysis_type}/{uuid4()}/retry", json=get_analysis_test_data(exp_id, analysis_type))
         assert response.status_code == 422
 
-    def test_analysis_retry_creates_new_reservation(self, authenticated_client: TestClient, session: Session, user_id: UUID, exp_id: str):
-        analysis = ComprehensiveAnalysis(user_id=user_id, experience_ids=[UUID(exp_id)], title="T", status=AnalysisStatus.FAILED)
+    def test_analysis_retry_creates_new_reservation(self, authenticated_client: TestClient, session: Session, user_id: UUID, exp_id: str, analysis_type: AnalysisType):
+        if analysis_type == "comprehensive":
+            analysis = ComprehensiveAnalysis(user_id=user_id, experience_ids=[UUID(exp_id)], title="T", status=AnalysisStatus.FAILED)
+        else:
+            analysis = KeywordAnalysis(user_id=user_id, keywords=["test"], target="test", title="T", status=AnalysisStatus.FAILED)
         session.add(analysis)
         session.commit()
-        response = authenticated_client.post(f"/analysis/comprehensive/{analysis.id}/retry", headers={"Idempotency-Key": "retry_k1"})
+        response = authenticated_client.post(f"/analysis/{analysis_type}/{analysis.id}/retry", headers={"Idempotency-Key": "retry_k1"})
         assert response.status_code == 200
         session.refresh(analysis)
         assert analysis.reservation_id is not None
 
-    def test_analysis_duplicate_success_callback(self, authenticated_client: TestClient, session: Session, user_id: UUID, exp_id: str):
-        res1 = authenticated_client.post("/analysis/comprehensive", headers={"Idempotency-Key": "dup_k1"}, json={"experiences": [exp_id]})
-        res2 = authenticated_client.post("/analysis/comprehensive", headers={"Idempotency-Key": "dup_k1"}, json={"experiences": [exp_id]})
+    def test_analysis_duplicate_success_callback(self, authenticated_client: TestClient, session: Session, user_id: UUID, exp_id: str, analysis_type: AnalysisType):
+        res1 = authenticated_client.post(f"/analysis/{analysis_type}", headers={"Idempotency-Key": "dup_k1"}, json=get_analysis_test_data(exp_id, analysis_type))
+        res2 = authenticated_client.post(f"/analysis/{analysis_type}", headers={"Idempotency-Key": "dup_k1"}, json=get_analysis_test_data(exp_id, analysis_type))
         assert res1.status_code == 200
         assert res2.status_code == 200
         assert res1.json()["data"]["id"] == res2.json()["data"]["id"]
         account = session.get(UserCreditAccount, user_id)
         assert account is not None
-        assert account.reserved == POLICY["comprehensive"]
+        assert account.reserved == POLICY[analysis_type]
 
-    def test_analysis_free_feature_bypass(self, authenticated_client: TestClient, session: Session, user_id: UUID, exp_id: str):
+    def test_analysis_free_feature_bypass(self, authenticated_client: TestClient, session: Session, user_id: UUID, exp_id: str, analysis_type: AnalysisType):
         response = authenticated_client.post("/experiences", json={"type": "career", "content": {"title": "T"}})
         assert response.status_code == 201
         account = session.get(UserCreditAccount, user_id)
@@ -313,8 +345,8 @@ class TestAnalysisGenerationAPI:
     #     response = authenticated_client.post("/analysis/comprehensive", headers={"Idempotency-Key": "k1"}, json={"experiences": [str(uuid4())]})
     #     assert response.status_code == 409
 
-    def test_queue_delivery_failure(self, authenticated_client: TestClient, user_id: UUID, exp_id: str):
+    def test_queue_delivery_failure(self, authenticated_client: TestClient, user_id: UUID, exp_id: str, analysis_type: AnalysisType):
         with patch("src.api.analysis.httpx.AsyncClient.post") as mock_post:
             mock_post.side_effect = Exception("Queue Error")
-            response = authenticated_client.post("/analysis/comprehensive", headers={"Idempotency-Key": "q_test"}, json={"experiences": [exp_id]})
+            response = authenticated_client.post(f"/analysis/{analysis_type}", headers={"Idempotency-Key": "q_test"}, json=get_analysis_test_data(exp_id, analysis_type))
             assert response.status_code == 500
