@@ -6,6 +6,7 @@ from os import getenv
 from fastapi.responses import JSONResponse
 from src.api.admin import admin_router
 from src.api.analysis import analysis_router
+from src.api.credits import credits_router
 from src.api.docs import docs_router
 from src.api.experiences import experiences_router
 from src.api.export import export_router
@@ -141,4 +142,8 @@ app.include_router(
 app.include_router(
     feedback_router,
     prefix="/feedback"
+)
+app.include_router(
+    credits_router,
+    prefix="/credits"
 )
