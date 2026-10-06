@@ -217,6 +217,7 @@ def grant(
     idempotency_key: str,
     actor_id: UUID,
 ) -> CreditLedger:
+    internal_idempotency_key = f"grant:{idempotency_key}"
     if amount <= 0:
         raise AppException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -228,7 +229,7 @@ def grant(
 
     with Session(engine) as session:
         existing_ledger = session.exec(
-            select(CreditLedger).where(CreditLedger.idempotency_key == idempotency_key)
+            select(CreditLedger).where(CreditLedger.idempotency_key == internal_idempotency_key)
         ).first()
         if existing_ledger:
             if existing_ledger.user_id != user_id or existing_ledger.amount != amount:
@@ -261,7 +262,7 @@ def grant(
             reason=reason,
             feature=None,
             policy_version=CURRENT_CREDIT_POLICY_VERSION,
-            idempotency_key=idempotency_key,
+            idempotency_key=internal_idempotency_key,
             reference_type="GRANT",
             reference_id=None,
             actor_id=actor_id,
@@ -277,7 +278,7 @@ def grant(
         except IntegrityError:
             session.rollback()
             concurrent_ledger = session.exec(
-                select(CreditLedger).where(CreditLedger.idempotency_key == idempotency_key)
+                select(CreditLedger).where(CreditLedger.idempotency_key == internal_idempotency_key)
             ).first()
             if concurrent_ledger:
                 if concurrent_ledger.user_id != user_id or concurrent_ledger.amount != amount:
