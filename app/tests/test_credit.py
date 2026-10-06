@@ -66,7 +66,7 @@ def setup_user(session: Session, authenticated_client: TestClient):
     return user.id
 
 @pytest.fixture(name="admin_id")
-def setup_admin(session: Session, client: TestClient, mock_mail: MagicMock):
+def setup_admin(session: Session, client: TestClient, mock_mail: MagicMock, monkeypatch: pytest.MonkeyPatch):
     # 1. Back up the original user's auth state
     original_headers = dict(client.headers)
     original_cookies = dict(client.cookies)
@@ -85,6 +85,7 @@ def setup_admin(session: Session, client: TestClient, mock_mail: MagicMock):
     client.cookies.clear()
     client.cookies.update(original_cookies)
     
+    monkeypatch.setenv("ADMIN_EMAILS", admin_email)
     return admin_user.id
 
 class TestCreditModels:
