@@ -1,7 +1,6 @@
 from datetime import datetime
 import traceback
 from zoneinfo import ZoneInfo
-import requests
 from typing import Annotated
 from uuid import UUID
 from fastapi import APIRouter, Depends, Header, Response, status
