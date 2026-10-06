@@ -1,5 +1,5 @@
 from collections.abc import Mapping
-from typing import Final, Literal, ReadOnly, TypedDict
+from typing import Final, Literal, TypedDict
 
 ACCESS_TOKEN_EXPIRE  = 15 # minutes
 REFRESH_TOKEN_EXPIRE = 14 # days
@@ -57,3 +57,13 @@ CREDIT_POLICY_VERSIONS: Final[Mapping[CreditPolicyVersion, CreditPolicy]] = {
         "cover_letter": 3,
     },
 }
+class CreditPackage(TypedDict):
+    id: str
+    name: str
+    credits: int
+    price_krw: int
+PACKAGES: Final[list[CreditPackage]] = [
+    { "id": "lite", "name": "Lite", "credits": 20, "price_krw": 4900 },
+    { "id": "basic", "name": "Basic", "credits": 50, "price_krw": 9900 },
+    { "id": "pro", "name": "Pro", "credits": 120, "price_krw": 19900 }
+]
