@@ -182,6 +182,8 @@ async def success_keyword(body: Annotated[dict, Depends(check_internal)], sessio
         analysis.result = body_validated.result
         analysis.status = AnalysisStatus.SUCCESS
         session.add(analysis)
+        if analysis.reservation_id is not None:
+            credit.capture(analysis.reservation_id, session, analysis.user_id)
         session.commit()
     except:
         session.rollback()
