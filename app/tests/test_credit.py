@@ -289,12 +289,15 @@ class TestAnalysisGenerationAPI:
         session.refresh(analysis)
         assert analysis.reservation_id is not None
 
-    def test_analysis_duplicate_success_callback(self, authenticated_client: TestClient, user_id: UUID, exp_id: str):
+    def test_analysis_duplicate_success_callback(self, authenticated_client: TestClient, session: Session, user_id: UUID, exp_id: str):
         res1 = authenticated_client.post("/analysis/comprehensive", headers={"Idempotency-Key": "dup_k1"}, json={"experiences": [exp_id]})
         res2 = authenticated_client.post("/analysis/comprehensive", headers={"Idempotency-Key": "dup_k1"}, json={"experiences": [exp_id]})
         assert res1.status_code == 200
         assert res2.status_code == 200
         assert res1.json()["data"]["id"] == res2.json()["data"]["id"]
+        account = session.get(UserCreditAccount, user_id)
+        assert account is not None
+        assert account.reserved == POLICY["comprehensive"]
 
     def test_analysis_free_feature_bypass(self, authenticated_client: TestClient, session: Session, user_id: UUID, exp_id: str):
         response = authenticated_client.post("/experiences", json={"type": "career", "content": {"title": "T"}})
