@@ -596,23 +596,64 @@ def generate_keyword_analysis_title(keywords: list[str]):
         title = f"{", ".join(keywords)} 분석"
     return title
 
-def process_keyword_analysis(analysis: KeywordAnalysis, user_input: list[str], session: SessionDep, response: Response):
-    try:
-        req = requests.post("http://ai_analyst:8001/keyword", json={
+async def process_keyword_analysis(analysis: KeywordAnalysis, user_input: list[str], session: SessionDep, response: Response, idempotency_key: str):
+    analysis.reservation_id = None
+    reservation = credit.reserve(
+        user_id=analysis.user_id,
+        feature="keyword",
+        idempotency_key=get_reserve_idempotency_key(idempotency_key, AnalysisType.keyword),
+        metadata={
             "analysis_id": str(analysis.id),
-            "input": json.dumps(user_input),
-            "keywords": analysis.keywords,
-            "target": analysis.target
-        })
-        req.raise_for_status()
-        analysis.task_id = req.json()["task_id"]
-        analysis.status = AnalysisStatus.QUEUED
-        session.add(analysis)
+        },
+    )
+    if reservation:
+        analysis.reservation_id = reservation.id
+    analysis.status = AnalysisStatus.PENDING
+    session.add(analysis)
+    try:
         session.commit()
-        session.refresh(analysis)
+    except Exception:
+        session.rollback()
+        if reservation:
+            try:
+                credit.release(reservation.id)
+            except Exception:
+                traceback.print_exc()
+        raise AppException(
+            500,
+            ErrorResponse(
+                code=ErrorResponseCode.SERVER_ERROR,
+                message="Server side error."
+            )
+        )
+    try:
+        async with httpx.AsyncClient(timeout=10) as client:
+            req = await client.post("http://ai_analyst:8001/keyword", json={
+                "analysis_id": str(analysis.id),
+                "input": json.dumps(user_input),
+                "keywords": analysis.keywords,
+                "target": analysis.target
+            })
+            req.raise_for_status()
+            analysis.task_id = req.json()["task_id"]
+            analysis.status = AnalysisStatus.QUEUED
+            session.add(analysis)
+            session.commit()
     except Exception:
         traceback.print_exc()
         session.rollback()
+        if reservation:
+            try:
+                credit.release(reservation.id)
+            except Exception:
+                traceback.print_exc()
+        try:
+            analysis.status = AnalysisStatus.FAILED
+            session.add(analysis)
+            session.commit()
+        except Exception:
+            traceback.print_exc()
+            session.rollback()
         raise AppException(
             500,
             ErrorResponse(
@@ -636,8 +677,12 @@ async def post_keyword_analysis(
     response: Response,
     payload: Annotated[AccessTokenPayload, Depends(check_auth)],
     _user_limit: Annotated[None, Depends(analysis_rate_limiters["keyword"]["user"])],
-    _ip_limit: Annotated[None, Depends(analysis_rate_limiters["keyword"]["ip"])]
+    _ip_limit: Annotated[None, Depends(analysis_rate_limiters["keyword"]["ip"])],
+    idempotency_key: Annotated[str, Header(alias="Idempotency-Key")],
 ):
+    idempotency_response = check_idempotency(session, payload.sub, idempotency_key, AnalysisType.keyword)
+    if idempotency_response:
+        return idempotency_response
     user_input = pre_process_keyword_analysis(session, payload.sub)
     title = generate_keyword_analysis_title(body.keywords)
     new_keyword_analysis = KeywordAnalysis(
@@ -646,7 +691,7 @@ async def post_keyword_analysis(
         title = title,
         target = body.target
     )
-    return process_keyword_analysis(new_keyword_analysis, user_input, session, response)
+    return await process_keyword_analysis(new_keyword_analysis, user_input, session, response, idempotency_key)
 
 @analysis_router.post("/keyword/{analysis_id}/retry")
 async def retry_keyword_analysis(
@@ -655,7 +700,8 @@ async def retry_keyword_analysis(
     response: Response,
     payload: Annotated[AccessTokenPayload, Depends(check_auth)],
     _user_limit: Annotated[None, Depends(analysis_rate_limiters["keyword"]["user"])],
-    _ip_limit: Annotated[None, Depends(analysis_rate_limiters["keyword"]["ip"])]
+    _ip_limit: Annotated[None, Depends(analysis_rate_limiters["keyword"]["ip"])],
+    idempotency_key: Annotated[str, Header(alias="Idempotency-Key")],
 ):
     analysis = session.get(KeywordAnalysis, analysis_id)
     if analysis is None:
@@ -682,8 +728,19 @@ async def retry_keyword_analysis(
                 message = "Analysis is not in failed status"
             )
         )
+    idempotency_response = check_idempotency(session, payload.sub, idempotency_key, AnalysisType.keyword)
+    if idempotency_response:
+        if idempotency_response.data.id != analysis_id:
+            raise AppException(
+                status_code=409,
+                error=ErrorResponse(
+                    code=ErrorResponseCode.IDEMPOTENCY_KEY_MISMATCH,
+                    message="Idempotency key is being used by a different analysis."
+                )
+            )
+        return idempotency_response
     user_input = pre_process_keyword_analysis(session, payload.sub)
-    return process_keyword_analysis(analysis, user_input, session, response)
+    return await process_keyword_analysis(analysis, user_input, session, response, idempotency_key)
 
 @analysis_router.patch("/keyword/{analysis_id}")
 async def patch_keyword_analysis(
