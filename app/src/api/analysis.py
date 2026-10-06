@@ -171,23 +171,29 @@ def fetch_owned_experiences(session: SessionDep, experience_ids: list[UUID], use
             )
     return result
 
-def check_idempotency(session: SessionDep, user_id: UUID, idempotency_key: str):
+def check_idempotency(session: SessionDep, user_id: UUID, idempotency_key: str, analysis_type: AnalysisType):
     existing_reservation = session.exec(
         select(CreditReservation).where(
             CreditReservation.user_id == user_id,
-            CreditReservation.idempotency_key == get_reserve_idempotency_key(idempotency_key, AnalysisType.comprehensive),
+            CreditReservation.idempotency_key == get_reserve_idempotency_key(idempotency_key, analysis_type),
             col(CreditReservation.status).in_([CreditReservationStatus.RESERVED, CreditReservationStatus.CAPTURED]),
         )
     ).first()
     if existing_reservation:
-        existing_analysis = session.exec(
-            select(ComprehensiveAnalysis).where(
+        if analysis_type == AnalysisType.comprehensive:
+            stmt = select(ComprehensiveAnalysis).where(
                 ComprehensiveAnalysis.reservation_id == existing_reservation.id
             )
-        ).first()
+        elif analysis_type == AnalysisType.keyword:
+            stmt = select(KeywordAnalysis).where(
+                KeywordAnalysis.reservation_id == existing_reservation.id
+            )
+        else:
+            return None
+        existing_analysis = session.exec(stmt).first()
         if existing_analysis:
             return PostSuccessResponse(
-                message="Queued comprehensive analysis.",
+                message="Queued analysis.",
                 data=UUIDDataWithTitle(
                     id=existing_analysis.id,
                     title=existing_analysis.title,
@@ -312,7 +318,7 @@ async def post_comprehensive_analysis(
     _ip_limit: Annotated[None, Depends(analysis_rate_limiters["comprehensive"]["ip"])],
     idempotency_key: Annotated[str, Header(alias="Idempotency-Key")],
 ):
-    idempotency_response = check_idempotency(session, payload.sub, idempotency_key)
+    idempotency_response = check_idempotency(session, payload.sub, idempotency_key, AnalysisType.comprehensive)
     if idempotency_response:
         return idempotency_response
     user_profile, user_input, experience_ids = pre_process_comprehensive_analysis(session, body.experiences, payload.sub)
@@ -360,7 +366,7 @@ async def retry_comprehensive_analysis(
                 message = "Analysis is not in failed status"
             )
         )
-    idempotency_response = check_idempotency(session, payload.sub, idempotency_key)
+    idempotency_response = check_idempotency(session, payload.sub, idempotency_key, AnalysisType.comprehensive)
     if idempotency_response:
         if idempotency_response.data.id != analysis_id:
             raise AppException(
