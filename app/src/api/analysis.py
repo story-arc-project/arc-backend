@@ -3,7 +3,7 @@ import traceback
 from zoneinfo import ZoneInfo
 from typing import Annotated
 from uuid import UUID
-from fastapi import APIRouter, Depends, Header, Response, status
+from fastapi import APIRouter, Depends, Header, Response
 from sqlmodel import col, select, and_, func
 import json
 import httpx
@@ -13,11 +13,11 @@ from src.api.models.exc import AppException
 from src.api.models.request import ComprehensiveAnalysisPatchRequest, ComprehensiveAnalysisPostRequest, KeywordAnalysisPatchRequest, KeywordAnalysisPostRequest
 from src.api.models.response import BookmarkListResponse, ComprehensiveAnalysisListResponse, ComprehensiveAnalysisResponse, DeleteSuccessResponse, IndividualAnalysisListResponse, IndividualAnalysisResponse, KeywordAnalysisListResponse, KeywordAnalysisResponse, PostSuccessResponse
 from src.db.db import SessionDep
-from src.db.models import AnalysisBookmark, ComprehensiveAnalysis, CreditReservation, Experience, IndividualAnalysis, KeywordAnalysis, UserProfile
-from src.enums import AnalysisStatus, AnalysisType, CreditReservationStatus, ErrorResponseCode
+from src.db.models import AnalysisBookmark, ComprehensiveAnalysis, Experience, IndividualAnalysis, KeywordAnalysis, UserProfile
+from src.enums import AnalysisStatus, AnalysisType, ErrorResponseCode
 from src.utils.auth import check_auth
 from src.utils import credit
-from src.utils.idempotency import get_reserve_idempotency_key
+from src.utils.idempotency import check_idempotency, get_reserve_idempotency_key
 from src.utils.ratelimit import analysis_rate_limiters
 from src.utils.render import render_experience_content
 from src.utils.token import AccessTokenPayload
@@ -169,43 +169,6 @@ def fetch_owned_experiences(session: SessionDep, experience_ids: list[UUID], use
                 )
             )
     return result
-
-def check_idempotency(session: SessionDep, user_id: UUID, idempotency_key: str, analysis_type: AnalysisType):
-    existing_reservation = session.exec(
-        select(CreditReservation).where(
-            CreditReservation.user_id == user_id,
-            CreditReservation.idempotency_key == get_reserve_idempotency_key(idempotency_key, analysis_type),
-            col(CreditReservation.status).in_([CreditReservationStatus.RESERVED, CreditReservationStatus.CAPTURED]),
-        )
-    ).first()
-    if existing_reservation:
-        if analysis_type == AnalysisType.comprehensive:
-            stmt = select(ComprehensiveAnalysis).where(
-                ComprehensiveAnalysis.reservation_id == existing_reservation.id
-            )
-        elif analysis_type == AnalysisType.keyword:
-            stmt = select(KeywordAnalysis).where(
-                KeywordAnalysis.reservation_id == existing_reservation.id
-            )
-        else:
-            return None
-        existing_analysis = session.exec(stmt).first()
-        if existing_analysis:
-            return PostSuccessResponse(
-                message="Queued analysis.",
-                data=UUIDDataWithTitle(
-                    id=existing_analysis.id,
-                    title=existing_analysis.title,
-                )
-            )
-        raise AppException(
-            status_code=status.HTTP_409_CONFLICT,
-            error=ErrorResponse(
-                code=ErrorResponseCode.IDEMPOTENCY_KEY_MISMATCH,
-                message="A request with this idempotency key is currently being processed. Please wait.",
-            ),
-        )
-    return None
 
 def pre_process_comprehensive_analysis(session: SessionDep, experience_ids: list[UUID], user_id: UUID):
     user_profile = session.exec(select(UserProfile).where(UserProfile.user_id == user_id)).one_or_none()
