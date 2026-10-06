@@ -10,6 +10,7 @@ from sqlmodel import Session, select
 from sqlalchemy.exc import IntegrityError
 from datetime import date
 
+from src.const import CREDIT_POLICY_VERSIONS, CURRENT_CREDIT_POLICY_VERSION
 from src.db.models import (
     User, UserCreditAccount, CreditLedger, CreditReservation, 
     ComprehensiveAnalysis, Experience, UserProfile
@@ -217,3 +218,41 @@ class TestCreditModels:
 #         response = client.get("/credits/packages")
 #         if response.status_code == 200:
 #             assert "balance" not in response.text
+
+DEFAULT_CREDIT_GRANT = 100
+POLICY = CREDIT_POLICY_VERSIONS[CURRENT_CREDIT_POLICY_VERSION]
+
+class TestAnalysisGenerationAPI:
+    @pytest.fixture(name="exp_id")
+    def setup_credit(self, session: Session, authenticated_client: TestClient, user_id: UUID, admin_id: UUID) -> str:
+        res = session.exec(select(UserProfile).where(UserProfile.user_id == user_id)).one_or_none()
+        assert res is not None, "User profile not found"
+        data = {"type": "career", "content": {"a": "b"}}
+        response = authenticated_client.post("/experiences", json=data)
+        assert response.status_code == 201
+        credit.grant(user_id, DEFAULT_CREDIT_GRANT, "test", "setup_key", admin_id)
+        return response.json()["data"]["id"]
+
+    def test_analysis_success_capture_atomicity(self, session: Session, authenticated_client: TestClient, user_id: UUID, exp_id: str):
+        response = authenticated_client.post("/analysis/comprehensive", headers={"Idempotency-Key": "cap_test"}, json={"experiences": [exp_id]})
+        assert response.status_code == 200
+        analysis_id = response.json()["data"]["id"]
+        analysis = session.get(ComprehensiveAnalysis, analysis_id)
+        assert analysis is not None
+        reservation = session.get(CreditReservation, analysis.reservation_id)
+        assert reservation is not None
+        assert reservation.status == CreditReservationStatus.RESERVED
+        callback_payload = {"analysis_id": analysis_id, "vector": [0] * 3072, "result": {"schema_version": "default_schema"}}
+        callback_endpoint = "/internal/comprehensive/success"
+        internal_callback = trigger_internal_callback(authenticated_client, callback_payload, callback_endpoint)
+        assert internal_callback.status_code == 200
+        session.expire_all()
+        analysis = session.get(ComprehensiveAnalysis, analysis_id)
+        assert analysis is not None
+        reservation = session.get(CreditReservation, analysis.reservation_id)
+        assert reservation is not None
+        assert reservation.status == CreditReservationStatus.CAPTURED
+        account = session.get(UserCreditAccount, user_id)
+        assert account is not None
+        assert account.reserved == 0
+        assert account.balance == DEFAULT_CREDIT_GRANT - POLICY["comprehensive"]
