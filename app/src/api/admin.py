@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, Query, Request
+from fastapi import APIRouter, Depends, Header, Query, Request
 from sqlalchemy import ARRAY, Enum
 from sqlalchemy.sql.elements import Label
 from sqlmodel import and_, col, or_, select, func
@@ -7,10 +7,11 @@ from uuid import UUID
 
 from src.api.models.base import AdminActivityStat, AdminCustomerDetail, AdminCustomerDetailActivity, AdminCustomerDetailCustomer, AdminCustomerDetailProfile, AdminCustomerList, AdminCustomerListData, ErrorResponse, QueryParamsAuditLog, SuccessResponseWithData
 from src.api.models.exc import AppException
-from src.api.models.request import ListCustomersQueryParams
+from src.api.models.request import AdminGrantRequest, ListCustomersQueryParams
 from src.db.db import SessionDep
 from src.db.models import ComprehensiveAnalysis, CoverLetter, DeletedUser, Experience, IndividualAnalysis, KeywordAnalysis, OauthAccount, Resume, User, UserProfile
 from src.enums import AnalysisStatus, AuditAction, ErrorResponseCode, OauthProviderId
+from src.utils import credit
 from src.utils.admin import log_audit, require_admin
 from src.utils.db import parse_sort
 from src.utils.token import AccessTokenPayload
@@ -189,4 +190,28 @@ def list_customers(query: Annotated[ListCustomersQueryParams, Query()], session:
             count = count,
             contents = customers
         )
+    )
+
+@admin_router.post("/credits/grant")
+def grant_credit(
+    body: AdminGrantRequest,
+    session: SessionDep,
+    payload: Annotated[AccessTokenPayload, Depends(require_admin)],
+    idempotency_key: Annotated[str, Header(alias="Idempotency-Key")],
+):
+    user = session.get(User, body.user_id)
+    if not user:
+        raise AppException(404, ErrorResponse(code=ErrorResponseCode.NOT_FOUND, message="User not found"))
+    ledger = credit.grant(
+        user_id=user.id,
+        amount=body.amount,
+        reason=body.reason,
+        idempotency_key=idempotency_key,
+        actor_id=payload.sub,
+    )
+    return SuccessResponseWithData(
+        message="Credit granted",
+        data={
+            "ledger_id": str(ledger.id),
+        },
     )
