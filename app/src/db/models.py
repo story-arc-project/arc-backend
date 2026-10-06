@@ -244,7 +244,7 @@ class IndividualAnalysis(SQLModel, table=True):
     )
     user_id: uuid.UUID = Field(foreign_key="users.id", index=True)
     task_id: str | None = Field(nullable=True, index=True, default=None)
-    status: AnalysisStatus = AnalysisStatus.QUEUED
+    status: AnalysisStatus = Field(default=AnalysisStatus.QUEUED)
     experience_id: uuid.UUID = Field(foreign_key="experiences.id")
     vector: list[float] | None = Field(
         default=None,
@@ -287,7 +287,7 @@ class ComprehensiveAnalysis(SQLModel, table=True):
     )
     user_id: uuid.UUID = Field(foreign_key="users.id", index=True)
     task_id: str | None = Field(nullable=True, index=True, default=None)
-    status: AnalysisStatus = AnalysisStatus.QUEUED
+    status: AnalysisStatus = Field(default=AnalysisStatus.QUEUED)
     title: str
     experience_ids: list[uuid.UUID] = Field(
         sa_column=Column(ARRAY(SAUUID))
@@ -334,7 +334,7 @@ class Resume(SQLModel, table=True):
     user_id: uuid.UUID = Field(foreign_key="users.id", index=True)
     language: Language
     title: str
-    status: AnalysisStatus = AnalysisStatus.QUEUED
+    status: AnalysisStatus = Field(default=AnalysisStatus.QUEUED)
     result: dict[str, Any] | None = Field(
         default=None,
         sa_column=Column(JSONB, nullable=True, default=None)
@@ -378,7 +378,7 @@ class KeywordAnalysis(SQLModel, table=True):
     user_id: uuid.UUID = Field(foreign_key="users.id", index=True)
     keywords: list[str] = Field(sa_column=Column(ARRAY(String)))
     task_id: str | None = Field(nullable=True, index=True, default=None)
-    status: AnalysisStatus = AnalysisStatus.QUEUED
+    status: AnalysisStatus = Field(default=AnalysisStatus.QUEUED)
     target: str
     title: str
     result: dict[str, Any] | None = Field(
@@ -510,7 +510,7 @@ class CoverLetter(SQLModel, table=True):
     )
     user_id: uuid.UUID = Field(foreign_key="users.id", index=True)
     task_id: str | None = Field(nullable=True, index=True, default=None)
-    status: AnalysisStatus = AnalysisStatus.QUEUED
+    status: AnalysisStatus = Field(default=AnalysisStatus.QUEUED)
     target_company: str | None = None
     target_job: str | None = None
     job_key: str = "general"
