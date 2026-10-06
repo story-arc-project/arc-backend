@@ -105,7 +105,7 @@ async def confirm_upload(body: ConfirmUploadRequest, session: SessionDep, s3: S3
     session.commit()
     return SuccessResponse(message="File confirmed")
 
-@files_router.get("/", response_model=FileListResponse)
+@files_router.get("", response_model=FileListResponse)
 async def list_files(session: SessionDep, payload: Annotated[AccessTokenPayload, Depends(check_auth)]):
     # TODO: filter confirmed
     files = session.exec(

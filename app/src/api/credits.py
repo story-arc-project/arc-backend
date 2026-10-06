@@ -18,7 +18,7 @@ credits_router = APIRouter()
 def get_credit_packages():
     return {"packages": PACKAGES}
 
-@credits_router.get("/")
+@credits_router.get("")
 def get_credit_account(
     session: SessionDep,
     payload: Annotated[AccessTokenPayload, Depends(check_auth)],

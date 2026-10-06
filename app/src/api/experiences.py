@@ -34,7 +34,7 @@ def generate_individual_analysis(experience: Experience, payload: AccessTokenPay
     new_individual_analysis.task_id = req.json()["task_id"]
     return new_individual_analysis
 
-@experiences_router.post("/")
+@experiences_router.post("")
 async def post_experience(
     body: ExperiencePostRequest,
     session: SessionDep,
@@ -74,7 +74,7 @@ async def post_experience(
         )
     )
 
-@experiences_router.get("/")
+@experiences_router.get("")
 async def get_experience(session: SessionDep, response: Response, payload: Annotated[AccessTokenPayload, Depends(check_auth)]):
     statement = select(Experience).where(Experience.user_id == payload.sub)
     result = session.exec(statement).all()

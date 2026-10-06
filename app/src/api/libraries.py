@@ -16,7 +16,7 @@ from src.utils.token import AccessTokenPayload
 
 libraries_router = APIRouter()
 
-@libraries_router.post("/")
+@libraries_router.post("")
 async def post_library(body: LibraryPostRequest, session: SessionDep, response: Response, payload: Annotated[AccessTokenPayload, Depends(check_auth)]):
     try:
         new_library = Library(
@@ -48,7 +48,7 @@ async def post_library(body: LibraryPostRequest, session: SessionDep, response: 
         )
     )
 
-@libraries_router.get("/")
+@libraries_router.get("")
 async def get_libraries(session: SessionDep, response: Response, payload: Annotated[AccessTokenPayload, Depends(check_auth)]):
     statement = select(Library).where(Library.user_id == payload.sub)
     result = session.exec(statement).all()

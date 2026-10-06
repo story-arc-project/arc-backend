@@ -16,7 +16,7 @@ from src.utils.token import AccessTokenPayload
 
 presets_router = APIRouter()
 
-@presets_router.get("/")
+@presets_router.get("")
 async def get_presets(session: SessionDep, response: Response, payload: Annotated[AccessTokenPayload, Depends(check_auth)]):
     statement = select(Preset).where(Preset.user_id == payload.sub)
     result = session.exec(statement).all()
