@@ -14,6 +14,14 @@ class SuccessResponse(BaseModel):
 class SuccessResponseWithData(SuccessResponse, Generic[T]):
     data: T
 
+class NextCursor(BaseModel):
+    created_at: datetime
+    id: UUID
+
+class SuccessResponseWithDataPagination(SuccessResponseWithData[T]):
+    has_more: bool
+    next_cursor: NextCursor | None
+
 class ErrorResponse(BaseModel):
     status: str = "error"
     code: ErrorResponseCode
