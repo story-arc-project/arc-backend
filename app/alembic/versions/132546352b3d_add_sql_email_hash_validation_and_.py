@@ -78,9 +78,24 @@ def upgrade() -> None:
         RETURNS trigger
         LANGUAGE plpgsql
         AS $$
+        DECLARE
+            expected_hash text;
         BEGIN
-            NEW.email_hash :=
+            expected_hash :=
                 encode(digest(lower(btrim(NEW.email)), 'sha256'), 'hex');
+
+            IF TG_OP = 'INSERT' AND NEW.email_hash IS NULL THEN
+                NEW.email_hash := expected_hash;
+            ELSIF TG_OP = 'INSERT' THEN
+                RAISE EXCEPTION 'email_hash must not be supplied'
+                    USING ERRCODE = '23514';
+            ELSIF NEW.email_hash IS DISTINCT FROM OLD.email_hash THEN
+                RAISE EXCEPTION 'email_hash must not be updated'
+                    USING ERRCODE = '23514';
+            ELSIF NEW.email IS DISTINCT FROM OLD.email THEN
+                NEW.email_hash := expected_hash;
+            END IF;
+
             RETURN NEW;
         END;
         $$;
@@ -109,7 +124,7 @@ def upgrade() -> None:
     op.execute(
         """
         CREATE TRIGGER users_sync_email_hash
-        BEFORE INSERT OR UPDATE OF email ON users
+        BEFORE INSERT OR UPDATE OF email, email_hash ON users
         FOR EACH ROW
         EXECUTE FUNCTION sync_users_email_hash();
         """
