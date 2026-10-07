@@ -1,7 +1,7 @@
 from datetime import datetime, date
 from typing import Any, Optional
 import uuid
-from sqlalchemy import CheckConstraint, DateTime, func, Column, UUID as SAUUID, event
+from sqlalchemy import CheckConstraint, Column, DateTime, event, Index, text, func, UUID as SAUUID
 from sqlalchemy.sql.functions import now
 from src.enums import Affiliation, AnalysisStatus, AnalysisType, AuditAction, CreditReservationStatus, FeedbackTriggerSource, Language, OauthProviderId, UserStatus
 from sqlmodel import ARRAY, Field, SQLModel, String, UniqueConstraint
@@ -11,13 +11,23 @@ from src.utils.email import HashEmail
 
 class User(SQLModel, table=True):
     __tablename__: str = "users"  # pyright: ignore[reportIncompatibleVariableOverride]
+    __table_args__ = (
+        Index(
+            "users_normalized_email_key",
+            text("lower(btrim(email))"),
+            unique=True,
+        ),
+    )
     id: uuid.UUID = Field(
         default_factory=uuid.uuid4,
         primary_key=True,
         sa_type=SAUUID
     )
     email: str = Field(unique=True)
-    email_hash: HashEmail = Field(index=True, max_length=64)
+    email_hash: HashEmail | None = Field(
+        default=None,
+        sa_column=Column(String(64), nullable=False, index=True),
+    )
     password_hash: str | None = None
     status: UserStatus = Field(default=UserStatus.UNVERIFIED)
     created_at: datetime = Field(
@@ -48,7 +58,9 @@ class UserEmailHistory(SQLModel, table=True):
         sa_type=SAUUID,
     )
     user_id: uuid.UUID = Field(foreign_key="users.id", index=True)
-    email_hash: HashEmail = Field(index=True, max_length=64)
+    email_hash: HashEmail = Field(
+        sa_column=Column(String(64), nullable=False, index=True),
+    )
     created_at: datetime = Field(
         default_factory=now,
         sa_column=Column(
