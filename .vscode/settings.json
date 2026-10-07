@@ -1,6 +1,10 @@
 {
+    "python.envFile": "${workspaceFolder}/app/.env",
+    "python.testing.cwd": "${workspaceFolder}/app",
     "python.testing.pytestArgs": [
-        "app"
+        "-c",
+        "pyproject.toml",
+        "tests"
     ],
     "python.testing.unittestEnabled": false,
     "python.testing.pytestEnabled": true
