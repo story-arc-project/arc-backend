@@ -1,13 +1,13 @@
 from datetime import datetime, date
 from typing import Any, Optional
 import uuid
-from sqlalchemy import CheckConstraint, DateTime, func, Column, UUID as SAUUID, event, inspect, literal
+from sqlalchemy import CheckConstraint, DateTime, func, Column, UUID as SAUUID, event
 from sqlalchemy.sql.functions import now
 from src.enums import Affiliation, AnalysisStatus, AnalysisType, AuditAction, CreditReservationStatus, FeedbackTriggerSource, Language, OauthProviderId, UserStatus
-from sqlmodel import ARRAY, Field, SQLModel, String, UniqueConstraint, select
+from sqlmodel import ARRAY, Field, SQLModel, String, UniqueConstraint
 from sqlalchemy.dialects.postgresql import JSONB
 from pgvector.sqlalchemy import Vector
-from src.utils.email import hash_email, HashEmail
+from src.utils.email import HashEmail
 
 class User(SQLModel, table=True):
     __tablename__: str = "users"  # pyright: ignore[reportIncompatibleVariableOverride]
@@ -17,11 +17,7 @@ class User(SQLModel, table=True):
         sa_type=SAUUID
     )
     email: str = Field(unique=True)
-    email_hash: HashEmail = Field(
-        default_factory=lambda: HashEmail(""),
-        index=True,
-        max_length=64,
-    )
+    email_hash: HashEmail = Field(index=True, max_length=64)
     password_hash: str | None = None
     status: UserStatus = Field(default=UserStatus.UNVERIFIED)
     created_at: datetime = Field(
@@ -60,40 +56,6 @@ class UserEmailHistory(SQLModel, table=True):
             server_default=func.now(),
             nullable=False,
         ),
-    )
-
-
-@event.listens_for(User, "before_insert")
-def set_user_initial_email_hash(mapper, connection, target: User):
-    if target.email and (not target.email_hash or target.email_hash == ""):
-        target.email_hash = hash_email(target.email)
-
-
-@event.listens_for(User, "before_update")
-def record_user_email_change(mapper, connection, target: User):
-    if target.email and (not target.email_hash or target.email_hash == ""):
-        target.email_hash = hash_email(target.email)
-
-    history = inspect(target).attrs.email.history
-    if not history.has_changes() or not history.deleted:
-        return
-
-    old_hash = hash_email(history.deleted[0])
-    target.email_hash = hash_email(target.email)
-
-    connection.execute(
-        UserEmailHistory.__table__.insert().from_select(
-            ["id", "user_id", "email_hash"],
-            select(
-                literal(uuid.uuid4()),
-                literal(target.id),
-                literal(old_hash),
-            ).where(
-                ~select(UserEmailHistory.id)
-                .where(UserEmailHistory.email_hash == old_hash)
-                .exists()
-            ),
-        )
     )
 
 
