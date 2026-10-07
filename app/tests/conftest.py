@@ -23,15 +23,6 @@ from tests.utils import generate_authenticated_user
 from src.db.db import get_session
 from src.main import app
 
-class CombinedMock:
-    def __init__(self, sync_mock: MagicMock, async_mock: AsyncMock):
-        self.sync_mock = sync_mock
-        self.async_mock = async_mock
-
-    @property
-    def call_count(self) -> int:
-        return self.sync_mock.call_count + self.async_mock.call_count
-
 @pytest.fixture(autouse=True)
 def fake_redis():
     fake = FakeRedis(decode_responses=True)
@@ -186,9 +177,8 @@ def mock_ai_analyst(monkeypatch: pytest.MonkeyPatch):
     mock_response = MagicMock()
     mock_response.json.return_value = {"task_id": str(uuid4())}
     mock_response.raise_for_status.return_value = None
-    with patch("src.api.experiences.requests.post", return_value=mock_response) as mock_post, \
-         patch("src.api.analysis.httpx.AsyncClient.post", new_callable=AsyncMock, return_value=mock_response) as mock_async_post:
-        yield CombinedMock(mock_post, mock_async_post)
+    with patch("httpx.AsyncClient.post", new_callable=AsyncMock, return_value=mock_response) as mock_post:
+        yield mock_post
 
 @pytest.fixture(autouse=True)
 def override_credit_engine(session: Session):
