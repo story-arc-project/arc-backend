@@ -3,7 +3,7 @@ from src.api.models.exc import AppException, ErrorResponse
 from src.api.models.base import FileMetadataPublic, PresignUploadData, SuccessResponse
 from src.api.models.request import ConfirmUploadRequest, PresignUploadRequest
 from src.api.models.response import FileDownloadResponse, FileListResponse, FileMetadataResponse, PresignUploadResponse
-from src.const import UPLOAD_EXPIRES_IN, ALLOWED_UPLOAD_CONTENT_SIZE, ALLOWED_UPLOAD_CONTENT_TYPE
+from src.const import UPLOAD_EXPIRES_IN, ALLOWED_UPLOAD_CONTENT_SIZE
 from src.db.db import SessionDep
 from src.db.models import FileMetadata
 from src.enums import ErrorResponseCode
