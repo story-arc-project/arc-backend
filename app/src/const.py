@@ -21,11 +21,11 @@ VERIFY_EMAIL_RETRY_COOLDOWN = 10 # minutes
 UPLOAD_EXPIRES_IN = 300 # seconds
 DOWNLOAD_EXPIRES_IN = 3600 # seconds
 ALLOWED_UPLOAD_CONTENT_SIZE = 50 # MB
-ALLOWED_UPLOAD_CONTENT_TYPE = [
-    "application/pdf",
-    "image/png",
-    "image/jpeg"
-] # MIME type
+# ALLOWED_UPLOAD_CONTENT_TYPE = [
+#     "application/pdf",
+#     "image/png",
+#     "image/jpeg"
+# ] # MIME type
 
 # Redis configurations
 REDIS_HOST = "redis"

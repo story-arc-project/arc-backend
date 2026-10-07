@@ -2,9 +2,10 @@ from unittest.mock import patch
 from uuid import uuid4
 import pytest
 from fastapi.testclient import TestClient
-from sqlmodel import Session
+from sqlmodel import Session, select
 from pyrate_limiter import Limiter, Rate, Duration
 
+from src.db.models import Experience, IndividualAnalysis
 from src.utils.auth import check_auth
 from src.utils.ratelimit import analysis_rate_limiters
 
@@ -116,17 +117,22 @@ class TestGetExperienceById:
     def test_not_found(self, authenticated_client: TestClient, mock_ai_analyst):
         response = authenticated_client.get(f"/experiences/{uuid4()}")
         assert response.status_code == 404
-    # TODO: test_forbidden
-    # def test_forbidden(self, authenticated_client: TestClient, session: Session):
-    #     data = {"type": "career", "content": {"a": "b"}}
-    #     response = authenticated_client.post("/experiences", json=data)
-    #     experience_id = response.json()["data"]["id"]
-    #     result = session.exec(select(Experience).where(Experience.id == UUID(experience_id))).one()
-    #     result.user_id = uuid4()
-    #     session.add(result)
-    #     session.commit()
-    #     response = authenticated_client.get(f"/experiences/{experience_id}")
-    #     assert response.status_code == 403
+
+    def test_forbidden_for_another_users_experience(
+        self,
+        authenticated_client: TestClient,
+        other_authenticated_client: TestClient,
+        mock_ai_analyst,
+    ):
+        response = other_authenticated_client.post(
+            "/experiences",
+            json={"type": "career", "content": {"owner": "other"}},
+        )
+        experience_id = response.json()["data"]["id"]
+
+        response = authenticated_client.get(f"/experiences/{experience_id}")
+
+        assert response.status_code == 403
 
 class TestPutExperienceById:
     def test_success(self, authenticated_client: TestClient, mock_ai_analyst):
@@ -135,6 +141,7 @@ class TestPutExperienceById:
         experience_id = response.json()["data"]["id"]
         update_data = {"content": {"role": "engineer"}, "importance": 4}
         response = authenticated_client.put(f"/experiences/{experience_id}", json=update_data)
+        assert response.status_code == 200
         response = authenticated_client.get(f"/experiences/{experience_id}")
         assert response.status_code == 200
         assert response.json()["data"]["content"] == {"role": "engineer"}
@@ -150,3 +157,94 @@ class TestPutExperienceById:
         update_data = {"content": {"role": "engineer"}, "importance": 4}
         response = authenticated_client.put(f"/experiences/{uuid4()}", json=update_data)
         assert response.status_code == 404
+
+    def test_forbidden_for_another_users_experience(
+        self,
+        authenticated_client: TestClient,
+        other_authenticated_client: TestClient,
+        mock_ai_analyst,
+    ):
+        response = other_authenticated_client.post(
+            "/experiences",
+            json={"type": "career", "content": {"owner": "other"}},
+        )
+        experience_id = response.json()["data"]["id"]
+
+        response = authenticated_client.put(
+            f"/experiences/{experience_id}",
+            json={"content": {"owner": "changed"}, "importance": 4},
+        )
+
+        assert response.status_code == 403
+        response = other_authenticated_client.get(f"/experiences/{experience_id}")
+        assert response.json()["data"]["content"] == {"owner": "other"}
+
+class TestExperienceOwnership:
+    def test_list_only_returns_current_users_experiences(
+        self,
+        authenticated_client: TestClient,
+        other_authenticated_client: TestClient,
+        mock_ai_analyst,
+    ):
+        response = other_authenticated_client.post(
+            "/experiences",
+            json={"type": "career", "content": {"owner": "other"}},
+        )
+        assert response.status_code == 201
+
+        response = authenticated_client.get("/experiences")
+
+        assert response.status_code == 200
+        assert response.json()["data"]["count"] == 0
+        assert response.json()["data"]["contents"] == []
+
+    @pytest.mark.parametrize(
+        ("method", "path_suffix", "payload"),
+        [
+            ("patch", "/importance", {"importance": 4}),
+            ("delete", "", None),
+            ("post", "/duplicate", None),
+        ],
+    )
+    def test_mutations_are_forbidden_for_another_users_experience(
+        self,
+        authenticated_client: TestClient,
+        other_authenticated_client: TestClient,
+        mock_ai_analyst,
+        method: str,
+        path_suffix: str,
+        payload: dict | None,
+    ):
+        response = other_authenticated_client.post(
+            "/experiences",
+            json={"type": "career", "content": {"owner": "other"}},
+        )
+        experience_id = response.json()["data"]["id"]
+
+        response = authenticated_client.request(
+            method.upper(),
+            f"/experiences/{experience_id}{path_suffix}",
+            json=payload,
+        )
+
+        assert response.status_code == 403
+        response = other_authenticated_client.get(f"/experiences/{experience_id}")
+        assert response.status_code == 200
+
+    def test_draft_experience_does_not_start_analysis(
+        self,
+        authenticated_client: TestClient,
+        session: Session,
+        mock_ai_analyst,
+    ):
+        response = authenticated_client.post(
+            "/experiences",
+            json={"type": "career", "content": {"status": "draft", "body": "unfinished"}},
+        )
+
+        assert response.status_code == 201
+        mock_ai_analyst.assert_not_called()
+        assert session.exec(select(IndividualAnalysis)).all() == []
+        experience = session.get(Experience, response.json()["data"]["id"])
+        assert experience is not None
+        assert experience.content["status"] == "draft"

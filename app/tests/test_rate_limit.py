@@ -31,21 +31,11 @@ class TestAnalysisRateLimit:
                 for bucket in limiter.limiter.buckets():
                     bucket.flush()
 
-    @pytest.fixture
-    def mock_ai_analyst(self):
-        mock_response = MagicMock()
-        mock_response.json.return_value = {"task_id": str(uuid4())}
-        mock_response.raise_for_status.return_value = None
-        with patch("src.api.analysis.requests.post", return_value=mock_response) as mock_post:
-            yield mock_post
-
-    @pytest.fixture
-    def mock_experience_ai_analyst(self):
-        mock_response = MagicMock()
-        mock_response.json.return_value = {"task_id": str(uuid4())}
-        mock_response.raise_for_status.return_value = None
-        with patch("src.api.experiences.requests.post", return_value=mock_response) as mock_post:
-            yield mock_post
+    @pytest.fixture(autouse=True)
+    def remove_credits(self):
+        with patch("src.api.analysis.credit.reserve", return_value=None), \
+             patch("src.api.export.credit.reserve", return_value=None):
+            yield
 
     def _add_profile(self, session: Session, user_id):
         profile = UserProfile(
@@ -97,12 +87,12 @@ class TestAnalysisRateLimit:
         first_response = authenticated_client.post(
             "/analysis/keyword",
             json={"keywords": ["api"]},
-            headers={"X-Forwarded-For": "203.0.113.10"},
+            headers={"X-Forwarded-For": "203.0.113.10", "Idempotency-Key": str(uuid4())},
         )
         second_response = authenticated_client.post(
             "/analysis/keyword",
             json={"keywords": ["api"]},
-            headers={"X-Forwarded-For": "203.0.113.11"},
+            headers={"X-Forwarded-For": "203.0.113.11", "Idempotency-Key": str(uuid4())},
         )
 
         assert first_response.status_code == 200
@@ -121,12 +111,12 @@ class TestAnalysisRateLimit:
         first_response = authenticated_client.post(
             "/analysis/keyword",
             json={"keywords": ["api"]},
-            headers={"X-Forwarded-For": "203.0.113.20"},
+            headers={"X-Forwarded-For": "203.0.113.20", "Idempotency-Key": str(uuid4())},
         )
         second_response = authenticated_client.post(
             "/analysis/keyword",
             json={"keywords": ["api"]},
-            headers={"X-Forwarded-For": "203.0.113.20"},
+            headers={"X-Forwarded-For": "203.0.113.20", "Idempotency-Key": str(uuid4())},
         )
 
         assert first_response.status_code == 200
@@ -150,12 +140,12 @@ class TestAnalysisRateLimit:
         first_response = authenticated_client.post(
             "/analysis/comprehensive",
             json=request_body,
-            headers={"X-Forwarded-For": "203.0.113.30"},
+            headers={"X-Forwarded-For": "203.0.113.30", "Idempotency-Key": str(uuid4())},
         )
         second_response = authenticated_client.post(
             "/analysis/comprehensive",
             json=request_body,
-            headers={"X-Forwarded-For": "203.0.113.31"},
+            headers={"X-Forwarded-For": "203.0.113.31", "Idempotency-Key": str(uuid4())},
         )
 
         assert first_response.status_code == 200
@@ -166,7 +156,7 @@ class TestAnalysisRateLimit:
     def test_post_experience_is_rate_limited_by_user(
         self,
         authenticated_client: TestClient,
-        mock_experience_ai_analyst,
+        mock_ai_analyst,
     ):
         self._set_analysis_limit("individual", "user", 1)
         self._set_analysis_limit("individual", "ip", 10)
@@ -175,23 +165,23 @@ class TestAnalysisRateLimit:
         first_response = authenticated_client.post(
             "/experiences",
             json=request_body,
-            headers={"X-Forwarded-For": "203.0.113.40"},
+            headers={"X-Forwarded-For": "203.0.113.40", "Idempotency-Key": str(uuid4())},
         )
         second_response = authenticated_client.post(
             "/experiences",
             json=request_body,
-            headers={"X-Forwarded-For": "203.0.113.41"},
+            headers={"X-Forwarded-For": "203.0.113.41", "Idempotency-Key": str(uuid4())},
         )
 
         assert first_response.status_code == 201
         assert second_response.status_code == 429
         assert second_response.json()["code"] == ErrorResponseCode.TOO_MANY_ATTEMPTS
-        assert mock_experience_ai_analyst.call_count == 1
+        assert mock_ai_analyst.call_count == 1
 
     def test_post_experience_is_rate_limited_by_ip(
         self,
         authenticated_client: TestClient,
-        mock_experience_ai_analyst,
+        mock_ai_analyst,
     ):
         self._set_analysis_limit("individual", "user", 10)
         self._set_analysis_limit("individual", "ip", 1)
@@ -200,18 +190,18 @@ class TestAnalysisRateLimit:
         first_response = authenticated_client.post(
             "/experiences",
             json=request_body,
-            headers={"X-Forwarded-For": "203.0.113.50"},
+            headers={"X-Forwarded-For": "203.0.113.50", "Idempotency-Key": str(uuid4())},
         )
         second_response = authenticated_client.post(
             "/experiences",
             json=request_body,
-            headers={"X-Forwarded-For": "203.0.113.50"},
+            headers={"X-Forwarded-For": "203.0.113.50", "Idempotency-Key": str(uuid4())},
         )
 
         assert first_response.status_code == 201
         assert second_response.status_code == 429
         assert second_response.json()["code"] == ErrorResponseCode.TOO_MANY_ATTEMPTS
-        assert mock_experience_ai_analyst.call_count == 1
+        assert mock_ai_analyst.call_count == 1
 
     def test_check_auth_runs_once_per_rate_limited_request(
         self,
@@ -233,6 +223,7 @@ class TestAnalysisRateLimit:
             response = authenticated_client.post(
                 "/analysis/keyword",
                 json={"keywords": ["api"]},
+                headers={"Idempotency-Key": str(uuid4())},
             )
         finally:
             app.dependency_overrides.pop(check_auth, None)

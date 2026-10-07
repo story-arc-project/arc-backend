@@ -47,15 +47,6 @@ def reset_analysis_limiters():
             for bucket in limiter.limiter.buckets():
                 bucket.flush()
 
-@pytest.fixture(autouse=True)
-def override_credit_engine(session: Session):
-    """
-    Overrides the hardcoded `engine` in credit.py so that independent
-    Session(engine) blocks use the testcontainer's database engine.
-    """
-    with patch("src.utils.credit.engine", session.bind):
-        yield
-
 @pytest.fixture(name="user_id")
 def setup_user(session: Session, authenticated_client: TestClient):
     user = session.exec(select(User).where(User.email == AUTHENTICATED_EMAIL)).one_or_none()
@@ -196,48 +187,98 @@ class TestAdminCreditAPI:
 #         assert credit_account is not None
 #         assert credit_account.balance == 15
 
-# class TestUserCreditAPI:
-#     def test_get_balance_isolation(self, authenticated_client: TestClient):
-#         response = authenticated_client.get("/credits")
-#         assert response.status_code in (200, 404) # Endpoint placeholder
+class TestUserCreditAPI:
+    def test_get_packages_is_public_and_not_cached(self, client: TestClient):
+        response = client.get("/credits/packages")
 
-#     def test_get_transactions_pagination(self, authenticated_client: TestClient):
-#         response = authenticated_client.get("/credits/transactions?cursor=abc")
-#         assert response.status_code in (200, 404)
+        assert response.status_code == 200
+        assert response.headers["cache-control"] == "no-store"
+        assert response.json() == {"packages": response.json()["packages"]}
 
-#     def test_get_packages_public(self, client: TestClient):
-#         response = client.get("/credits/packages")
-#         assert response.status_code in (200, 404)
+    def test_get_balance_returns_zero_when_account_is_missing(
+        self,
+        authenticated_client: TestClient,
+    ):
+        response = authenticated_client.get("/credits")
 
-#     def test_new_user_balance_returns_200(self, authenticated_client: TestClient):
-#         response = authenticated_client.get("/credits")
-#         if response.status_code == 200:
-#             assert response.json()["balance"] == 0
+        assert response.status_code == 200
+        assert response.headers["cache-control"] == "private, no-store"
+        assert response.json()["message"] == "User credit account not found"
+        assert response.json()["data"] == {
+            "balance": 0,
+            "reserved": 0,
+            "available": 0,
+            "updated_at": response.json()["data"]["updated_at"],
+        }
 
-#     def test_get_balance_ignores_user_id_param(self, authenticated_client: TestClient):
-#         response = authenticated_client.get(f"/credits?user_id={uuid4()}")
-#         assert response.status_code in (200, 404)
+    def test_get_transactions_returns_paginated_results(
+        self,
+        authenticated_client: TestClient,
+        user_id: UUID,
+        admin_id: UUID,
+    ):
+        ledgers = [
+            credit.grant(user_id, amount, f"grant-{amount}", f"api-page-{amount}", admin_id)
+            for amount in (10, 20, 30)
+        ]
 
-#     def test_get_packages_validation(self, client: TestClient):
-#         response = client.get("/credits/packages")
-#         if response.status_code == 200:
-#             data = response.json().get("packages", [])
-#             assert len(data) <= 20
+        first_page = authenticated_client.get("/credits/transactions", params={"limit": 2})
 
-#     def test_get_balance_updated_at_format(self, authenticated_client: TestClient):
-#         response = authenticated_client.get("/credits")
-#         if response.status_code == 200:
-#             assert "T" in response.json().get("updated_at", "")
+        assert first_page.status_code == 200
+        assert first_page.headers["cache-control"] == "private, no-store"
+        first_data = first_page.json()
+        assert len(first_data["data"]) == 2
+        assert first_data["has_more"] is True
+        assert first_data["next_cursor"] is not None
+        assert {record["amount"] for record in first_data["data"]}.issubset({10, 20, 30})
 
-#     def test_get_transactions_no_internal_leaks(self, authenticated_client: TestClient):
-#         response = authenticated_client.get("/credits/transactions")
-#         if response.status_code == 200:
-#             assert "internal_memo" not in response.text
+        cursor = first_data["next_cursor"]
+        second_page = authenticated_client.get(
+            "/credits/transactions",
+            params={
+                "limit": 2,
+                "cursor_created_at": cursor["created_at"],
+                "cursor_id": cursor["id"],
+            },
+        )
 
-#     def test_get_packages_excludes_private_data(self, client: TestClient):
-#         response = client.get("/credits/packages")
-#         if response.status_code == 200:
-#             assert "balance" not in response.text
+        assert second_page.status_code == 200
+        second_data = second_page.json()
+        assert len(second_data["data"]) == 1
+        assert second_data["has_more"] is False
+        assert second_data["next_cursor"] is None
+        returned_ids = {
+            record["id"]
+            for record in first_data["data"] + second_data["data"]
+        }
+        assert returned_ids == {str(ledger.id) for ledger in ledgers}
+
+    @pytest.mark.parametrize("limit", [0, 101])
+    def test_get_transactions_rejects_limit_outside_bounds(
+        self,
+        authenticated_client: TestClient,
+        limit: int,
+    ):
+        response = authenticated_client.get(
+            "/credits/transactions",
+            params={"limit": limit},
+        )
+
+        assert response.status_code == 422
+
+    def test_get_transactions_rejects_invalid_cursor(
+        self,
+        authenticated_client: TestClient,
+    ):
+        response = authenticated_client.get(
+            "/credits/transactions",
+            params={
+                "cursor_created_at": "not-a-timestamp",
+                "cursor_id": "not-a-uuid",
+            },
+        )
+
+        assert response.status_code == 422
 
 DEFAULT_CREDIT_GRANT = 100
 POLICY = CREDIT_POLICY_VERSIONS[CURRENT_CREDIT_POLICY_VERSION]
