@@ -47,15 +47,6 @@ def reset_analysis_limiters():
             for bucket in limiter.limiter.buckets():
                 bucket.flush()
 
-@pytest.fixture(autouse=True)
-def override_credit_engine(session: Session):
-    """
-    Overrides the hardcoded `engine` in credit.py so that independent
-    Session(engine) blocks use the testcontainer's database engine.
-    """
-    with patch("src.utils.credit.engine", session.bind):
-        yield
-
 @pytest.fixture(name="user_id")
 def setup_user(session: Session, authenticated_client: TestClient):
     user = session.exec(select(User).where(User.email == AUTHENTICATED_EMAIL)).one_or_none()

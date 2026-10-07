@@ -180,3 +180,12 @@ def mock_ai_analyst(monkeypatch: pytest.MonkeyPatch):
     with patch("src.api.experiences.requests.post", return_value=mock_response) as mock_post, \
          patch("src.api.analysis.httpx.AsyncClient.post", new_callable=AsyncMock, return_value=mock_response):
         yield mock_post
+
+@pytest.fixture(autouse=True)
+def override_credit_engine(session: Session):
+    """
+    Overrides the hardcoded `engine` in credit.py so that independent
+    Session(engine) blocks use the testcontainer's database engine.
+    """
+    with patch("src.utils.credit.engine", session.bind):
+        yield
