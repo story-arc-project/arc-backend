@@ -2,4 +2,6 @@
 !.env.template
 __pycache__
 .venv
-send*
+data/log/app/
+app/logs/
+resume*.json

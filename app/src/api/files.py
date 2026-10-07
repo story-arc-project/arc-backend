@@ -1,0 +1,193 @@
+from fastapi import APIRouter, Depends
+from src.api.models.exc import AppException, ErrorResponse
+from src.api.models.base import FileMetadataPublic, PresignUploadData, SuccessResponse
+from src.api.models.request import ConfirmUploadRequest, PresignUploadRequest
+from src.api.models.response import FileDownloadResponse, FileListResponse, FileMetadataResponse, PresignUploadResponse
+from src.const import UPLOAD_EXPIRES_IN, ALLOWED_UPLOAD_CONTENT_SIZE
+from src.db.db import SessionDep
+from src.db.models import FileMetadata
+from src.enums import ErrorResponseCode
+from src.utils.auth import check_auth
+from src.utils.files import S3Dep
+from src.utils.token import AccessTokenPayload
+from sqlmodel import select
+from typing import Annotated
+import uuid
+
+files_router = APIRouter()
+
+@files_router.post("/presign", response_model=PresignUploadResponse)
+async def presign_upload(body: PresignUploadRequest, session: SessionDep, s3: S3Dep, payload: Annotated[AccessTokenPayload, Depends(check_auth)]):
+    if body.size < 0 or body.size > ALLOWED_UPLOAD_CONTENT_SIZE * 1024 * 1024:
+        raise AppException(
+            status_code=400,
+            error=ErrorResponse(
+                code=ErrorResponseCode.BAD_REQUEST,
+                message="File size above limit"
+            )
+        )
+    # if body.content_type not in ALLOWED_UPLOAD_CONTENT_TYPE:
+    #     raise AppException(
+    #         status_code=400,
+    #         error=ErrorResponse(
+    #             code=ErrorResponseCode.BAD_REQUEST,
+    #             message="File content type not allowed"
+    #         )
+    #     )
+    key = f"users/{payload.sub}/{uuid.uuid4()}"
+    upload_url = s3.presign_upload(key=key)
+    file_record = FileMetadata(
+        user_id=payload.sub,
+        key=key,
+        filename=body.filename,
+        content_type=body.content_type,
+        size=body.size
+    )
+    session.add(file_record)
+    session.commit()
+    session.refresh(file_record)
+    return PresignUploadResponse(
+        message="Presign upload url generated.",
+        data=PresignUploadData(
+            id=file_record.id,
+            upload_url=upload_url,
+            expires_in=UPLOAD_EXPIRES_IN
+        )
+    )
+
+@files_router.post("/confirm")
+async def confirm_upload(body: ConfirmUploadRequest, session: SessionDep, s3: S3Dep, payload: Annotated[AccessTokenPayload, Depends(check_auth)]):
+    # TODO: Implement not confirmed file records cleanup
+    file_record = session.exec(
+        select(FileMetadata).where(
+            FileMetadata.id == body.id,
+            FileMetadata.user_id == payload.sub
+        )
+    ).one_or_none()
+    if file_record is None:
+        raise AppException(
+            status_code=404,
+            error=ErrorResponse(
+                code=ErrorResponseCode.NOT_FOUND,
+                message="File record not found"
+            )
+        )
+    try:
+        head = s3.get_head(file_record.key)
+    except s3._client.exceptions.ClientError:
+        raise AppException(
+            status_code=404,
+            error=ErrorResponse(
+                code=ErrorResponseCode.NOT_FOUND,
+                message="File not found"
+            )
+        )
+    actual_size = head["ContentLength"]
+    actual_content_type = head.get("ContentType", "")
+    if actual_size != file_record.size:
+        raise AppException(
+            status_code=400,
+            error=ErrorResponse(
+                code=ErrorResponseCode.METADATA_ERROR,
+                message="File size does not match metadata"
+            )
+        )
+    if actual_content_type != file_record.content_type:
+        raise AppException(
+            status_code=400,
+            error=ErrorResponse(
+                code=ErrorResponseCode.METADATA_ERROR,
+                message="File content type does not match metadata"
+            )
+        )
+    file_record.confirmed = True
+    session.add(file_record)
+    session.commit()
+    return SuccessResponse(message="File confirmed")
+
+@files_router.get("", response_model=FileListResponse)
+async def list_files(session: SessionDep, payload: Annotated[AccessTokenPayload, Depends(check_auth)]):
+    # TODO: filter confirmed
+    files = session.exec(
+        select(FileMetadata).where(
+            FileMetadata.user_id == payload.sub,
+            FileMetadata.confirmed == True
+        )
+    ).all()
+    return FileListResponse(
+        message="File list fetch success",
+        data=[FileMetadataPublic.model_validate(file) for file in files]
+    )
+
+@files_router.get("/{file_id}", response_model=FileMetadataResponse)
+async def get_file(file_id: uuid.UUID, session: SessionDep, payload: Annotated[AccessTokenPayload, Depends(check_auth)]):
+    # TODO: filter confirmed
+    file_record = session.exec(
+        select(FileMetadata).where(
+            FileMetadata.id == file_id,
+            FileMetadata.user_id == payload.sub,
+            FileMetadata.confirmed == True,
+        )
+    ).one_or_none()
+    if file_record is None:
+        raise AppException(
+            status_code=404,
+            error=ErrorResponse(
+                code=ErrorResponseCode.NOT_FOUND,
+                message="File record not found"
+            )
+        )
+    return FileMetadataResponse(
+        message="File metadata fetched",
+        data=FileMetadataPublic.model_validate(file_record)
+    )
+
+@files_router.get("/{file_id}/download")
+async def get_download_url(file_id: uuid.UUID, session: SessionDep, s3: S3Dep, payload: Annotated[AccessTokenPayload, Depends(check_auth)]):
+    file_record = session.exec(
+        select(FileMetadata).where(
+            FileMetadata.id == file_id,
+            FileMetadata.user_id == payload.sub
+        )
+    ).one_or_none()
+    if file_record is None:
+        raise AppException(
+            status_code=404,
+            error=ErrorResponse(
+                code=ErrorResponseCode.NOT_FOUND,
+                message="File record not found"
+            )
+        )
+    if not file_record.confirmed:
+        raise AppException(
+            status_code=400,
+            error=ErrorResponse(
+                code=ErrorResponseCode.FILE_NOT_CONFIRMED,
+                message="File not confirmed"
+            )
+        )
+    url = s3.presign_download(file_record.key)
+    return FileDownloadResponse(
+        message="File download url generated",
+        data=url
+    )
+
+@files_router.delete("/{file_id}", status_code=204)
+async def delete_file(file_id: uuid.UUID, session: SessionDep, s3: S3Dep, payload: Annotated[AccessTokenPayload, Depends(check_auth)]):
+    file_record = session.exec(
+        select(FileMetadata).where(
+            FileMetadata.id == file_id,
+            FileMetadata.user_id == payload.sub
+        )
+    ).one_or_none()
+    if file_record is None:
+        raise AppException(
+            status_code=404,
+            error=ErrorResponse(
+                code=ErrorResponseCode.NOT_FOUND,
+                message="File record not found"
+            )
+        )
+    s3.remove(file_record.key)
+    session.delete(file_record)
+    session.commit()

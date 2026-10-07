@@ -28,3 +28,51 @@ class ErrorResponseCode(str, enum.Enum):
     AUTH_REUSE_DETECTED = "AUTH_REUSE_DETECTED"
     AUTH_REVOKED = "AUTH_REVOKED"
     DUPLICATE_ONBOARDING = "DUPLICATE_ONBOARDING"
+    NOT_FOUND = "NOT_FOUND"
+    RESOURCE_NOT_ALLOWED = "RESOURCE_NOT_ALLOWED"
+    BAD_REQUEST = "BAD_REQUEST"
+    INTERNAL_ERROR = "INTERNAL_ERROR"
+    ACCOUNT_LOCKED = "ACCOUNT_LOCKED"
+    ACCOUNT_DELETED = "ACCOUNT_DELETED"
+    TOO_MANY_ATTEMPTS = "TOO_MANY_ATTEMPTS"
+    CODE_EXPIRED = "CODE_EXPIRED"
+    CONSENT_MISSING = "CONSENT_MISSING"
+    METADATA_ERROR = "METADATA_ERROR"
+    FILE_NOT_CONFIRMED = "FILE_NOT_CONFIRMED"
+    IDEMPOTENCY_KEY_MISMATCH = "IDEMPOTENCY_KEY_MISMATCH"
+    INSUFFICIENT_CREDITS = "INSUFFICIENT_CREDITS"
+    INVALID_OPERATION = "INVALID_OPERATION"
+
+class AnalysisStatus(str, enum.Enum):
+    PENDING = "pending"
+    QUEUED = "queued"
+    SUCCESS = "success"
+    FAILED = "failed"
+
+class Affiliation(str, enum.Enum):
+    STUDENT = "student"
+    EMPLOYED = "employed"
+    JOBSEEKER = "jobseeker"
+    OTHER = "other"
+
+class AnalysisType(str, enum.Enum):
+    individual = "individual"
+    comprehensive = "comprehensive"
+    keyword = "keyword"
+
+class Language(str, enum.Enum):
+    ko = "ko"
+    en = "en"
+
+class AuditAction(str, enum.Enum):
+    CUSTOMER_LIST = "customer.list"
+    CUSTOMER_VIEW = "customer.view"
+
+class FeedbackTriggerSource(str, enum.Enum):
+    analysis_completed = "analysis_completed"
+    experience_threshold = "experience_threshold"
+
+class CreditReservationStatus(str, enum.Enum):
+    RESERVED = "RESERVED"
+    CAPTURED = "CAPTURED"
+    RELEASED = "RELEASED"

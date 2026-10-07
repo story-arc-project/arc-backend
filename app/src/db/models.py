@@ -1,12 +1,20 @@
 from datetime import datetime, date
-from sqlalchemy import DateTime, func, Column
+from typing import Any, Optional
+import uuid
+from sqlalchemy import CheckConstraint, DateTime, func, Column, UUID as SAUUID, event
 from sqlalchemy.sql.functions import now
-from src.enums import OauthProviderId, UserStatus
+from src.enums import Affiliation, AnalysisStatus, AnalysisType, AuditAction, CreditReservationStatus, FeedbackTriggerSource, Language, OauthProviderId, UserStatus
 from sqlmodel import ARRAY, Field, SQLModel, String, UniqueConstraint
+from sqlalchemy.dialects.postgresql import JSONB
+from pgvector.sqlalchemy import Vector
 
 class User(SQLModel, table=True):
     __tablename__: str = "users"  # pyright: ignore[reportIncompatibleVariableOverride]
-    id: int | None = Field(default=None, primary_key=True)
+    id: uuid.UUID = Field(
+        default_factory=uuid.uuid4,
+        primary_key=True,
+        sa_type=SAUUID
+    )
     email: str = Field(unique=True)
     password_hash: str | None = None
     status: UserStatus = Field(default=UserStatus.UNVERIFIED)
@@ -15,6 +23,7 @@ class User(SQLModel, table=True):
         sa_column=Column(
             DateTime(timezone=True),
             server_default=func.now(),
+            index=True,
             nullable=False
         )
     )
@@ -30,14 +39,21 @@ class User(SQLModel, table=True):
 
 class UserProfile(SQLModel, table=True):
     __tablename__: str = "user_profiles"  # pyright: ignore[reportIncompatibleVariableOverride]
-    id: int | None = Field(default=None, primary_key=True)
-    user_id: int = Field(foreign_key="users.id", unique=True)
+    id: uuid.UUID = Field(
+        default_factory=uuid.uuid4,
+        primary_key=True,
+        sa_type=SAUUID
+    )
+    user_id: uuid.UUID = Field(foreign_key="users.id", unique=True)
     name: str
     birth: date
-    phone: str = Field(max_length=11)
-    education: str
+    affiliation: Affiliation
     school: str | None = None
     department: str | None = None
+    company: str | None = None
+    desiredRole: str | None = None
+    affiliationDetail: str | None = None
+    phone: str = Field(max_length=11)
     worry: list[str] = Field(
         sa_column=Column(ARRAY(String))
     )
@@ -67,8 +83,12 @@ class OauthAccount(SQLModel, table=True):
     __table_args__: tuple[UniqueConstraint] = (
         UniqueConstraint("provider", "provider_user_id"),
     )
-    id: int | None = Field(default=None, primary_key=True)
-    user_id: int = Field(foreign_key="users.id")
+    id: uuid.UUID = Field(
+        default_factory=uuid.uuid4,
+        primary_key=True,
+        sa_type=SAUUID
+    )
+    user_id: uuid.UUID = Field(foreign_key="users.id")
     provider: OauthProviderId
     provider_user_id: str
     created_at: datetime = Field(
@@ -91,10 +111,614 @@ class OauthAccount(SQLModel, table=True):
 
 class Token(SQLModel, table=True):
     __tablename__: str = "tokens"  # pyright: ignore[reportIncompatibleVariableOverride]
-    id: int | None = Field(default=None, primary_key=True)
+    id: uuid.UUID = Field(
+        default_factory=uuid.uuid4,
+        primary_key=True,
+        sa_type=SAUUID
+    )
     jti_hash: str = Field(unique=True, index=True)
-    user_id: int = Field(foreign_key="users.id")
+    user_id: uuid.UUID = Field(foreign_key="users.id")
     iat: datetime = Field(sa_column=Column(DateTime(timezone=True), nullable=False))
     exp: datetime = Field(sa_column=Column(DateTime(timezone=True), nullable=False))
-    next: int | None = None
+    next: uuid.UUID | None = None
     revoked: bool = False
+
+class Experience(SQLModel, table=True):
+    __tablename__: str = "experiences"  # pyright: ignore[reportIncompatibleVariableOverride]
+    id: uuid.UUID = Field(
+        default_factory=uuid.uuid4,
+        primary_key=True,
+        sa_type=SAUUID
+    )
+    user_id: uuid.UUID = Field(foreign_key="users.id")
+    type: str
+    importance: int | None
+    content: dict[str, Any] = Field(
+        sa_column=Column(JSONB)
+    )
+    created_at: datetime = Field(
+        default_factory=now,
+        sa_column=Column(
+            DateTime(timezone=True),
+            server_default=func.now(),
+            nullable=False
+        )
+    )
+    updated_at: datetime = Field(
+        default_factory=now,
+        sa_column=Column(
+            DateTime(timezone=True),
+            server_default=func.now(),
+            onupdate=func.now(),
+            nullable=False
+        )
+    )
+
+class Library(SQLModel, table=True):
+    __tablename__: str = "libraries"  # pyright: ignore[reportIncompatibleVariableOverride]
+    id: uuid.UUID = Field(
+        default_factory=uuid.uuid4,
+        primary_key=True,
+        sa_type=SAUUID
+    )
+    user_id: uuid.UUID = Field(foreign_key="users.id")
+    name: str = Field(nullable=False)
+    color: str
+    icon: str
+    is_system: bool = False
+    filter: dict[str, Any] | None = Field(
+        default=None,
+        sa_column=Column(JSONB, nullable=True)
+    )
+    sort_order: int = 0
+    created_at: datetime = Field(
+        default_factory=now,
+        sa_column=Column(
+            DateTime(timezone=True),
+            server_default=func.now(),
+            nullable=False
+        )
+    )
+    updated_at: datetime = Field(
+        default_factory=now,
+        sa_column=Column(
+            DateTime(timezone=True),
+            server_default=func.now(),
+            onupdate=func.now(),
+            nullable=False
+        )
+    )
+
+class LibraryExperienceRelation(SQLModel, table=True):
+    __tablename__: str = "libraries-experiences"  # pyright: ignore[reportIncompatibleVariableOverride]
+    user_id: uuid.UUID = Field(foreign_key="users.id", index=True)
+    library_id: uuid.UUID = Field(foreign_key="libraries.id", primary_key=True)
+    experience_id: uuid.UUID = Field(foreign_key="experiences.id", primary_key=True)
+    created_at: datetime = Field(
+        default_factory=now,
+        sa_column=Column(
+            DateTime(timezone=True),
+            server_default=func.now(),
+            nullable=False
+        )
+    )
+
+class Preset(SQLModel, table=True):
+    __tablename__: str = "presets"  # pyright: ignore[reportIncompatibleVariableOverride]
+    id: uuid.UUID = Field(
+        default_factory=uuid.uuid4,
+        primary_key=True,
+        sa_type=SAUUID
+    )
+    user_id: uuid.UUID = Field(foreign_key="users.id")
+    name: str = Field(nullable=False)
+    description: str | None
+    blocks: list[dict[str, Any]] = Field(
+        sa_column=Column(ARRAY(JSONB))
+    )
+    is_favorite: bool = False
+    created_at: datetime = Field(
+        default_factory=now,
+        sa_column=Column(
+            DateTime(timezone=True),
+            server_default=func.now(),
+            nullable=False
+        )
+    )
+    updated_at: datetime = Field(
+        default_factory=now,
+        sa_column=Column(
+            DateTime(timezone=True),
+            server_default=func.now(),
+            onupdate=func.now(),
+            nullable=False
+        )
+    )
+
+class IndividualAnalysis(SQLModel, table=True):
+    __tablename__: str = "individual_analyses"  # pyright: ignore[reportIncompatibleVariableOverride]
+    id: uuid.UUID = Field(
+        default_factory=uuid.uuid4,
+        primary_key=True,
+        sa_type=SAUUID
+    )
+    user_id: uuid.UUID = Field(foreign_key="users.id", index=True)
+    task_id: str | None = Field(nullable=True, index=True, default=None)
+    status: AnalysisStatus = Field(default=AnalysisStatus.QUEUED)
+    experience_id: uuid.UUID = Field(foreign_key="experiences.id")
+    vector: list[float] | None = Field(
+        default=None,
+        sa_column=Column(Vector(3072), nullable=True, default=None)
+    )
+    result: dict[str, Any] | None = Field(
+        default=None,
+        sa_column=Column(JSONB, nullable=True, default=None)
+    )
+    created_at: datetime = Field(
+        default_factory=now,
+        sa_column=Column(
+            DateTime(timezone=True),
+            server_default=func.now(),
+            nullable=False
+        )
+    )
+    updated_at: datetime = Field(
+        default_factory=now,
+        sa_column=Column(
+            DateTime(timezone=True),
+            server_default=func.now(),
+            onupdate=func.now(),
+            nullable=False
+        )
+    )
+    reservation_id: uuid.UUID | None = Field(
+        default=None,
+        foreign_key="credit_reservations.id",
+        nullable=True,
+        index=True,
+    )
+
+class ComprehensiveAnalysis(SQLModel, table=True):
+    __tablename__: str = "comprehensive_analyses"  # pyright: ignore[reportIncompatibleVariableOverride]
+    id: uuid.UUID = Field(
+        default_factory=uuid.uuid4,
+        primary_key=True,
+        sa_type=SAUUID
+    )
+    user_id: uuid.UUID = Field(foreign_key="users.id", index=True)
+    task_id: str | None = Field(nullable=True, index=True, default=None)
+    status: AnalysisStatus = Field(default=AnalysisStatus.QUEUED)
+    title: str
+    experience_ids: list[uuid.UUID] = Field(
+        sa_column=Column(ARRAY(SAUUID))
+    )
+    vector: list[float] | None = Field(
+        default=None,
+        sa_column=Column(Vector(3072), nullable=True, default=None)
+    )
+    result: dict[str, Any] | None = Field(
+        default=None,
+        sa_column=Column(JSONB, nullable=True, default=None)
+    )
+    created_at: datetime = Field(
+        default_factory=now,
+        sa_column=Column(
+            DateTime(timezone=True),
+            server_default=func.now(),
+            nullable=False
+        )
+    )
+    updated_at: datetime = Field(
+        default_factory=now,
+        sa_column=Column(
+            DateTime(timezone=True),
+            server_default=func.now(),
+            onupdate=func.now(),
+            nullable=False
+        )
+    )
+    reservation_id: uuid.UUID | None = Field(
+        default=None,
+        foreign_key="credit_reservations.id",
+        nullable=True,
+        index=True,
+    )
+
+class Resume(SQLModel, table=True):
+    __tablename__: str = "resume"  # pyright: ignore[reportIncompatibleVariableOverride]
+    id: uuid.UUID = Field(
+        default_factory=uuid.uuid4,
+        primary_key=True,
+        sa_type=SAUUID
+    )
+    user_id: uuid.UUID = Field(foreign_key="users.id", index=True)
+    language: Language
+    title: str
+    status: AnalysisStatus = Field(default=AnalysisStatus.QUEUED)
+    result: dict[str, Any] | None = Field(
+        default=None,
+        sa_column=Column(JSONB, nullable=True, default=None)
+    )
+    experience_ids: list[uuid.UUID] | None = Field(
+        default=None,
+        sa_column=Column(ARRAY(SAUUID), nullable=True, default=None)
+    )
+    task_id: str | None = Field(nullable=True, index=True, default=None)
+    created_at: datetime = Field(
+        default_factory=now,
+        sa_column=Column(
+            DateTime(timezone=True),
+            server_default=func.now(),
+            nullable=False
+        )
+    )
+    updated_at: datetime = Field(
+        default_factory=now,
+        sa_column=Column(
+            DateTime(timezone=True),
+            server_default=func.now(),
+            onupdate=func.now(),
+            nullable=False
+        )
+    )
+    reservation_id: uuid.UUID | None = Field(
+        default=None,
+        foreign_key="credit_reservations.id",
+        nullable=True,
+        index=True,
+    )
+
+class KeywordAnalysis(SQLModel, table=True):
+    __tablename__: str = "keyword_analyses"  # pyright: ignore[reportIncompatibleVariableOverride]
+    id: uuid.UUID = Field(
+        default_factory=uuid.uuid4,
+        primary_key=True,
+        sa_type=SAUUID
+    )
+    user_id: uuid.UUID = Field(foreign_key="users.id", index=True)
+    keywords: list[str] = Field(sa_column=Column(ARRAY(String)))
+    task_id: str | None = Field(nullable=True, index=True, default=None)
+    status: AnalysisStatus = Field(default=AnalysisStatus.QUEUED)
+    target: str
+    title: str
+    result: dict[str, Any] | None = Field(
+        default=None,
+        sa_column=Column(JSONB, nullable=True, default=None)
+    )
+    created_at: datetime = Field(
+        default_factory=now,
+        sa_column=Column(
+            DateTime(timezone=True),
+            server_default=func.now(),
+            nullable=False
+        )
+    )
+    updated_at: datetime = Field(
+        default_factory=now,
+        sa_column=Column(
+            DateTime(timezone=True),
+            server_default=func.now(),
+            onupdate=func.now(),
+            nullable=False
+        )
+    )
+    reservation_id: uuid.UUID | None = Field(
+        default=None,
+        foreign_key="credit_reservations.id",
+        nullable=True,
+        index=True,
+    )
+
+class DeletedUser(SQLModel, table=True):
+    __tablename__: str = "deleted_users"  # pyright: ignore[reportIncompatibleVariableOverride]
+    user_id: uuid.UUID = Field(foreign_key="users.id", primary_key=True, sa_type=SAUUID)
+    deleted_at: datetime = Field(
+        default_factory=now,
+        sa_column=Column(
+            DateTime(timezone=True),
+            server_default=func.now(),
+            nullable=False
+        )
+    )
+
+class TermsConsent(SQLModel, table=True):
+    __tablename__: str = "terms_consent"  # pyright: ignore[reportIncompatibleVariableOverride]
+    id: uuid.UUID = Field(
+        default_factory=uuid.uuid4,
+        primary_key=True,
+        sa_type=SAUUID
+    )
+    user_id: uuid.UUID = Field(foreign_key="users.id", sa_type=SAUUID)
+    consent_id: str
+    version: str | None = Field(nullable=True, default=None)
+    granted: bool
+    ip: str | None = Field(nullable=True, default=None)
+    agreed_at: datetime = Field(
+        default_factory=now,
+        sa_column=Column(
+            DateTime(timezone=True),
+            server_default=func.now(),
+            onupdate=func.now(),
+            nullable=False
+        )
+    )
+
+class FileMetadata(SQLModel, table=True):
+    __tablename__: str = "file_metadata"  # pyright: ignore[reportIncompatibleVariableOverride]
+    id: uuid.UUID = Field(
+        default_factory=uuid.uuid4,
+        primary_key=True,
+        sa_type=SAUUID
+    )
+    user_id: uuid.UUID = Field(foreign_key="users.id", sa_type=SAUUID)
+    key: str = Field(unique=True, index=True)
+    filename: str
+    content_type: str
+    size: int
+    confirmed: bool = False
+    created_at: datetime = Field(
+        default_factory=now,
+        sa_column=Column(
+            DateTime(timezone=True),
+            server_default=func.now(),
+            nullable=False
+        )
+    )
+
+class AnalysisBookmark(SQLModel, table=True):
+    __tablename__: str = "analysis_bookmarks"  # pyright: ignore[reportIncompatibleVariableOverride]
+    __table_args__ = (
+        UniqueConstraint(
+            "user_id",
+            "analysis_type",
+            "analysis_id",
+            name="uq_analysis_bookmark_user_type_analysis",
+        ),
+    )
+    id: uuid.UUID = Field(
+        default_factory=uuid.uuid4,
+        primary_key=True,
+        sa_type=SAUUID
+    )
+    user_id: uuid.UUID = Field(foreign_key="users.id", sa_type=SAUUID)
+    analysis_type: AnalysisType = Field(nullable=False)
+    analysis_id: uuid.UUID = Field(nullable=False, index=True)
+    created_at: datetime = Field(
+        default_factory=now,
+        sa_column=Column(
+            DateTime(timezone=True),
+            server_default=func.now(),
+            nullable=False
+        )
+    )
+    updated_at: datetime = Field(
+        default_factory=now,
+        sa_column=Column(
+            DateTime(timezone=True),
+            server_default=func.now(),
+            onupdate=func.now(),
+            nullable=False
+        )
+    )
+
+class CoverLetter(SQLModel, table=True):
+    __tablename__: str = "cover_letters"  # pyright: ignore[reportIncompatibleVariableOverride]
+    id: uuid.UUID = Field(
+        default_factory=uuid.uuid4,
+        primary_key=True,
+        sa_type=SAUUID
+    )
+    user_id: uuid.UUID = Field(foreign_key="users.id", index=True)
+    task_id: str | None = Field(nullable=True, index=True, default=None)
+    status: AnalysisStatus = Field(default=AnalysisStatus.QUEUED)
+    target_company: str | None = None
+    target_job: str | None = None
+    job_key: str = "general"
+    region: str = "KR"
+    questions: list[dict[str, Any]] | None = Field(
+        default=None,
+        sa_column=Column(JSONB, nullable=True, default=None)
+    )
+    experience_ids: list[uuid.UUID] | None = Field(
+        default=None,
+        sa_column=Column(ARRAY(SAUUID), nullable=True, default=None)
+    )
+    result: dict[str, Any] | None = Field(
+        default=None,
+        sa_column=Column(JSONB, nullable=True, default=None)
+    )
+    created_at: datetime = Field(
+        default_factory=now,
+        sa_column=Column(
+            DateTime(timezone=True),
+            server_default=func.now(),
+            nullable=False
+        )
+    )
+    updated_at: datetime = Field(
+        default_factory=now,
+        sa_column=Column(
+            DateTime(timezone=True),
+            server_default=func.now(),
+            onupdate=func.now(),
+            nullable=False
+        )
+    )
+    reservation_id: uuid.UUID | None = Field(
+        default=None,
+        foreign_key="credit_reservations.id",
+        nullable=True,
+        index=True,
+    )
+
+class AuditLog(SQLModel, table=True):
+    __tablename__: str = "audit_logs"  # pyright: ignore[reportIncompatibleVariableOverride]
+    id: uuid.UUID = Field(
+        default_factory=uuid.uuid4,
+        primary_key=True,
+        sa_type=SAUUID
+    )
+    actor_id: uuid.UUID = Field(foreign_key="users.id", index=True)
+    action: AuditAction = Field(index=True)
+    target_user_id: Optional[uuid.UUID] = Field(foreign_key="users.id", index=True, default=None)
+    query_params: Optional[dict] = Field(
+        default=None,
+        sa_column=Column(JSONB, nullable=True)
+    )
+    timestamp: datetime = Field(
+        default_factory=now,
+        sa_column=Column(
+            DateTime(timezone=True),
+            server_default=func.now(),
+            nullable=False
+        )
+    )
+    ip_address: Optional[str] = Field(default=None, max_length=45)
+    user_agent: Optional[str] = Field(default=None, max_length=512)
+
+class FeedbackResponse(SQLModel, table=True):
+    __tablename__: str = "feedback_responses"  # pyright: ignore[reportIncompatibleVariableOverride]
+    id: uuid.UUID = Field(
+        default_factory=uuid.uuid4,
+        primary_key=True,
+        sa_type=SAUUID
+    )
+    user_id: uuid.UUID = Field(foreign_key="users.id", sa_type=SAUUID, index=True)
+    campaign_id: str
+    trigger_source: Optional[FeedbackTriggerSource] = Field(default=None, nullable=True)
+    rating: Optional[int] = Field(default=None, nullable=True)
+    comment: Optional[str] = Field(default=None, max_length=500, nullable=True)
+    responded_at: Optional[datetime] = Field(
+        default=None,
+        sa_column=Column(
+            DateTime(timezone=True),
+            nullable=True
+        )
+    )
+    context: Optional[dict[str, Any]] = Field(
+        default=None,
+        sa_column=Column(JSONB, nullable=True)
+    )
+    created_at: datetime = Field(
+        default_factory=now,
+        sa_column=Column(
+            DateTime(timezone=True),
+            server_default=func.now(),
+            nullable=False
+        )
+    )
+    updated_at: datetime = Field(
+        default_factory=now,
+        sa_column=Column(
+            DateTime(timezone=True),
+            server_default=func.now(),
+            onupdate=func.now(),
+            nullable=False
+        )
+    )
+
+    __table_args__ = (
+        UniqueConstraint("user_id", "campaign_id", name="uq_feedback_user_campaign"),
+        CheckConstraint("rating BETWEEN 1 AND 5", name="ck_feedback_rating_range"),
+    )
+
+class UserCreditAccount(SQLModel, table=True):
+    __tablename__: str = "user_credit_accounts"  # pyright: ignore[reportIncompatibleVariableOverride]
+    __table_args__ = (
+        CheckConstraint("reserved >= 0", name="chk_positive_reserved"),
+        CheckConstraint("balance - reserved >= 0", name="chk_available_balance"),
+    )
+
+    user_id: uuid.UUID = Field(
+        foreign_key="users.id",
+        primary_key=True,
+        sa_type=SAUUID
+    )
+    balance: int = Field(default=0)
+    reserved: int = Field(default=0)
+    created_at: datetime = Field(
+        default_factory=now,
+        sa_column=Column(
+            DateTime(timezone=True),
+            server_default=func.now(),
+            nullable=False
+        )
+    )
+    updated_at: datetime = Field(
+        default_factory=now,
+        sa_column=Column(
+            DateTime(timezone=True),
+            server_default=func.now(),
+            onupdate=func.now(),
+            nullable=False
+        )
+    )
+
+class CreditLedger(SQLModel, table=True):
+    __tablename__: str = "credit_ledgers"  # pyright: ignore[reportIncompatibleVariableOverride]
+    id: uuid.UUID = Field(
+        default_factory=uuid.uuid4,
+        primary_key=True,
+        sa_type=SAUUID
+    )
+    user_id: uuid.UUID = Field(foreign_key="users.id", sa_type=SAUUID, index=True)
+    amount: int
+    balance_after: int
+    reason: str
+    feature: str | None = None
+    policy_version: str
+    idempotency_key: str = Field(unique=True, index=True)
+    reference_type: str | None = Field(default=None, index=True)
+    reference_id: str | None = Field(default=None, index=True)
+    actor_id: uuid.UUID = Field(foreign_key="users.id", sa_type=SAUUID)
+    created_at: datetime = Field(
+        default_factory=now,
+        sa_column=Column(
+            DateTime(timezone=True),
+            server_default=func.now(),
+            index=True,
+            nullable=False
+        )
+    )
+
+@event.listens_for(CreditLedger, "before_delete")
+def prevent_ledger_deletion(mapper, connection, target):
+    raise Exception("CreditLedger records cannot be deleted.")
+
+class CreditReservation(SQLModel, table=True):
+    __tablename__: str = "credit_reservations"  # pyright: ignore[reportIncompatibleVariableOverride]
+    __table_args__ = (
+        CheckConstraint("amount > 0", name="chk_positive_reservation_amount"),
+    )
+
+    id: uuid.UUID = Field(
+        default_factory=uuid.uuid4,
+        primary_key=True,
+        sa_type=SAUUID
+    )
+    user_id: uuid.UUID = Field(foreign_key="users.id", sa_type=SAUUID, index=True)
+    amount: int
+    status: CreditReservationStatus = Field(default=CreditReservationStatus.RESERVED, index=True)
+    feature: str
+    policy_version: str
+    attempt_count: int = Field(default=1)
+    idempotency_key: str = Field(unique=True, index=True)
+    created_at: datetime = Field(
+        default_factory=now,
+        sa_column=Column(
+            DateTime(timezone=True),
+            server_default=func.now(),
+            nullable=False
+        )
+    )
+    finished_at: datetime | None = Field(
+        default=None,
+        sa_column=Column(
+            DateTime(timezone=True),
+            nullable=True
+        )
+    )
+    meta_data: Optional[dict[str, Any]] = Field(
+        default=None,
+        sa_column=Column(JSONB, nullable=True)
+    )

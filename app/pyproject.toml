@@ -5,10 +5,17 @@ description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.13.12"
 dependencies = [
+    "alembic>=1.18.4",
+    "boto3>=1.43.32",
+    "boto3-stubs[s3]>=1.43.34",
     "cryptography>=46.0.6",
     "fastapi>=0.135.2",
+    "fastapi-limiter>=0.2.0",
+    "httpx>=0.28.1",
+    "pgvector>=0.4.2",
     "psycopg2-binary>=2.9.11",
     "pwdlib[argon2]>=0.3.0",
+    "pydantic-settings>=2.14.1",
     "pydantic[email]>=2.12.5",
     "pyjwt>=2.12.1",
     "redis>=7.4.0",
@@ -21,9 +28,8 @@ dependencies = [
 dev = [
     "fakeredis>=2.34.1",
     "freezegun>=1.5.5",
-    "httpx>=0.28.1",
     "pytest>=9.0.2",
-    "testcontainers[postgres]>=4.14.2",
+    "testcontainers[localstack,minio]>=4.15.0",
 ]
 
 [tool.pytest.ini_options]

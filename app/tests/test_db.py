@@ -1,13 +1,40 @@
+from fakeredis import FakeRedis
+
 from src.db.red import store_code, get_code, delete_code
+from src.const import VERIFICATION_MAX_ATTEMPTS
 
-def test_full_flow():
-    email = "a@test.com"
+EMAIL = "a@test.com"
+CODE = "123456"
+PURPOSE = "verify"
 
-    store_code(email, "123456")
-    assert get_code(email) == "123456"
+class TestStoreAndGet:
+    def test_store_then_get_returns_code(self, fake_redis: FakeRedis):
+        store_code(EMAIL, CODE, PURPOSE)
+        assert get_code(EMAIL, PURPOSE) == CODE
 
-    store_code(email, "999999")
-    assert get_code(email) == "999999"
+    def test_overwrite_code(self, fake_redis: FakeRedis):
+        store_code(EMAIL, CODE, PURPOSE)
+        store_code(EMAIL, "999999", PURPOSE)
+        assert get_code(EMAIL, PURPOSE) == "999999"
 
-    delete_code(email)
-    assert get_code(email) is None
+    def test_get_nonexistent_returns_none(self, fake_redis: FakeRedis):
+        assert get_code(EMAIL, PURPOSE) is None
+
+class TestDeleteCode:
+    def test_delete_removes_verify_key(self, fake_redis: FakeRedis):
+        store_code(EMAIL, CODE, PURPOSE)
+        delete_code(EMAIL, PURPOSE)
+        assert get_code(EMAIL, PURPOSE) is None
+
+    def test_delete_idempotent(self, fake_redis: FakeRedis):
+        store_code(EMAIL, CODE, PURPOSE)
+        delete_code(EMAIL, PURPOSE)
+        delete_code(EMAIL, PURPOSE)  # should not raise
+        assert get_code(EMAIL, PURPOSE) is None
+
+class TestTTL:
+    def test_verify_key_has_ttl(self, fake_redis: FakeRedis):
+        store_code(EMAIL, CODE, PURPOSE)
+        ttl = fake_redis.ttl(f"verify:{EMAIL}")
+        assert isinstance(ttl, int)
+        assert ttl > 0

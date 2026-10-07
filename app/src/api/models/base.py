@@ -1,8 +1,9 @@
 from datetime import date, datetime
-from pydantic import BaseModel, EmailStr
-from typing import Generic, TypeVar
+from uuid import UUID
+from pydantic import BaseModel, EmailStr, ConfigDict, model_validator
+from typing import Any, Generic, Literal, Optional, TypeVar
 
-from src.enums import ErrorResponseCode, OauthProviderId
+from src.enums import Affiliation, AnalysisStatus, AnalysisType, Language, ErrorResponseCode, OauthProviderId
 
 T = TypeVar("T")
 
@@ -13,10 +14,27 @@ class SuccessResponse(BaseModel):
 class SuccessResponseWithData(SuccessResponse, Generic[T]):
     data: T
 
+class NextCursor(BaseModel):
+    created_at: datetime
+    id: UUID
+
+class SuccessResponseWithDataPagination(SuccessResponseWithData[T]):
+    has_more: bool
+    next_cursor: NextCursor | None
+
 class ErrorResponse(BaseModel):
     status: str = "error"
     code: ErrorResponseCode
     message: str
+
+class CreditErrorResponse(ErrorResponse):
+    feature: str
+    required: int
+    available: int
+    policy_version: str
+
+class EmailVerificationErrorResponse(ErrorResponse):
+    remaining_attempts: int
 
 class UserInfo(BaseModel):
     email: EmailStr
@@ -41,8 +59,13 @@ class AccountData(BaseModel):
 class ProfileData(BaseModel):
     name: str
     birth: date
+    affiliation: Affiliation
+    school: str | None
+    department: str | None
+    company: str | None
+    desiredRole: str | None
+    affiliationDetail: str | None
     phone: str
-    education: str
     worry: list[str]
     interest: list[str]
 
@@ -51,3 +74,300 @@ class AuthMeData(BaseModel):
     profile: ProfileData | None
     onboarded: bool
     # TODO: validate profile is None only when onboarded is False, not None only when onboarded is True
+
+class UUIDData(BaseModel):
+    id: UUID
+
+class UUIDDataWithTitle(UUIDData):
+    title: str
+
+class UUIDDataWithTitleNone(UUIDData):
+    title: str | None
+
+class ExperienceResponseData(BaseModel):
+    id: UUID
+    user_id: UUID
+    type: str
+    importance: int | None
+    content: dict[str, Any]
+    created_at: datetime
+    updated_at: datetime
+
+class ExperiencesResponseData(BaseModel):
+    count: int
+    contents: list[ExperienceResponseData]
+
+class LibraryResponseData(BaseModel):
+    id: UUID
+    user_id: UUID
+    name: str
+    color: str
+    icon: str
+    filter: dict[str, Any] | None
+    sort_order: int
+    created_at: datetime
+    updated_at: datetime
+
+class LibraryContentData(BaseModel):
+    system: list[LibraryResponseData]
+    custom: list[LibraryResponseData]
+
+class LibrariesResponseData(BaseModel):
+    count: int
+    contents: LibraryContentData
+
+class PresetResponseData(BaseModel):
+    id: UUID
+    user_id: UUID
+    name: str
+    description: str | None
+    blocks: list[dict[str, Any]]
+    is_favorite: bool
+    created_at: datetime
+    updated_at: datetime
+
+class PresetsResponseData(BaseModel):
+    count: int
+    contents: list[PresetResponseData]
+
+class IndividualAnalysisData(BaseModel):
+    id: UUID
+    status: AnalysisStatus
+    experience_id: UUID
+    title: str
+    type: Literal["individual"] = "individual"
+    created_at: datetime
+    updated_at: datetime
+    result: dict[str, Any] | None
+    is_bookmarked: bool
+
+class IndividualAnalysisListData(BaseModel):
+    id: UUID
+    status: AnalysisStatus
+    experience_id: UUID
+    title: str
+    type: Literal["individual"] = "individual"
+    created_at: datetime
+    updated_at: datetime
+    is_bookmarked: bool
+
+class IndividualAnalysisList(BaseModel):
+    count: int
+    contents: list[IndividualAnalysisListData]
+
+class ComprehensiveAnalysisExperienceData(BaseModel):
+    id: UUID
+    title: str | None
+
+class ComprehensiveAnalysisData(BaseModel):
+    id: UUID
+    status: AnalysisStatus
+    experiences: list[ComprehensiveAnalysisExperienceData]
+    type: Literal["comprehensive"] = "comprehensive"
+    created_at: datetime
+    updated_at: datetime
+    result: dict[str, Any] | None
+    is_bookmarked: bool
+    title: str
+
+class ComprehensiveAnalysisListData(BaseModel):
+    id: UUID
+    status: AnalysisStatus
+    experiences: list[ComprehensiveAnalysisExperienceData]
+    type: Literal["comprehensive"] = "comprehensive"
+    created_at: datetime
+    updated_at: datetime
+    is_bookmarked: bool
+    title: str
+
+class ComprehensiveAnalysisList(BaseModel):
+    count: int
+    contents: list[ComprehensiveAnalysisListData]
+
+class KeywordAnalysisData(BaseModel):
+    id: UUID
+    status: AnalysisStatus
+    keywords: list[str]
+    type: Literal["keyword"] = "keyword"
+    target: str
+    created_at: datetime
+    updated_at: datetime
+    result: dict[str, Any] | None
+    is_bookmarked: bool
+    title: str
+
+class KeywordAnalysisListData(BaseModel):
+    id: UUID
+    status: AnalysisStatus
+    keywords: list[str]
+    type: Literal["keyword"] = "keyword"
+    target: str
+    created_at: datetime
+    updated_at: datetime
+    is_bookmarked: bool
+    title: str
+
+class KeywordAnalysisList(BaseModel):
+    count: int
+    contents: list[KeywordAnalysisListData]
+
+class ResumeListData(BaseModel):
+    id: UUID
+    title: str | None
+    language: Language
+    status: AnalysisStatus
+    created_at: datetime
+    updated_at: datetime
+
+class ResumeList(BaseModel):
+    count: int
+    contents: list[ResumeListData]
+
+class ResumeData(BaseModel):
+    id: UUID
+    title: str | None
+    language: Language
+    status: AnalysisStatus
+    created_at: datetime
+    updated_at: datetime
+    result: dict[str, Any] | None
+    experience_ids: list[UUID] | None
+
+class PresignUploadData(BaseModel):
+    id: UUID
+    upload_url: str
+    expires_in: int
+
+class FileMetadataPublic(BaseModel):
+    id: UUID
+    filename: str
+    content_type: str
+    size: int
+    created_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+class BookmarkData(BaseModel):
+    id: UUID
+    type: AnalysisType
+    title: str
+    status: AnalysisStatus
+    created_at: datetime
+    updated_at: datetime
+
+class AdminCustomerListData(BaseModel):
+    id: UUID
+    email: EmailStr
+    name: str | None
+    status: str
+    onboarded: bool
+    created_at: datetime
+    withdrawn_at: datetime | None
+
+class AdminCustomerList(BaseModel):
+    count: int
+    contents: list[AdminCustomerListData]
+
+class QueryParamsAuditLog(BaseModel):
+    q: Optional[str]
+    limit: Optional[int]
+    offset: Optional[int]
+    sort: Optional[str]
+    result_user_ids: Optional[list[str]]
+
+class AdminCustomerDetailCustomer(BaseModel):
+    id: UUID
+    email: EmailStr
+    name: str | None
+    status: str
+    onboarded: bool
+    created_at: datetime
+    withdrawn_at: datetime | None
+    auth_providers: list[OauthProviderId]
+
+class AdminCustomerDetailProfile(BaseModel):
+    school: str | None
+    department: str | None
+    affiliation: Affiliation | None
+    affiliation_detail: str | None
+    company: str | None
+    desired_role: str | None
+
+class AdminActivityStat(BaseModel):
+    total: int
+    last_at: datetime | None
+    by_status: dict[AnalysisStatus, int] | None
+
+class AdminCustomerDetailActivity(BaseModel):
+    experiences: AdminActivityStat
+    individual_analyses: AdminActivityStat
+    comprehensive_analyses: AdminActivityStat
+    keyword_analyses: AdminActivityStat
+    resumes: AdminActivityStat
+    cover_letters: AdminActivityStat
+
+class AdminCustomerDetail(BaseModel):
+    customer: AdminCustomerDetailCustomer
+    profile: AdminCustomerDetailProfile | None
+    activity: AdminCustomerDetailActivity
+
+class CoverLetterListData(BaseModel):
+    id: UUID
+    status: AnalysisStatus
+    created_at: datetime
+    updated_at: datetime
+
+class CoverLetterList(BaseModel):
+    count: int
+    contents: list[CoverLetterListData]
+
+class CoverLetterData(BaseModel):
+    id: UUID
+    status: AnalysisStatus
+    target_company: str | None
+    target_job: str | None
+    job_key: str
+    region: str
+    questions: list[dict[str, Any]] | None
+    experience_ids: list[UUID] | None
+    result: dict[str, Any] | None
+    created_at: datetime
+    updated_at: datetime
+
+class PromptShownData(BaseModel):
+    created: bool
+
+class FeedbackResponseData(BaseModel):
+    responded_at: datetime
+
+class FeedbackStatusData(BaseModel):
+    has_seen: bool
+    has_responded: bool
+
+class CreditData(BaseModel):
+    balance: int
+    reserved: int
+    available: int
+    updated_at: datetime
+
+    @model_validator(mode="after")
+    def validate_credit_data(self):
+        if self.balance < 0:
+            raise ValueError("Balance cannot be negative")
+        if self.reserved < 0:
+            raise ValueError("Reserved credits cannot be negative")
+        if self.available < 0:
+            raise ValueError("Available credits cannot be negative")
+        if self.balance != self.reserved + self.available:
+            raise ValueError("Balance must equal reserved + available")
+        return self
+
+class CreditTransactionData(BaseModel):
+    id: UUID
+    amount: int
+    reason: str
+    feature: str | None
+    reference_type: str | None
+    reference_id: str | None
+    balance_after: int
+    created_at: datetime

@@ -1,4 +1,4 @@
-from src.api.models.base import AuthMeData, OnboardResponseData, RefreshData, SuccessResponseWithData, LoginData, SuccessResponse
+from src.api.models.base import AuthMeData, BookmarkData, ComprehensiveAnalysisData, ComprehensiveAnalysisList, CoverLetterData, CoverLetterList, CreditData, CreditTransactionData, FeedbackResponseData, FeedbackStatusData, FileMetadataPublic, IndividualAnalysisData, IndividualAnalysisList, OnboardResponseData, PresignUploadData, PromptShownData, RefreshData, ResumeData, ResumeList, SuccessResponseWithData, LoginData, SuccessResponse, SuccessResponseWithDataPagination, UUIDData, KeywordAnalysisList, KeywordAnalysisData, ErrorResponse
 
 class LoginResponse(SuccessResponseWithData[LoginData]):
     pass
@@ -20,3 +20,75 @@ class LogoutResponse(SuccessResponse):
 
 class AuthMeResponse(SuccessResponseWithData[AuthMeData]):
     message: str = "User data fetch success"
+
+class PostSuccessResponse(SuccessResponseWithData[UUIDData]):
+    pass
+
+class PutSuccessResponse(SuccessResponse):
+    pass
+
+class DeleteSuccessResponse(SuccessResponse):
+    pass
+
+class IndividualAnalysisListResponse(SuccessResponseWithData[IndividualAnalysisList]):
+    pass
+
+class IndividualAnalysisResponse(SuccessResponseWithData[IndividualAnalysisData]):
+    pass
+
+class ComprehensiveAnalysisListResponse(SuccessResponseWithData[ComprehensiveAnalysisList]):
+    pass
+
+class ComprehensiveAnalysisResponse(SuccessResponseWithData[ComprehensiveAnalysisData]):
+    pass
+
+class KeywordAnalysisListResponse(SuccessResponseWithData[KeywordAnalysisList]):
+    pass
+
+class KeywordAnalysisResponse(SuccessResponseWithData[KeywordAnalysisData]):
+    pass
+
+class ResumeListResponse(SuccessResponseWithData[ResumeList]):
+    pass
+
+class ResumeResponse(SuccessResponseWithData[ResumeData]):
+    pass
+
+class OnboardConsentErrorResponse(ErrorResponse):
+    missing_consent: list[str]
+
+class PresignUploadResponse(SuccessResponseWithData):
+    data: PresignUploadData
+
+class FileListResponse(SuccessResponseWithData):
+    data: list[FileMetadataPublic]
+
+class FileMetadataResponse(SuccessResponseWithData):
+    data: FileMetadataPublic
+
+class FileDownloadResponse(SuccessResponseWithData):
+    data: str
+
+class BookmarkListResponse(SuccessResponseWithData):
+    data: list[BookmarkData]
+
+class CoverLetterListResponse(SuccessResponseWithData[CoverLetterList]):
+    pass
+
+class CoverLetterResponse(SuccessResponseWithData[CoverLetterData]):
+    pass
+
+class PromptShownResponse(SuccessResponseWithData):
+    data: PromptShownData
+
+class FeedbackResponse(SuccessResponseWithData):
+    data: FeedbackResponseData
+
+class FeedbackStatusResponse(SuccessResponseWithData):
+    data: FeedbackStatusData
+
+class CreditAccountResponse(SuccessResponseWithData):
+    data: CreditData
+
+class CreditTransactionListResponse(SuccessResponseWithDataPagination):
+    data: list[CreditTransactionData]
