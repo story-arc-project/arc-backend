@@ -48,7 +48,7 @@ class UserEmailHistory(SQLModel, table=True):
         sa_type=SAUUID,
     )
     user_id: uuid.UUID = Field(foreign_key="users.id", index=True)
-    email_hash: HashEmail = Field(unique=True, index=True, max_length=64)
+    email_hash: HashEmail = Field(index=True, max_length=64)
     created_at: datetime = Field(
         default_factory=now,
         sa_column=Column(
