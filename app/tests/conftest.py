@@ -99,8 +99,6 @@ def db_engine():
         database_url = postgres.get_connection_url()
         os.environ["DATABASE_URL"] = database_url
         engine = create_engine(database_url, poolclass=NullPool)
-        with engine.begin() as conn:
-            _ = conn.execute(text("CREATE EXTENSION IF NOT EXISTS vector"))
         alembic_config = Config("alembic.ini")
         command.upgrade(alembic_config, "head")
         yield engine
