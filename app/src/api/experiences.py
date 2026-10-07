@@ -5,7 +5,7 @@ from typing import Annotated
 from uuid import UUID
 from fastapi import APIRouter, Depends, Response
 from sqlmodel import select
-import requests
+import httpx
 
 from src.api.models.base import ErrorResponse, ExperienceResponseData, ExperiencesResponseData, SuccessResponseWithData, UUIDData
 from src.api.models.exc import AppException
@@ -21,15 +21,16 @@ from src.utils.token import AccessTokenPayload
 
 experiences_router = APIRouter()
 
-def generate_individual_analysis(experience: Experience, payload: AccessTokenPayload):
+async def generate_individual_analysis(experience: Experience, payload: AccessTokenPayload):
     new_individual_analysis = IndividualAnalysis(
         user_id=payload.sub,
         experience_id = experience.id
     )
-    req = requests.post("http://ai_analyst:8001/individual", json={
-        "analysis_id": str(new_individual_analysis.id),
-        "input": render_experience_content(experience.content).split("\n")
-    })
+    async with httpx.AsyncClient(timeout=10) as client:
+        req = await client.post("http://ai_analyst:8001/individual", json={
+            "analysis_id": str(new_individual_analysis.id),
+            "input": render_experience_content(experience.content).split("\n")
+        })
     req.raise_for_status()
     new_individual_analysis.task_id = req.json()["task_id"]
     return new_individual_analysis
@@ -51,7 +52,7 @@ async def post_experience(
             content = body.content
         )
         if body.content.get("status") != "draft":
-            new_individual_analysis = generate_individual_analysis(new_experience, payload)
+            new_individual_analysis = await generate_individual_analysis(new_experience, payload)
             session.add(new_individual_analysis)
         session.add(new_experience)
         session.commit()
@@ -145,7 +146,7 @@ async def put_experience_by_id(
         result.content = body.content
         result.importance = body.importance
         if body.content.get("status") != "draft":
-            new_individual_analysis = generate_individual_analysis(result, payload)
+            new_individual_analysis = await generate_individual_analysis(result, payload)
             session.add(new_individual_analysis)
         session.add(result)
         session.commit()
