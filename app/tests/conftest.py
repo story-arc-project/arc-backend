@@ -91,16 +91,42 @@ def mock_jwt_key():
         yield mock_getenv
 
 
-@pytest.fixture(name="session")  
-def session_fixture():
+@pytest.fixture(scope="session")
+def db_engine():
     with PostgresContainer("pgvector/pgvector:pg16") as postgres:
         engine = create_engine(postgres.get_connection_url(), poolclass=NullPool)
         with engine.begin() as conn:
             _ = conn.execute(text("CREATE EXTENSION IF NOT EXISTS vector"))
-            conn.commit()
         SQLModel.metadata.create_all(engine)
-        with Session(engine) as session:
+        yield engine
+        SQLModel.metadata.drop_all(engine)
+        engine.dispose()
+
+
+def clear_database(engine) -> None:
+    table_names = []
+    for table in SQLModel.metadata.sorted_tables:
+        escaped_name = table.name.replace('"', '""')
+        table_names.append(f'"{escaped_name}"')
+    if table_names:
+        with engine.begin() as conn:
+            conn.execute(
+                text(
+                    "TRUNCATE TABLE "
+                    + ", ".join(table_names)
+                    + " RESTART IDENTITY CASCADE"
+                )
+            )
+
+
+@pytest.fixture(name="session")
+def session_fixture(db_engine):
+    clear_database(db_engine)
+    try:
+        with Session(db_engine) as session:
             yield session
+    finally:
+        clear_database(db_engine)
 
 
 @pytest.fixture
