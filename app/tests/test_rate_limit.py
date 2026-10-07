@@ -31,6 +31,12 @@ class TestAnalysisRateLimit:
                 for bucket in limiter.limiter.buckets():
                     bucket.flush()
 
+    @pytest.fixture(autouse=True)
+    def remove_credits(self):
+        with patch("src.api.analysis.credit.reserve", return_value=None), \
+             patch("src.api.export.credit.reserve", return_value=None):
+            yield
+
     def _add_profile(self, session: Session, user_id):
         profile = UserProfile(
             user_id=user_id,
@@ -150,7 +156,7 @@ class TestAnalysisRateLimit:
     def test_post_experience_is_rate_limited_by_user(
         self,
         authenticated_client: TestClient,
-        mock_experience_ai_analyst,
+        mock_ai_analyst,
     ):
         self._set_analysis_limit("individual", "user", 1)
         self._set_analysis_limit("individual", "ip", 10)
@@ -170,12 +176,12 @@ class TestAnalysisRateLimit:
         assert first_response.status_code == 201
         assert second_response.status_code == 429
         assert second_response.json()["code"] == ErrorResponseCode.TOO_MANY_ATTEMPTS
-        assert mock_experience_ai_analyst.call_count == 1
+        assert mock_ai_analyst.call_count == 1
 
     def test_post_experience_is_rate_limited_by_ip(
         self,
         authenticated_client: TestClient,
-        mock_experience_ai_analyst,
+        mock_ai_analyst,
     ):
         self._set_analysis_limit("individual", "user", 10)
         self._set_analysis_limit("individual", "ip", 1)
@@ -195,7 +201,7 @@ class TestAnalysisRateLimit:
         assert first_response.status_code == 201
         assert second_response.status_code == 429
         assert second_response.json()["code"] == ErrorResponseCode.TOO_MANY_ATTEMPTS
-        assert mock_experience_ai_analyst.call_count == 1
+        assert mock_ai_analyst.call_count == 1
 
     def test_check_auth_runs_once_per_rate_limited_request(
         self,
