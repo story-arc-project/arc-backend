@@ -60,7 +60,7 @@ def get_credit_transactions(
     response.headers["Cache-Control"] = "private, no-store"
     result = session.exec(
         select(CreditLedger)
-        .where(CreditLedger.id == payload.sub)
+        .where(CreditLedger.user_id == payload.sub)
         .order_by(col(CreditLedger.created_at).desc())
     ).all()
     return CreditTransactionListResponse(
