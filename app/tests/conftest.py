@@ -1,4 +1,6 @@
 from uuid import uuid4
+from alembic import command
+from alembic.config import Config
 from fastapi.testclient import TestClient
 import pytest
 from fakeredis import FakeRedis
@@ -94,12 +96,14 @@ def mock_jwt_key():
 @pytest.fixture(scope="session")
 def db_engine():
     with PostgresContainer("pgvector/pgvector:pg16") as postgres:
-        engine = create_engine(postgres.get_connection_url(), poolclass=NullPool)
+        database_url = postgres.get_connection_url()
+        os.environ["DATABASE_URL"] = database_url
+        engine = create_engine(database_url, poolclass=NullPool)
         with engine.begin() as conn:
             _ = conn.execute(text("CREATE EXTENSION IF NOT EXISTS vector"))
-        SQLModel.metadata.create_all(engine)
+        alembic_config = Config("alembic.ini")
+        command.upgrade(alembic_config, "head")
         yield engine
-        SQLModel.metadata.drop_all(engine)
         engine.dispose()
 
 
