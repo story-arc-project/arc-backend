@@ -131,6 +131,21 @@ def authenticated_client(client: TestClient, mock_mail: MagicMock):
     generate_authenticated_user(client, mock_mail, email, password)
     return client
 
+@pytest.fixture
+def other_authenticated_client(client: TestClient, mock_mail: MagicMock):
+    other_client = TestClient(
+        app,
+        f"https://{TESTSERVER_HOST}",
+        headers={"Origin": f"https://{TESTFRONT_HOST}"},
+    )
+    generate_authenticated_user(
+        other_client,
+        mock_mail,
+        f"other-{uuid4()}@example.com",
+        "testpassword123",
+    )
+    return other_client
+
 @pytest.fixture(autouse=True)
 def mock_ai_analyst(monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setenv("INTERNAL_SECRET", "default_secret")
