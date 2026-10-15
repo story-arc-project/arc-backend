@@ -2,13 +2,12 @@ FROM python:3.13-slim AS builder
 COPY --from=ghcr.io/astral-sh/uv:0.12.21 /uv /uvx /bin/
 
 ENV UV_COMPILE_BYTECODE=1
-ENV PATH="/root/.local/bin/:$PATH"
 ENV UV_PYTHON=3.13.12
 
 WORKDIR /app
 
 COPY pyproject.toml uv.lock ./
-RUN uv sync --frozen --no-dev --no-editable
+RUN uv sync --frozen --no-dev --no-editable --no-install-project
 
 FROM python:3.13-slim
 
