@@ -65,7 +65,7 @@ services:
       - "443:443"
     volumes:
       - ./data/log:/var/log/nginx
-      - ./nginx:/etc/nginx/templates:ro
+      - nginx_conf:/etc/nginx/templates:ro
       - certbot-etc:/etc/letsencrypt
       - certbot-var:/var/www/certbot
     depends_on:
@@ -127,3 +127,4 @@ volumes:
   certbot-etc:
   certbot-var:
   rabbitmq_data:
+  nginx_conf:
