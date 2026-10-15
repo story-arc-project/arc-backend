@@ -1,8 +1,0 @@
-ai_analyst/
-app/
-init/
-nginx/
-scripts/
-.env.gpg
-docker-compose.yml
-Makefile
