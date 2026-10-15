@@ -34,3 +34,6 @@ local-run:
 	export IMAGE_NAME=arc-backend; \
 	export IMAGE_TAG=local; \
 	./scripts/build.sh && $(COMPOSE) up -d app --remove-orphans
+
+local-stop:
+	$(COMPOSE) down
