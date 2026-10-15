@@ -11,14 +11,20 @@ stop:
 	$(COMPOSE) down
 
 certificate:
-	set -e; \
-	trap '$(COMPOSE_INIT) down' EXIT; \
-	$(COMPOSE_INIT) up --exit-code-from certbot
+	@set -a; [ -f ./.env ] && . ./.env; set +a; \
+	if docker run --rm -v $(PROJECT_NAME)_certbot-etc:/etc/letsencrypt alpine sh -c "[ -f /etc/letsencrypt/live/$$DOMAIN/fullchain.pem ]"; then \
+		echo "SSL certificate already exists. Skipping generation."; \
+	else \
+		echo "No certificate found. Generating new SSL certificate..."; \
+		set -e; \
+		trap '$(COMPOSE_INIT) down' EXIT; \
+		$(COMPOSE_INIT) up --exit-code-from certbot; \
+	fi
 
 run: build
 	$(COMPOSE) up -d --remove-orphans
 
-deploy-prod:
+deploy-prod: certificate
 	$(COMPOSE) up -d --pull always --remove-orphans
 	docker image prune -f
 
