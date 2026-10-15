@@ -1,9 +1,5 @@
 FROM python:3.13-slim AS builder
-
-RUN apt-get update && apt-get install -y --no-install-recommends curl ca-certificates
-
-ADD https://astral.sh/uv/install.sh /uv-installer.sh
-RUN sh /uv-installer.sh && rm /uv-installer.sh
+COPY --from=ghcr.io/astral-sh/uv:0.12.21 /uv /uvx /bin/
 
 ENV PATH="/root/.local/bin/:$PATH"
 ENV UV_PYTHON=3.13.12
