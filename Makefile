@@ -16,8 +16,6 @@ certificate:
 	fi
 
 deploy-prod: certificate
-	docker run --rm -v $(PROJECT_NAME)_nginx_conf:/target alpine sh -c "rm -rf /target/*"
-	docker run --rm -v $(PROJECT_NAME)_nginx_conf:/target -v $(CURDIR)/nginx:/source alpine cp -r /source/. /target/
 	$(COMPOSE) up -d --pull always --remove-orphans
 	docker image prune -f
 
