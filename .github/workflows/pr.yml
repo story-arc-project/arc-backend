@@ -25,3 +25,13 @@ jobs:
       - name: Run tests
         working-directory: ./app
         run: uv run pytest
+
+  build:
+    name: Docker build test
+    runs-on: ubuntu-26.04
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Build Docker images
+        run: IMAGE_NAME=ghcr.io/${{ github.repository }} IMAGE_TAG=pr-${{ github.event.pull_request.number }} ./scripts/build.sh
