@@ -1,9 +1,11 @@
-FROM python:3.13-slim AS builder
+FROM debian:trixie-slim AS builder
 COPY --from=ghcr.io/astral-sh/uv:0.12.21 /uv /uvx /bin/
 
 ENV UV_COMPILE_BYTECODE=1 \
     UV_LINK_MODE=copy \
     UV_NO_DEV=1 \
+    UV_PYTHON_INSTALL_DIR=/python \
+    UV_PYTHON_PREFERENCE=only-managed \
     UV_PYTHON=3.13.12
 
 WORKDIR /app
@@ -18,14 +20,14 @@ COPY . /app
 RUN --mount=type=cache,target=/root/.cache/uv \
     uv sync --locked --no-editable
 
-FROM python:3.13-slim
+FROM debian:trixie-slim
 
 WORKDIR /app
 
-COPY --from=builder /root/.local /root/.local
+COPY --from=builder /python /python
 COPY --from=builder /app/.venv /app/.venv
 
-ENV PATH="/root/.local/bin:/app/.venv/bin:$PATH"
+ENV PATH="/app/.venv/bin:$PATH"
 
 COPY . .
 
