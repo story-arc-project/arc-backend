@@ -4,11 +4,9 @@ on:
   push:
     branches:
       - main
-      - feature/**
 
 env:
   IMAGE_NAME: ghcr.io/${{ github.repository }}
-  REMOTE_DIR: /home/${{ secrets.SSH_USER }}/arc-backend
 
 jobs:
   build:
@@ -71,4 +69,4 @@ jobs:
           IMAGE_TAG: ${{ github.sha }}
         run: |
           ssh-keyscan -H ${{ secrets.SSH_HOST }} >> ~/.ssh/known_hosts
-          GITHUB_WORKSPACES=${{ env.REMOTE_DIR }} make deploy-prod
+          make deploy-prod
