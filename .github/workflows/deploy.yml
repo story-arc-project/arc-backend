@@ -69,7 +69,7 @@ jobs:
 
       - name: Copy Nginx Directory to Remote
         run: |
-          rsync -avz --delete \
+          rsync -avz --mkpath --delete \
             "$GITHUB_WORKSPACE/nginx/" \
             "${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:$GITHUB_WORKSPACE/nginx/"
 
