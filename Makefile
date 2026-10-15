@@ -1,5 +1,5 @@
 PROJECT_NAME ?= arc-backend
-COMPOSE := docker compose -f ./docker-compose.yml --project-directory . -p "$(PROJECT_NAME)"
+COMPOSE := docker compose -f ./docker/docker-compose.yml --project-directory . -p "$(PROJECT_NAME)"
 COMPOSE_INIT := docker compose -f ./init/docker-compose.yml --project-directory . -p "$(PROJECT_NAME)"
 
 .PHONY: build stop certificate run deploy-prod revision logs psql local-run
@@ -19,8 +19,9 @@ run: build
 	$(COMPOSE) up -d --remove-orphans
 
 deploy-prod:
-	$(COMPOSE) pull app ai_analyst worker
-	$(COMPOSE) up -d --remove-orphans
+	$(COMPOSE) up -d app
+# 	$(COMPOSE) up -d --pull always --remove-orphans
+# 	docker image prune -f
 
 revision:
 	@test -n "$(MSG)" || (echo "Usage: make revision MSG='message'" && exit 1)

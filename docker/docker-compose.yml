@@ -14,7 +14,7 @@ services:
       retries: 5
     restart: unless-stopped
   app:
-    image: ghcr.io/${GITHUB_REPO}/app:${IMAGE_TAG}
+    image: ${IMAGE_NAME}/app:${IMAGE_TAG}
     volumes:
       - ./data/log/app:/app/logs
     environment:
@@ -84,7 +84,7 @@ services:
     entrypoint: >
       sh -c "while true; do certbot renew --non-interactive --webroot -w /var/www/certbot --quiet; sleep 12h; done"
   ai_analyst:
-    image: ghcr.io/${GITHUB_REPO}/ai_analyst:${IMAGE_TAG}
+    image: ${IMAGE_NAME}/ai_analyst:${IMAGE_TAG}
     command: uv run --no-sync uvicorn src.main:app --host 0.0.0.0 --port 8001
     depends_on:
       rabbitmq:
@@ -107,7 +107,7 @@ services:
       retries: 5
     restart: unless-stopped
   worker:
-    image: ghcr.io/${GITHUB_REPO}/ai_analyst:${IMAGE_TAG}
+    image: ${IMAGE_NAME}/ai_analyst:${IMAGE_TAG}
     command: uv run --no-sync celery -A src.queue.celery_app worker --loglevel=info
     environment:
       GEMINI_API_KEY: ${GEMINI_API_KEY}
