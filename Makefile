@@ -2,13 +2,7 @@ PROJECT_NAME ?= arc-backend
 COMPOSE := docker compose -f ./docker/docker-compose.yml --project-directory . -p "$(PROJECT_NAME)"
 COMPOSE_INIT := docker compose -f ./init/docker-compose.yml --project-directory . -p "$(PROJECT_NAME)"
 
-.PHONY: build stop certificate run deploy-prod revision logs psql local-run
-
-build:
-	COMPOSE_BAKE=true $(COMPOSE) build
-
-stop:
-	$(COMPOSE) down
+.PHONY: certificate deploy-prod revision logs psql local-run
 
 certificate:
 	@set -a; [ -f ./.env ] && . ./.env; set +a; \
@@ -20,9 +14,6 @@ certificate:
 		trap '$(COMPOSE_INIT) down' EXIT; \
 		$(COMPOSE_INIT) up --exit-code-from certbot; \
 	fi
-
-run: build
-	$(COMPOSE) up -d --remove-orphans
 
 deploy-prod: certificate
 	$(COMPOSE) up -d --pull always --remove-orphans
@@ -39,5 +30,7 @@ psql:
 	@set -a; . ./.env; set +a; \
 	docker exec -it $(PROJECT_NAME)-db-1 psql -U "$$DB_USER" -d "$$DB_NAME"
 
-local-run: build stop
-	$(COMPOSE) up -d app
+local-run:
+	export IMAGE_NAME=arc-backend; \
+	export IMAGE_TAG=local; \
+	./scripts/build.sh && $(COMPOSE) up -d app --remove-orphans
