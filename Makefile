@@ -31,7 +31,7 @@ psql:
 	docker exec -it $(PROJECT_NAME)-db-1 psql -U "$$DB_USER" -d "$$DB_NAME"
 
 local-run:
-	export IMAGE_NAME=arc-backend; \
+	export IMAGE_NAME=$(PROJECT_NAME); \
 	export IMAGE_TAG=local; \
 	./scripts/build.sh && $(COMPOSE) up -d app --remove-orphans
 
