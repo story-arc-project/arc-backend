@@ -19,9 +19,8 @@ run: build
 	$(COMPOSE) up -d --remove-orphans
 
 deploy-prod:
-	$(COMPOSE) up -d app
-# 	$(COMPOSE) up -d --pull always --remove-orphans
-# 	docker image prune -f
+	$(COMPOSE) up -d --pull always --remove-orphans
+	docker image prune -f
 
 revision:
 	@test -n "$(MSG)" || (echo "Usage: make revision MSG='message'" && exit 1)
