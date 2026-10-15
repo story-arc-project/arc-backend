@@ -64,6 +64,9 @@ jobs:
           ${{ secrets.ENV_FILE }}
           EOF
 
+      - name: Add SSH Host to Known Hosts
+        run: ssh-keyscan -H ${{ secrets.SSH_HOST }} >> ~/.ssh/known_hosts
+
       - name: Copy Nginx Directory to Remote
         run: |
           rsync -avz --delete \
@@ -75,5 +78,4 @@ jobs:
           DOCKER_HOST: ssh://${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}
           IMAGE_TAG: ${{ github.sha }}
         run: |
-          ssh-keyscan -H ${{ secrets.SSH_HOST }} >> ~/.ssh/known_hosts
           make deploy-prod
