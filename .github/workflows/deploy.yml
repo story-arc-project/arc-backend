@@ -59,10 +59,11 @@ jobs:
           ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
 
       - name: Create local .env from GitHub Secret
+        env:
+          ENV_FILE_CONTENT: ${{ secrets.ENV_FILE }}
         run: |
-          cat << 'EOF' > .env
-          ${{ secrets.ENV_FILE }}
-          EOF
+          umask 077
+          printf '%s' "$ENV_FILE_CONTENT" > .env
 
       - name: Add SSH Host to Known Hosts
         run: ssh-keyscan -H ${{ secrets.SSH_HOST }} >> ~/.ssh/known_hosts
