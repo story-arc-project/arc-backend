@@ -51,6 +51,7 @@ jobs:
     needs: build
     permissions:
       contents: read
+      packages: read
 
     steps:
       - uses: actions/checkout@v6
@@ -80,7 +81,7 @@ jobs:
 
       - name: Log in to GHCR on Remote Server
         env:
-          GHCR_TOKEN: ${{ secrets.GHCR_READ_TOKEN }}
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GHCR_USERNAME: ${{ github.repository_owner }}
           SSH: ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}
         run: |
