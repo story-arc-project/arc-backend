@@ -17,7 +17,7 @@ certificate:
 
 deploy-prod: certificate
 	$(COMPOSE) up -d --pull always --remove-orphans
-	docker image prune -f
+	docker image prune -af
 
 revision:
 	@test -n "$(MSG)" || (echo "Usage: make revision MSG='message'" && exit 1)
