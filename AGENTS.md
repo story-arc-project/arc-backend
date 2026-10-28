@@ -7,13 +7,16 @@
 - `init/`: certificate initialization; `nginx/`: reverse-proxy configuration.
 - `scripts/` and root `Makefile`: existing build and maintenance entrypoints.
 
+## Protected paths and branching rules
+- **Never modify any file under `ai_analyst/`** (including configuration, tests, lockfiles and generated files). Treat this directory as read-only unless the user explicitly revokes this restriction.
+- **Create every new working branch from `dev`, not `main` or another feature branch.** Target `dev` for pull requests unless explicitly instructed otherwise. Verify the base branch before creating a branch or PR.
+
 ## Workspace initialization (Codex Cloud or fresh Linux checkout)
 Run commands from the repository root unless otherwise stated.
 1. Install `uv` if missing, following https://docs.astral.sh/uv/getting-started/installation/.
-2. Install dependencies independently for each service:
+2. Install dependencies for the editable backend service:
    ```sh
    cd app && uv sync --frozen && cd ..
-   cd ai_analyst && uv sync --frozen && cd ..
    ```
    If the lockfile is absent or stale, report that instead of silently rewriting it.
 3. For tests requiring containers, install Docker with the Compose plugin and ensure the Docker daemon is available. This is optional for code-only tasks; cloud sandboxes may not provide a working daemon.
@@ -22,7 +25,6 @@ Run commands from the repository root unless otherwise stated.
 
 ## Validation
 - Backend: `cd app && uv run pytest`
-- AI analyst: `cd ai_analyst && uv run pytest`
 - Run targeted tests before full suites. Some tests may need Docker or external services; report skipped/blocked tests accurately.
 - Validate changes within the affected service and avoid editing unrelated files.
 - Preserve lockfiles unless dependency changes require updating them intentionally.
@@ -45,6 +47,5 @@ This document guides the agent; it is not an automatically executed initializati
 ```sh
 set -eu
 (cd app && uv sync --frozen)
-(cd ai_analyst && uv sync --frozen)
 ```
 Use this only in an environment with `uv` installed and compatible Python interpreters available.
